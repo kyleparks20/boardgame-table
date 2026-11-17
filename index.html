@@ -64,6 +64,16 @@ nav button.on{color:var(--accent);background:#5fd38a14}
   nav{justify-content:center} nav button{flex:0 0 92px}
 }
 .pane{display:none}.pane.show{display:block}
+#rollbox{position:absolute;left:8px;right:8px;bottom:8px;z-index:40;display:none;background:#141a18f7;border:1px solid var(--accent2);border-radius:14px;padding:12px;max-height:75%;overflow:auto;box-shadow:0 8px 30px #000a}
+@media (min-width:900px){ #rollbox{left:auto;width:400px} }
+.rb-title{font-weight:800;font-size:16px;margin-bottom:2px}
+.rb-note{margin:6px 0;padding:6px 8px;border-radius:8px;background:#5fd38a18;font-size:13px}
+.rb-dice{display:flex;flex-wrap:wrap;margin:8px 0}
+.rb-dice .chip{min-width:46px;height:46px;font-size:20px;padding:0;border-radius:9px;min-height:46px}
+.rb-dice .chip.w{background:#eee;color:#111;border:2px solid transparent}.rb-dice .chip.b{background:#111;color:#eee;border:2px solid #444}
+.rb-dice .chip.pk{border-color:var(--accent)!important;box-shadow:0 0 0 2px var(--accent)}
+.rb-score{font-size:15px;margin:4px 0}
+.rb-plan{margin:8px 0;padding:6px 8px;border-left:3px solid var(--accent2);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
 h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:12px 0 6px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
 .grid2 button{display:flex;align-items:center;gap:8px;text-align:left}
@@ -121,6 +131,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
     <button id="zfit" aria-label="Fit board" style="font-size:13px">Fit</button>
   </div>
   <div id="qbar"></div>
+  <div id="rollbox"></div>
 </div>
 
 <div id="sheet" aria-hidden="true">
@@ -151,7 +162,8 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
         <textarea id="ai-text" readonly style="display:none;min-height:160px"></textarea></div>
       <div class="card"><b>2 · Paste the AI's reply</b>
         <textarea id="ai-in" placeholder="Paste the whole reply. Only the command lines are used, e.g.&#10;move Snake G17&#10;token Snake ? G17"></textarea>
-        <div class="row"><button class="on" id="ai-apply" style="flex:1">Apply moves</button></div>
+        <div class="row"><button class="on" id="ai-apply" style="flex:1">Run the turn</button></div>
+        <p class="muted">Moves happen in order. At each roll a dice box pops up: roll, use any Focus, then Continue, and the AI's plan for that result runs.</p>
         <div class="muted" id="ai-out"></div></div>
     </div>
   </div>
@@ -717,9 +729,12 @@ document.getElementById("ai-copy").onclick=()=>{ const who=document.getElementBy
   const done=()=>{ b.textContent="Copied ✓ — paste it to your AI"; setTimeout(()=>b.textContent="Copy board for AI",2500); };
   const fallback=()=>{ try{ ta.select(); if(document.execCommand("copy")) done(); else b.textContent="Select the text below and copy it"; }catch(_){ b.textContent="Select the text below and copy it"; } };
   try{ navigator.clipboard.writeText(t).then(done, fallback); }catch(e){ fallback(); } };
-document.getElementById("ai-apply").onclick=()=>{ const res=applyMoves(document.getElementById("ai-in").value).filter(x=>!x.startsWith("·"));
-  document.getElementById("ai-out").innerHTML=res.length?res.map(x=>esc(x)).join("<br>"):"No command lines found in that reply.";
-  if(res.some(x=>x.startsWith("✓"))) document.getElementById("ai-in").value=""; };
+document.getElementById("ai-apply").onclick=async()=>{ const btn=document.getElementById("ai-apply"), out=document.getElementById("ai-out"), txt=document.getElementById("ai-in").value;
+  if(btn.disabled) return; btn.disabled=true; btn.textContent="Running…"; out.innerHTML="";
+  if(innerWidth<900) closeSheet();
+  const show=m=>{ out.innerHTML+=esc(m)+"<br>"; };
+  try{ await runScript(txt, show); } finally { btn.disabled=false; btn.textContent="Run the turn"; }
+  document.getElementById("ai-in").value=""; };
 function renderBuildPane(){
   const el=document.getElementById("pane-build");
   const tool=(t,l)=>`<button class="sm ${!S.addType&&S.tool===t?"on":""}" data-tool="${t}">${l}</button>`;
@@ -921,12 +936,19 @@ const net = {
     dc.onclose=()=>this.setStatus("Disconnected",""); dc.onmessage=e=>this.recv(e.data); },
   async host(){ this.role="host"; const pc=this.newPC(); this.wire(pc.createDataChannel("board",{ordered:true}));
     await pc.setLocalDescription(await pc.createOffer()); await this.gathered(pc);
-    this.myCode=await encode({sdp:pc.localDescription.sdp,n:S.me}); this.setStatus("Hosting — send your code","wait"); },
+    this.myCode=await encode({k:"host",sdp:pc.localDescription.sdp,n:S.me}); this.setStatus("Hosting — send your code","wait"); },
   async join(code){ this.role="guest"; const pc=this.newPC(); pc.ondatachannel=e=>this.wire(e.channel);
-    const o=await decode(code); this.peerName=o.n||""; await pc.setRemoteDescription({type:"offer",sdp:o.sdp});
+    const o=await decode(code); if(o.k==="reply") throw new Error("That's a reply code. On the joining device, paste the HOST's code here.");
+    this.peerName=o.n||""; await pc.setRemoteDescription({type:"offer",sdp:o.sdp});
     await pc.setLocalDescription(await pc.createAnswer()); await this.gathered(pc);
-    this.myCode=await encode({sdp:pc.localDescription.sdp,n:S.me}); this.setStatus("Send your reply code to the host","wait"); },
-  async accept(code){ const a=await decode(code); this.peerName=a.n||""; await this.pc.setRemoteDescription({type:"answer",sdp:a.sdp}); this.setStatus("Connecting…","wait"); },
+    this.myCode=await encode({k:"reply",sdp:pc.localDescription.sdp,n:S.me}); this.setStatus("Send your reply code to the host","wait"); },
+  async accept(code){
+    const a=await decode(code);
+    if(a.k==="host") throw new Error("That's a host code, not a reply. Paste the code your friend sent back after they tapped Make reply code.");
+    if(!this.pc || this.role!=="host" || this.pc.signalingState!=="have-local-offer")
+      throw new Error(this.pc&&this.pc.signalingState==="stable" ? "Already used. If it isn't connecting, tap Create host code again and start over." : "This page's host code changed or the page reloaded. Tap Create host code again, send the NEW code, and get a new reply.");
+    this.peerName=a.n||""; await this.pc.setRemoteDescription({type:"answer",sdp:a.sdp}); this.setStatus("Connecting…","wait");
+    setTimeout(()=>{ if(this.pc && this.pc.connectionState!=="connected") this.setStatus("Still not connected. Both try Wi-Fi (or both mobile data), then make new codes.",""); }, 15000); },
   gathered(pc){ return new Promise(res=>{ if(pc.iceGatheringState==="complete") return res();
     const f=()=>{ if(pc.iceGatheringState==="complete"){ pc.removeEventListener("icegatheringstatechange",f); res(); } };
     pc.addEventListener("icegatheringstatechange",f); setTimeout(res,5000); }); },
@@ -948,11 +970,15 @@ const net = {
 async function encode(obj){ const bytes=new TextEncoder().encode(JSON.stringify(obj));
   try{ const cs=new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw")); return "Z"+b64(new Uint8Array(await new Response(cs).arrayBuffer())); }
   catch(e){ return "J"+b64(bytes); } }
-async function decode(code){ code=code.trim().replace(/\s+/g,""); const kind=code[0], bytes=unb64(code.slice(1));
+async function decode(code){ code=(code||"").trim().replace(/[\s"'“”‘’<>]+/g,"");
+  if(!code) throw new Error("The box is empty — paste the code first.");
+  const kind=code[0]; if(kind!=="Z"&&kind!=="J") throw new Error("That doesn't look like a Sneaking Table code. Copy the whole code with the Copy button and paste it again.");
+  try{ return await decode2(kind, unb64(code.slice(1))); }catch(e){ throw new Error("That code is cut off or changed. Use the Copy button and paste the whole thing again (some apps split long messages)."); } }
+async function decode2(kind, bytes){
   if(kind==="Z"){ const ds=new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")); return JSON.parse(await new Response(ds).text()); }
   return JSON.parse(new TextDecoder().decode(bytes)); }
-function b64(u8){ let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
-function unb64(s){ const b=atob(s), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+function b64(u8){ let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function unb64(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="="; const b=atob(s), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
 function renderNetPane(){
   const el=document.getElementById("pane-net"); if(!el) return;
   const connected=net.dc&&net.dc.readyState==="open";
@@ -974,8 +1000,8 @@ function renderNetPane(){
   const $=id=>el.querySelector("#"+id);
   if($("n-name")) $("n-name").onchange=e=>{ S.me=e.target.value.trim()||"Player"; saveLS("st-name",S.me); net.raw({t:"hello",name:S.me}); };
   if($("n-host")) $("n-host").onclick=async()=>{ net.setStatus("Making code…","wait"); try{ await net.host(); }catch(err){ net.setStatus("Couldn't create a code: "+err.message,""); } };
-  if($("n-accept")) $("n-accept").onclick=async()=>{ const code=$("n-reply").value; try{ await net.accept(code); }catch(err){ net.setStatus("That reply code didn't work",""); } };
-  if($("n-join")) $("n-join").onclick=async()=>{ const code=$("n-hostcode").value; net.setStatus("Making reply…","wait"); try{ await net.join(code); }catch(err){ net.setStatus("That host code didn't work",""); } };
+  if($("n-accept")) $("n-accept").onclick=async()=>{ const code=$("n-reply").value; try{ await net.accept(code); }catch(err){ net.setStatus("Reply code problem: "+err.message,""); } };
+  if($("n-join")) $("n-join").onclick=async()=>{ const code=$("n-hostcode").value; net.setStatus("Making reply…","wait"); try{ await net.join(code); }catch(err){ net.setStatus("Host code problem: "+err.message,""); } };
   const copy=id=>{ const t=$(id); t.select(); try{ navigator.clipboard.writeText(t.value); }catch(e){ document.execCommand("copy"); } };
   if($("n-copy")) $("n-copy").onclick=()=>copy("n-mycode");
   if($("n-copy2")) $("n-copy2").onclick=()=>copy("n-mycode2");
@@ -1043,6 +1069,12 @@ function boardText(who){
   const W=Object.keys(st.walls).map(k=>{ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); return t==="h"?`${sq(r,c)}/${sq(r+1,c)}`:`${sq(r,c)}|${sq(r,c+1)}`; });
   if(W.length) L.push("WALLS (no movement or sight across): "+W.join(", "));
   L.push("", "HOW TO REPLY: explain your plan if you like, then put each change on its own line in this exact format so the page can apply it. Move one square per line so the path is recorded.");
+  L.push("DICE: write the WHOLE turn now, including what happens after each roll. The page stops at every roll, the player rolls (and applies any Focus tokens by hand), then it runs your matching 'if' lines and continues.");
+  L.push("  roll 2W 1B vs 3 for Combo on G4   ← W = white dice, B = black dice, vs = the target's Defense");
+  L.push("  if hits>=2: ko G4      if hits=1: roll 1W vs 3 for Hand-to-Hand on G4      if hits=0: stop");
+  L.push("  noise Snake 2          ← end-of-turn noise check: rolls 2 white; a '!' places Snake's ? token automatically");
+  L.push("  attack G2 Snake        ← (referee) guard attack: 2 black vs Defense 3, damage applied automatically");
+  L.push("  if !: ...  /  if no !: ...  (any white '!' on the last roll)   ·   dmg <name> hits   ·   note <tip for the player, e.g. which Focus to use>   ·   stop   ·   ask <question> (pause and hand back to the AI)");
   L.push("Commands: move <name> <square> · face <name> up|down|left|right · dmg <name> <n> · kodmg <guard> <n> · token <owner> ?|! <square> · flip <name> · ko <guard> · kill <guard> · remove <name> · place <type> <square>");
   return L.join("\n");
 }
@@ -1052,10 +1084,12 @@ function findPiece(name){
 }
 function parseSq(t){ const m=/^([A-Za-z]+)(-?\d+)$/.exec(t||""); if(!m) return null; let c=0; for(const ch of m[1].toUpperCase()) c=c*26+(ch.charCodeAt(0)-64); c-=1;
   const r=parseInt(m[2],10)-(S.st.rowStart??1); return (r>=0&&c>=0&&r<S.st.rows&&c<S.st.cols)?{r,c}:null; }
-function applyMoves(text){
+const cleanLines=text=>text.split(/\n/).map(l=>l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/,"").replace(/[`]/g,"").trim()).filter(Boolean);
+function applyMoves(text){ return cleanLines(text).map(execCmd); }
+function execCmd(line){
   const out=[], DIRS={up:0,right:1,down:2,left:3,north:0,east:1,south:2,west:3};
-  const lines=text.split(/\n/).map(l=>l.replace(/^[-*•\d.)\s]+/,"").replace(/[`]/g,"").trim()).filter(Boolean);
-  for(const line of lines){
+  {
+    if(S.lastRoll) line=line.replace(/\bhits\b/gi, String(S.lastRoll.hits));
     const w=line.split(/\s+/), cmd=(w[0]||"").toLowerCase();
     try{
       if(cmd==="move"){ const to=parseSq(w[w.length-1]), p=findPiece(w.slice(1,-1).join(" ")); if(!p||!to) throw "?"; const from=sq(p.r,p.c);
@@ -1075,7 +1109,81 @@ function applyMoves(text){
       else out.push("· skipped: "+line);
     }catch(e){ out.push("✗ couldn't do: "+line); }
   }
-  return out;
+  return out[0];
+}
+
+// ---------- turn scripts with dice rolls ----------
+const SCRIPT_CMDS=/^(move|face|dmg|kodmg|token|flip|ko|kill|remove|place|roll|noise|attack|if|note|stop|ask)\b/i;
+function parseDice(spec){
+  const w=/(\d+)\s*(?:w\b|white)/i.exec(spec), b=/(\d+)\s*(?:b\b|black)/i.exec(spec), v=/\bvs\.?\s*(\d+)/i.exec(spec), f=/\bfor\s+(.+)$/i.exec(spec);
+  return {w:w?+w[1]:0, b:b?+b[1]:0, vs:v?+v[1]:null, why:f?f[1].trim():""};
+}
+function evalCond(c){
+  const R_=S.lastRoll; if(!R_) return false;
+  return c.split(/\s+and\s+/i).every(part=>{ part=part.trim().toLowerCase();
+    if(/^(no\s*!|no bang|no noise)$/.test(part)) return R_.bang===0;
+    if(/^(!|bang|noise)$/.test(part)) return R_.bang>0;
+    const m=/^hits\s*(>=|<=|==|=|>|<)\s*(\d+)$/.exec(part); if(!m) return false; const n=+m[2], h=R_.hits;
+    return {">=":h>=n,"<=":h<=n,"==":h===n,"=":h===n,">":h>n,"<":h<n}[m[1]]; });
+}
+function scoreDice(dice, vs){ const hits=vs==null?0:dice.filter(d=>d.v!=="!"&&d.v>=vs).length, bang=dice.filter(d=>d.v==="!").length; return {hits,bang}; }
+function rollPrompt(o){ // o: {w,b,vs,why,who,preview}
+  return new Promise(res=>{
+    const box=document.getElementById("rollbox"); let dice=null, pick=null;
+    const roll1=k=>{ const v=1+Math.floor(Math.random()*6); return k==="w"&&v===1?"!":v; };
+    const draw=()=>{
+      const sc=dice?scoreDice(dice,o.vs):null;
+      box.innerHTML=`<div class="rb-title">🎲 ${esc(o.who?o.who+" · ":"")}${esc(o.why||"Roll")}</div>
+        <div class="muted">${[o.w?o.w+" white":"",o.b?o.b+" black":""].filter(Boolean).join(" + ")}${o.vs!=null?` · each ${o.vs}+ is a hit`:""}</div>
+        ${o.note?`<div class="rb-note">${esc(o.note)}</div>`:""}
+        ${dice?`<div class="rb-dice">${dice.map((d,i)=>`<button class="chip ${d.k==="w"?"w":"b"} ${d.v==="!"?"bang":""} ${pick===i?"pk":""}" data-d="${i}">${d.v}</button>`).join("")}</div>
+          <div class="rb-score"><b>${o.vs!=null?`${sc.hits} hit${sc.hits===1?"":"s"}`:"Rolled"}</b>${sc.bang?` · <span class="bad">${sc.bang} "!"</span>`:""}</div>
+          ${pick!=null?`<div class="row">${dice[pick].v==="!"?"":`<button class="sm" data-adj="2">+2</button><button class="sm" data-adj="-2">−2</button><button class="sm" data-adj="1">+1</button><button class="sm" data-adj="-1">−1</button>`}<button class="sm" data-adj="re">Reroll</button><button class="sm" data-adj="x">Done</button></div>`
+            :`<div class="muted">Using a Focus token? Tap a die to reroll or change it.</div>`}`:""}
+        ${o.preview&&o.preview.length?`<div class="rb-plan"><span class="muted">Plan after this roll:</span>${o.preview.map(l=>`<div>${esc(l)}</div>`).join("")}</div>`:""}
+        <div class="row">${dice?`<button class="on" id="rb-go" style="flex:1">Continue the turn</button>`:`<button class="on" id="rb-roll" style="flex:1">Roll</button>`}<button class="sm danger" id="rb-stop">Stop here</button></div>`;
+      box.style.display="block";
+      const q=s_=>box.querySelector(s_);
+      if(q("#rb-roll")) q("#rb-roll").onclick=()=>{ dice=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:roll1(k)})); draw(); };
+      box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
+      box.querySelectorAll("[data-adj]").forEach(b=>b.onclick=()=>{ const a=b.dataset.adj, d=dice[pick];
+        if(a==="re") d.v=roll1(d.k); else if(a!=="x"){ d.v=d.v+(+a); } if(a!=="re") pick=null; draw(); });
+      if(q("#rb-go")) q("#rb-go").onclick=()=>{ box.style.display="none"; const sc=scoreDice(dice,o.vs);
+        const parts=[]; const ws=dice.filter(d=>d.k==="w").map(d=>d.v), bs=dice.filter(d=>d.k==="b").map(d=>d.v);
+        if(ws.length) parts.push("white "+ws.join(", ")); if(bs.length) parts.push("black "+bs.join(", "));
+        commit(()=>{}, `rolled ${parts.join(" · ")}${o.why?" — "+o.why:""}${o.vs!=null?` → ${sc.hits} hit${sc.hits===1?"":"s"}`:""}${sc.bang?` · ${sc.bang} "!"`:""}`);
+        res({...sc, dice}); };
+      q("#rb-stop").onclick=()=>{ box.style.display="none"; res(null); };
+    };
+    draw();
+  });
+}
+async function runScript(text, show){
+  const lines=cleanLines(text).filter(l=>SCRIPT_CMDS.test(l)); S.lastRoll=null; let note="";
+  if(!lines.length){ show("No command lines found in that reply."); return; }
+  for(let i=0;i<lines.length;i++){
+    let line=lines[i];
+    const m=/^if\s+(.+?)\s*(?::|then)\s*(.+)$/i.exec(line);
+    if(m){ if(!evalCond(m[1])){ show("· skipped (no): "+line); continue; } line=m[2].trim(); }
+    const w=line.split(/\s+/), cmd=w[0].toLowerCase();
+    if(cmd==="note"){ note=line.slice(5).trim(); show("ℹ "+note); continue; }
+    if(cmd==="stop"){ show("■ turn ends here"); return; }
+    if(cmd==="ask"){ show("❓ Ask the AI: "+line.slice(4).trim()+" (copy the board again and paste it to them)"); return; }
+    if(cmd==="roll"||cmd==="noise"||cmd==="attack"){
+      let o, after=null;
+      if(cmd==="roll") o=parseDice(line.slice(5));
+      if(cmd==="noise"){ const p=findPiece(w[1]||""), n=+(w[2]||1); o={w:n,b:0,vs:null,why:`noise check for ${p?nameOf(p):w[1]}`};
+        after=r=>{ if(r.bang&&p){ playerToken(p,"q"); show(`! rolled — ${nameOf(p)}'s ? placed`); } }; }
+      if(cmd==="attack"){ const g=findPiece(w[1]||""), t=findPiece(w[2]||""); o={w:0,b:2,vs:+(w[3]||3),why:`${g?nameOf(g):w[1]} attacks ${t?nameOf(t):w[2]}`};
+        after=r=>{ if(t&&r.hits) hurt(t,r.hits); }; }
+      const preview=[]; for(let j=i+1;j<lines.length && /^if\b/i.test(lines[j]);j++) preview.push(lines[j]);
+      const r=await rollPrompt({...o, who:"", note, preview}); note="";
+      if(!r){ show("■ stopped at: "+line); return; }
+      S.lastRoll=r; show(`🎲 ${line} → ${o.vs!=null?r.hits+" hit(s)":"rolled"}${r.bang?` · ${r.bang} "!"`:""}`); if(after) after(r); continue;
+    }
+    show(execCmd(line));
+  }
+  show("✓ turn finished");
 }
 
 // ---------- play-by-play history ----------
