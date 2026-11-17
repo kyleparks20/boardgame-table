@@ -87,10 +87,23 @@ body.tp-open #tp-handle{display:none}
 .tp-hint{font-size:12.5px;color:var(--muted);margin-top:6px}
 .dots{margin-top:5px}.dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--accent);margin-right:4px}.dot.used{background:#33413b}
 #seats{position:fixed;inset:0;z-index:55;background:#070a09;display:none;overflow:auto;padding:calc(20px + env(safe-area-inset-top,0)) 16px 30px}
-#seats.open{display:block}#seats .wrap{max-width:560px;margin:0 auto}#seats h2{font-size:22px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:6px 0}
-#rollbox{position:absolute;left:8px;right:8px;bottom:8px;z-index:40;display:none;background:#141a18f7;border:1px solid var(--accent2);border-radius:14px;padding:12px;max-height:75%;overflow:auto;box-shadow:0 8px 30px #000a}
+#seats.open{display:block}
+.gcard{border-radius:12px;padding:12px 14px;margin:8px 0;border:2px solid #2f7fd6;background:#0f1d2b}.gcard.red{border-color:#c0392b;background:#2a1212}.gcard.over{border-color:#fff;background:#000;text-align:center}
+.gc-row{display:flex;gap:10px;align-items:baseline;margin:4px 0;font-size:14px}.gc-row span{color:var(--muted)}.gc-row b{font-size:20px;margin-right:12px}.gc-big{font-size:26px;font-weight:900;letter-spacing:.1em}#seats .wrap{max-width:560px;margin:0 auto}#seats h2{font-size:22px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:6px 0}
+#rollbox{position:fixed;left:8px;right:8px;bottom:calc(var(--tabh) + var(--safe-b) + 8px);z-index:60;display:none;background:#141a18f7;border:1px solid var(--accent2);border-radius:14px;padding:12px;max-height:75%;overflow:auto;box-shadow:0 8px 30px #000a}
 @media (min-width:900px){ #rollbox{left:auto;width:400px} }
 .rb-title{font-weight:800;font-size:16px;margin-bottom:2px}
+#dicefx{position:fixed;inset:0;z-index:58;pointer-events:none;perspective:2200px;overflow:hidden}
+#dicefx .dw{position:absolute;left:0;top:0;width:56px;height:56px;transform-style:preserve-3d}
+#dicefx .cube{position:relative;width:56px;height:56px;transform-style:preserve-3d}
+#dicefx .f{position:absolute;inset:0;border-radius:10px;display:flex;align-items:center;justify-content:center;font:900 26px system-ui;backface-visibility:hidden;box-shadow:inset 0 0 8px #0004}
+#dicefx .w .f{background:#f1f1ec;color:#111;border:1px solid #bbb}#dicefx .w .f.bang{color:#d0281c;font-size:32px}
+#dicefx .b .f{background:#151515;color:#eee;border:1px solid #555}
+#dicefx .f1{transform:translateZ(28px)}#dicefx .f6{transform:rotateY(180deg) translateZ(28px)}#dicefx .f2{transform:rotateY(90deg) translateZ(28px)}
+#dicefx .f5{transform:rotateY(-90deg) translateZ(28px)}#dicefx .f3{transform:rotateX(90deg) translateZ(28px)}#dicefx .f4{transform:rotateX(-90deg) translateZ(28px)}
+#dicefx .shadow{position:absolute;width:50px;height:14px;border-radius:50%;background:#0008;filter:blur(4px)}
+#dicefx .hit{outline:3px solid #5fd38a;outline-offset:3px;border-radius:12px}
+.rb-auto{font-size:12.5px;color:var(--muted);margin:2px 0 6px}
 .rb-note{margin:6px 0;padding:6px 8px;border-radius:8px;background:#5fd38a18;font-size:13px}
 .rb-dice{display:flex;flex-wrap:wrap;margin:8px 0}
 .rb-dice .chip{min-width:46px;height:46px;font-size:20px;padding:0;border-radius:9px;min-height:46px}
@@ -159,8 +172,9 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
     <button id="zfit" aria-label="Fit board" style="font-size:13px">Fit</button>
   </div>
   <div id="qbar"></div>
-  <div id="rollbox"></div>
 </div>
+<div id="rollbox"></div>
+<div id="dicefx"></div>
 
 <aside id="turnpanel"><div class="tp-top"><b>Turn</b><button class="sm" id="tp-x">Hide ▸</button></div><div id="tp-body"></div></aside>
 <button id="tp-handle">Turn</button>
@@ -420,7 +434,7 @@ function defaultState(){
 }
 function buildPreset(name){
   const L=LAYOUTS[name], st=defaultState(); st.stage=L.name;
-  st.rows=L.map.length; st.cols=L.map[0].length; st.rowStart=L.rowStart; st.priority=L.priority; st.blue=L.blue; st.red=L.red;
+  st.rows=L.map.length; st.cols=L.map[0].length; st.rowStart=L.rowStart; st.priority=L.priority; st.blue=L.blue; st.red=L.red; st.vb=L.blue; st.vr=L.red;
   L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
   L.walls.forEach(w=>st.walls[w]=1);
   st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{}); st.counts=Object.assign({},L.counts||{});
@@ -1086,7 +1100,8 @@ function renderGamePane(){
     <div class="row"><label>Blue left</label><button class="sm" data-deck="blue,-1">−</button><b>${st.blue}</b><button class="sm" data-deck="blue,1">+</button></div>
     <div class="row"><label>Red left</label><button class="sm" data-deck="red,-1">−</button><b class="${st.blue===0?"bad":""}">${st.red}</b><button class="sm" data-deck="red,1">+</button></div>
     <div class="row"><button id="draw">Draw a card</button><button class="sm" id="burn">Burn a card</button></div>
-    <p class="muted">Counters only. The real deck stays on your table; a red card might be Game Over.</p></div>
+    <p class="muted">${vdeckOn()?"Using the virtual deck — the board shuffles and flips the cards.":"Counters only — the real deck stays on your table. Set up the virtual deck to stop using physical cards."}</p>
+    <div class="row"><button class="sm on" id="deck-ui" style="flex:1">🃏 Virtual deck: enter cards / shuffle</button></div></div>
   <div class="card"><div class="row"><label>Cameras</label><button id="cam" style="flex:1;${st.cam==="orange"?"background:#7a3d10;border-color:#e07b2a":"background:#1f5a34;border-color:#3fbf63"}">${st.cam==="green"?"Green side up":"Orange side up"} · tap to flip</button></div></div>
   <div class="card"><b>Line of sight & order</b>
     <p class="muted">Guards and cameras see every open square in front of them unless a wall, obstacle or locked door is inside the box between them.</p>
@@ -1106,6 +1121,7 @@ function renderGamePane(){
   el.querySelectorAll("[data-deck]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.deck.split(","); commit(s=>{ s[k]=Math.max(0,s[k]+(+d)); }); });
   on("draw",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, st.blue>0?`Guard Order card drawn (blue left: ${st.blue-1})`:`RED Guard Order card drawn (red left: ${Math.max(0,st.red-1)}) — check for Game Over`));
   on("burn",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `Guard Order card burned to the bottom — if it was Game Over, the stage fails`));
+  on("deck-ui",()=>{ closeSheet(); openDeckBuilder(); });
   on("open-tp",()=>{ closeSheet(); openTurnPanel(true); });
   on("guard-turn",()=>{ if(EN.busy){ toast("The guards are still moving"); return; } openGuardCard(); });
   on("cam",()=>{ commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flipped to ${st.cam==="green"?"orange":"green"}`); autoSpot(); });
@@ -1187,9 +1203,11 @@ document.getElementById("load-file").onchange=e=>{
 function setDice(){ document.getElementById("dw-v").textContent=S.dw; document.getElementById("db-v").textContent=S.db; }
 document.querySelectorAll("[data-dn]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.dn.split(","); S[k]=Math.max(0,Math.min(10,S[k]+(+d))); setDice(); });
 document.querySelectorAll("[data-preset]").forEach(b=>b.onclick=()=>{ const [w,bl]=b.dataset.preset.split(",").map(Number); S.dw=w; S.db=bl; setDice(); });
-document.getElementById("roll").onclick=()=>{
-  const w=[...Array(S.dw)].map(()=>{ const v=1+Math.floor(Math.random()*6); return v===1?"!":v; }), b=[...Array(S.db)].map(()=>1+Math.floor(Math.random()*6));
+document.getElementById("roll").onclick=async()=>{
+  const ds=[...[...Array(S.dw)].map(()=>({k:"w",v:null})),...[...Array(S.db)].map(()=>({k:"b",v:null}))];
   const why=document.getElementById("dfor").value.trim();
+  if(innerWidth<900) closeSheet(); await rollDice(ds); setTimeout(clearDice,2200);
+  const w=ds.filter(d=>d.k==="w").map(d=>d.v), b=ds.filter(d=>d.k==="b").map(d=>d.v);
   document.getElementById("dice-out").innerHTML=`<div class="card">${w.map(v=>`<span class="chip w ${v==="!"?"bang":""}">${v}</span>`).join("")}${b.map(v=>`<span class="chip b">${v}</span>`).join("")}</div>`;
   const parts=[]; if(w.length) parts.push("white "+w.join(", ")); if(b.length) parts.push("black "+b.join(", "));
   commit(()=>{}, `rolled ${parts.join(" · ")||"nothing"}${why?" — "+why:""}`);
@@ -1346,7 +1364,7 @@ function closeMenu(){ const m=document.getElementById("menu"); m.classList.remov
 function startStage(k){
   commit(s=>{ const n=k==="blank"?defaultState():buildPreset(k), keep={bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(x=>delete s[x]); Object.assign(s,n,keep); S.sel=null; },
     `New game: ${k==="blank"?"blank board":LAYOUTS[k].name}`);
-  S.st.log=S.st.log.slice(0,1); persist(); closeMenu(); stageBg(); S.zoneView=null; fitView(); refresh(); if(k!=="blank") openSeats(true);
+  S.st.log=S.st.log.slice(0,1); persist(); closeMenu(); stageBg(); S.zoneView=null; if(k!=="blank"&&cardLib().length) buildDeck(); fitView(); refresh(); if(k!=="blank") openSeats(true);
 }
 // each stage remembers its own backdrop picture on this device
 function stageBg(){ const d=loadLS("st-bg:"+(S.st.stage||"")); S.st.bgRect={x:0,y:0,w:100,h:100}; if(d){ if(S.st.bgOpacity<0.7) S.st.bgOpacity=0.85; setBg(d,true); } else if(S.bg) setBg(null,true); }
@@ -1906,7 +1924,7 @@ async function activateGuard(gid,card){
 function noWallFacing(gid,card){ const g=P(gid); if(!g) return; const r2=g.r+DR[g.facing], c2=g.c+DC[g.facing];
   if(!inBounds(r2,c2)||wallBetween(g.r,g.c,r2,c2)||blocked(r2,c2)){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"never ends facing a wall"); } }
 function spawnFacing(st,r,c){ const a=(st.arrows||{})[key(r,c)]; if(a!=null) return a; for(const d of [2,1,3,0]){ const r2=r+DR[d],c2=c+DC[d]; if(inBounds(r2,c2)&&!wallBetween(r,c,r2,c2)&&!blocked(r2,c2)) return d; } return 2; }
-function burnCard(why){ commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `${why} → reveal the top Guard Order card and put it on the bottom (if it's GAME OVER, the stage fails)`); }
+function burnCard(why){ if(vdeckOn()){ burnVirtual(why); return; } commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `${why} → reveal the top Guard Order card and put it on the bottom (if it's GAME OVER, the stage fails)`); }
 async function guardActionSection(card){
   const st=S.st, zones=zonesAll().filter(zoneActive);
   if(card.action==="waken"){
@@ -1933,10 +1951,10 @@ async function guardActionSection(card){
 }
 async function runEnemyPhase(card){
   if(EN.busy) return; EN.busy=true; EN.stop=false; EN.last=card;
-  { const gs=snapshot(); commit(s=>{ s.flow=Object.assign(s.flow||{}, {g:"running",gsnap:gs}); }); }
+  { const gs=card.fromDeck&&S.preFlip?S.preFlip:snapshot(); S.preFlip=null; commit(s=>{ s.flow=Object.assign(s.flow||{}, {g:"running",gsnap:gs}); }); }
   try{
     if(S.st.phase!=="Enemy") commit(s=>{ s.phase="Enemy"; }, `— Enemy phase, round ${S.st.round} —`);
-    commit(s=>{ if(card.color==="red") s.red=Math.max(0,s.red-1); else s.blue=Math.max(0,s.blue-1); },
+    commit(s=>{ if(card.fromDeck) return; if(card.color==="red") s.red=Math.max(0,s.red-1); else s.blue=Math.max(0,s.blue-1); },
       `Guard Order card: ${card.over?"GAME OVER":`${card.color} · patrol ${card.blue} · alert ${card.red} · turn ${card.arrow==="L"?"left ⟲":"right ⟳"}${card.action!=="none"?" · "+({waken:"Waken Guard",radio:"Radio-In",lost:"Lost Contact",stay:"Stay Alert"})[card.action]:""}${card.cam?" · camera flip":""}`}`);
     if(card.over){ addLog("GAME OVER card revealed — the stage is failed"); toast("Game Over"); return; }
     await guardActionSection(card); if(EN.stop) return;
@@ -1989,7 +2007,7 @@ function revertTurn(){ const f=flow(); if(!f.active||!f.snap) return; const id=f
   addLog(`↶ ${nm}'s turn undone — start again`); S.st.ver++; persist(); net.sendState(); afterReplace(); toast(`${nm}'s turn undone`); }
 async function confirmTurn(){ const f=flow(); const p=P(f.active); if(!p) return; try{ toast(await endTurn(p)); }catch(e){ toast("✗ "+(e.message||e)); } refresh(); }
 async function startGuards(){ const f=flow(); if(f.active){ toast(`Finish ${nameOf(P(f.active))}'s turn first`); return; }
-  openGuardCard(); }
+  if(vdeckOn()) flipVirtual(); else openGuardCard(); }
 function revertGuards(){ const f=flow(); if(!f.gsnap) return; S.undo.push(snapshot()); S.redo=[]; S.st=JSON.parse(f.gsnap);
   addLog("↶ Guard turn undone — enter the card again"); S.st.ver++; persist(); net.sendState(); afterReplace(); toast("Guard turn undone"); }
 function confirmGuards(){ commit(s=>{ s.phase="Player"; s.round++; s.tt={}; s.flow={active:null,snap:null,g:"idle",gsnap:null}; }, `✓ Guard turn confirmed — Round ${S.st.round+1} begins`); toast(`Round ${S.st.round}`); }
@@ -2032,16 +2050,91 @@ function renderTurnPanel(){
   if(f.g==="running") h+=`<div class="tp-st">The guards are moving… you'll be asked to roll for attacks and to draw Reaction cards.</div>`;
   else if(f.g==="review") h+=`<div class="tp-st">Guards are done. Check the board — any piece can be dragged to fix a mistake.</div>
       <div class="row" style="margin:6px 0 0"><button class="sm" id="tp-gundo">↶ Undo guards</button><button class="on" id="tp-gok" style="flex:1">✓ Confirm → Round ${st.round+1}</button></div>`;
-  else if(allDone||!rulesOn()) h+=`<div class="tp-st">Everyone has played. Flip the top Guard Order card.</div><div class="row" style="margin:6px 0 0"><button class="on" id="tp-guards" style="flex:1;background:#7a2f25;border-color:#c0392b">🃏 Start the guards' turn</button></div>`;
+  else if(allDone||!rulesOn()) h+=`<div class="tp-st">Everyone has played. ${vdeckOn()?"The board flips the top Guard Order card for you.":"Flip the top Guard Order card on your table."}</div><div class="row" style="margin:6px 0 0"><button class="on" id="tp-guards" style="flex:1;background:#7a2f25;border-color:#c0392b">🃏 ${vdeckOn()?"Flip the top card":"Start the guards' turn"}</button></div>`;
   else h+=`<div class="tp-st muted">Waiting for ${ps.filter(p=>!turnDone(p)).map(nameOf).join(" and ")}.</div>`;
-  h+=`<div class="muted" style="margin-top:6px">Deck: ${st.blue} blue · ${st.red} red left</div></div>
+  h+=`<div class="row" style="margin:6px 0 0"><span class="muted" style="flex:1">${vdeckOn()?"Virtual deck":"Physical deck"}: ${st.blue} blue · ${st.red} red left</span><button class="sm" id="tp-cards">🃏 Cards</button></div>${st.lastCard?`<div class="muted">Last card: ${esc(cardText(st.lastCard))}</div>`:""}</div>
     <div class="row"><button class="sm" id="tp-seats" style="flex:1">👥 Who's playing</button><button class="sm" id="tp-log" style="flex:1">📜 What happened</button></div>`;
   el.innerHTML=h;
   const on=(id,fn)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=fn; };
   el.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>{ try{ startTurn(P(+b.dataset.start)); S.sel=+b.dataset.start; refresh(); }catch(e){ toast("✗ "+e); } });
   el.querySelectorAll("[data-ai]").forEach(b=>b.onclick=()=>{ openSheet("ai"); const sel=document.getElementById("ai-who"); sel.value=b.dataset.ai; sel.dataset.picked="1"; });
   on("tp-undo",revertTurn); on("tp-end",confirmTurn); on("tp-guards",startGuards); on("tp-gundo",revertGuards); on("tp-gok",confirmGuards);
-  on("tp-seats",()=>openSeats(false)); on("tp-log",()=>{ if(typeof openHistory==="function") openHistory(); else openSheet("log"); });
+  on("tp-seats",()=>openSeats(false)); on("tp-cards",openDeckBuilder); on("tp-log",()=>{ if(typeof openHistory==="function") openHistory(); else openSheet("log"); });
+}
+
+// ---------- virtual Guard Order deck ----------
+// The card library is entered once (from the real cards) and kept on this device; each stage shuffles its own deck from it.
+function cardLib(){ try{ return JSON.parse(loadLS("st-cards")||"[]"); }catch(e){ return []; } }
+function saveLib(a){ saveLS("st-cards",JSON.stringify(a)); }
+const cardText=c=>c.over?"GAME OVER":`${c.color==="red"?"Red":"Blue"} · patrol ${c.blue} · alert ${c.red} · turn ${c.arrow==="L"?"⟲ left":"⟳ right"}${c.action&&c.action!=="none"?" · "+({waken:"Waken",radio:"Radio-In",lost:"Lost Contact",stay:"Stay Alert"})[c.action]:""}${c.cam?" · 📷 flip":""}`;
+const shuffle=a=>{ a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+function buildDeck(){
+  const lib=cardLib(), blues=lib.filter(c=>c.color!=="red"&&!c.over), reds=lib.filter(c=>c.color==="red"&&!c.over), over=lib.find(c=>c.over)||{over:true,color:"red"};
+  const nb=Math.min(S.st.vb??S.st.blue, blues.length), nr=Math.max(0,Math.min((S.st.vr??S.st.red)-1, reds.length));
+  const redPile=shuffle([...shuffle(reds).slice(0,nr), over]), draw=[...shuffle(blues).slice(0,nb), ...redPile];
+  commit(s=>{ s.vdeck={draw:draw.map(c=>({...c})),disc:[]}; s.blue=nb; s.red=redPile.length; },
+    `🃏 Guard Order deck shuffled: ${nb} blue on top of ${redPile.length} red (Game Over is somewhere in the red)`);
+  if(nb<(S.st.vb??S.st.blue)||nr<(S.st.vr??S.st.red)-1) toast("Not enough cards in your library for this stage — add more in the deck builder");
+}
+function deckCounts(s){ if(!s.vdeck) return; s.blue=s.vdeck.draw.filter(c=>c.color!=="red"&&!c.over).length; s.red=s.vdeck.draw.filter(c=>c.color==="red"||c.over).length; }
+function vdeckOn(){ return !!(S.st.vdeck&&S.st.vdeck.draw); }
+// reveal the top card and put it on the bottom (Radio-In with no room, Lost Contact, some reactions)
+function burnVirtual(why){ const top=S.st.vdeck.draw[0]; if(!top) return;
+  commit(s=>{ const c=s.vdeck.draw.shift(); s.vdeck.draw.push(c); deckCounts(s); }, `${why} → revealed ${cardText(top)}, moved to the bottom`);
+  if(top.over){ addLog("GAME OVER card revealed — the stage is failed"); toast("GAME OVER revealed — stage failed"); } }
+function flipVirtual(){
+  const top=S.st.vdeck.draw[0]; if(!top){ toast("The deck is empty"); return; }
+  S.preFlip=snapshot();
+  commit(s=>{ const c=s.vdeck.draw.shift(); s.vdeck.disc.push(c); deckCounts(s); s.lastCard=c; }, `🃏 Flipped: ${cardText(top)}`);
+  const box=document.getElementById("rollbox");
+  box.innerHTML=`<div class="rb-title">🃏 Guard Order card</div>
+    <div class="gcard ${top.over?"over":top.color==="red"?"red":"blue"}">${top.over?`<div class="gc-big">GAME OVER</div><div>The stage is failed.</div>`:`
+      <div class="gc-row"><span>Patrol</span><b>${top.blue}</b><span>Alert</span><b class="bad">${top.red}</b></div>
+      <div class="gc-row"><span>Turn</span><b>${top.arrow==="L"?"⟲ Left":"⟳ Right"}</b></div>
+      <div class="gc-row"><span>Guard action</span><b>${({none:"—",waken:"Waken Guard",radio:"Radio-In",lost:"Lost Contact",stay:"Stay Alert"})[top.action||"none"]}</b></div>
+      <div class="gc-row"><span>Cameras</span><b>${top.cam?"Flip":"—"}</b></div>`}</div>
+    <div class="row"><button class="on" id="vf-go" style="flex:1">${top.over?"OK":"Run the guards"}</button></div>`;
+  box.style.display="block";
+  box.querySelector("#vf-go").onclick=()=>{ box.style.display="none"; if(innerWidth<900) closeSheet();
+    runEnemyPhase({...top, color:top.color||"blue", fromDeck:true}); };
+}
+function openDeckBuilder(){
+  const el=document.getElementById("seats"); let lib=cardLib(); let edit=null;
+  const form=(c)=>{ const opt=(k,v,l)=>`<button class="sm ${c[k]===v?"on":""}" data-fk="${k}" data-fv="${v}">${l}</button>`, num=(k,l)=>`<div class="row"><label>${l}</label><button class="sm" data-fn="${k},-1">−</button><b style="font-size:18px;min-width:22px;text-align:center">${c[k]}</b><button class="sm" data-fn="${k},1">+</button></div>`;
+    return `<div class="card"><b>${c.id?"Edit card":"New card"} — copy what the real card shows</b>
+      <div class="row"><label>Card</label>${opt("color","blue","Blue")}${opt("color","red","Red")}<button class="sm ${c.over?"on":""}" data-fover="1">GAME OVER card</button></div>
+      ${c.over?"":`${num("blue","Patrol # (blue)")}${num("red","Alert # (red)")}
+      <div class="row"><label>Turn arrow</label>${opt("arrow","L","⟲ Left")}${opt("arrow","R","⟳ Right")}</div>
+      <div class="row" style="flex-wrap:wrap"><label>Guard action</label>${opt("action","none","None")}${opt("action","waken","Waken")}${opt("action","radio","Radio-In")}${opt("action","lost","Lost Contact")}${opt("action","stay","Stay Alert")}</div>
+      <div class="row"><label>Camera icon</label>${opt("cam",false,"No")}${opt("cam",true,"Flip")}</div>`}
+      <div class="row"><button class="on" id="f-save" style="flex:1">${c.id?"Save card":"Add card"}</button>${c.id?`<button class="sm danger" id="f-del">Delete</button>`:""}<button class="sm" id="f-x">Cancel</button></div></div>`; };
+  const draw=()=>{ const b=lib.filter(c=>c.color!=="red"&&!c.over).length, r=lib.filter(c=>c.color==="red"&&!c.over).length, o=lib.some(c=>c.over);
+    el.innerHTML=`<div class="wrap"><div class="row" style="justify-content:space-between"><h2>Guard Order cards</h2><button class="sm" id="dk-x">Back to board</button></div>
+      <p class="muted">Enter each of your real Guard Order cards once (blue, red and the Game Over card). They're saved on this device. Every stage then shuffles its own deck from them — ${S.st.vb??S.st.blue} blue on top and ${S.st.vr??S.st.red} red (including Game Over) for ${esc(S.st.stage||"this stage")} — and the board flips them for you.</p>
+      <div class="card"><b>Your library:</b> ${b} blue · ${r} red · ${o?"Game Over ✓":"<span class='bad'>no Game Over card yet</span>"}</div>
+      ${edit?form(edit):`<div class="row"><button class="on" id="dk-add" style="flex:1">＋ Add a card</button></div>`}
+      ${lib.map(c=>`<div class="row" style="margin:4px 0"><span class="sw" style="background:${c.over?"#111":c.color==="red"?"#c0392b":"#2f7fd6"}"> </span><span style="flex:1">${esc(cardText(c))}</span><button class="sm" data-ed="${c.id}">Edit</button></div>`).join("")||`<p class="muted">No cards yet.</p>`}
+      <div class="row"><button class="on" id="dk-shuffle" style="flex:1" ${lib.length?"":"disabled"}>🔀 Shuffle a deck for this stage and use it</button></div>
+      ${vdeckOn()?`<div class="row"><button class="sm danger" id="dk-off" style="flex:1">Stop using the virtual deck (go back to the physical cards)</button></div>`:""}
+      <div class="row"><button class="sm" id="dk-export">Copy library as text</button><button class="sm" id="dk-import">Paste library text</button></div>
+      <p class="muted">Copy/paste lets your friend load the same cards on their phone.</p></div>`;
+    el.classList.add("open");
+    const q=s_=>el.querySelector(s_), on=(s_,f)=>{ const b_=q(s_); if(b_) b_.onclick=f; };
+    on("#dk-x",()=>el.classList.remove("open"));
+    on("#dk-add",()=>{ edit={color:"blue",blue:2,red:4,arrow:"R",action:"none",cam:false,over:false}; draw(); });
+    el.querySelectorAll("[data-ed]").forEach(b_=>b_.onclick=()=>{ edit={...lib.find(c=>c.id===+b_.dataset.ed)}; draw(); });
+    el.querySelectorAll("[data-fk]").forEach(b_=>b_.onclick=()=>{ const v=b_.dataset.fv; edit[b_.dataset.fk]=v==="true"?true:v==="false"?false:v; draw(); });
+    el.querySelectorAll("[data-fn]").forEach(b_=>b_.onclick=()=>{ const [k,d]=b_.dataset.fn.split(","); edit[k]=Math.max(0,Math.min(9,edit[k]+(+d))); draw(); });
+    on("[data-fover]",()=>{ edit.over=!edit.over; if(edit.over) edit.color="red"; draw(); });
+    on("#f-save",()=>{ if(edit.id) lib=lib.map(c=>c.id===edit.id?edit:c); else { edit.id=Date.now(); lib.push(edit); } saveLib(lib); edit=null; draw(); });
+    on("#f-del",()=>{ lib=lib.filter(c=>c.id!==edit.id); saveLib(lib); edit=null; draw(); });
+    on("#f-x",()=>{ edit=null; draw(); });
+    on("#dk-shuffle",()=>{ buildDeck(); el.classList.remove("open"); openTurnPanel(true); });
+    on("#dk-off",()=>{ commit(s=>{ delete s.vdeck; }, "Virtual deck turned off — using the physical cards"); draw(); });
+    on("#dk-export",()=>{ const t="STCARDS"+JSON.stringify(lib); try{ navigator.clipboard.writeText(t).then(()=>toast("Copied — send it to your friend"),()=>prompt("Copy this:",t)); }catch(e){ prompt("Copy this:",t); } });
+    on("#dk-import",()=>{ const t=prompt("Paste the card library text:"); if(!t) return; try{ const a=JSON.parse(t.trim().replace(/^STCARDS/,"")); if(!Array.isArray(a)) throw 0; lib=a; saveLib(lib); toast(`Loaded ${a.length} cards`); draw(); }catch(e){ toast("That doesn't look like a card library"); } });
+  };
+  draw();
 }
 
 // ---------- turn scripts with dice rolls ----------
@@ -2059,9 +2152,90 @@ function evalCond(c){
     return {">=":h>=n,"<=":h<=n,"==":h===n,"=":h===n,">":h>n,"<":h<n}[m[1]]; });
 }
 function scoreDice(dice, vs){ const hits=vs==null?0:dice.filter(d=>d.v!=="!"&&d.v>=vs).length, bang=dice.filter(d=>d.v==="!").length; return {hits,bang}; }
+// ---------- 3D dice thrown onto the board ----------
+// final rotation that shows face v on the front
+const FACE_ROT={1:[0,0],2:[0,-90],3:[-90,0],4:[90,0],5:[0,90],6:[0,180]};
+function throwDice(dice,vs){ return new Promise(res=>{
+  const fx=document.getElementById("dicefx"), rect=stage.getBoundingClientRect(); fx.innerHTML="";
+  if(!dice.length){ res(); return; }
+  const n=dice.length, cols=Math.min(n,4), gap=70, x0=rect.left+rect.width/2-((cols-1)*gap)/2-28, y0=rect.top+rect.height*0.38;
+  const fv=v=>v==="!"?1:Math.max(1,Math.min(6,+v||1));
+  dice.forEach((d,i)=>{ const v=fv(d.v), face=k=>d.k==="w"&&k===1?"!":k;
+    const sh=document.createElement("div"); sh.className="shadow"; fx.appendChild(sh);
+    const w=document.createElement("div"); w.className="dw "+(d.k==="w"?"w":"b");
+    w.innerHTML=`<div class="cube">${[1,2,3,4,5,6].map(k=>`<div class="f f${k} ${d.k==="w"&&k===1?"bang":""}">${face(k)}</div>`).join("")}</div>`; fx.appendChild(w);
+    const tx=x0+(i%cols)*gap+(Math.random()*16-8), ty=y0+Math.floor(i/cols)*gap+(Math.random()*16-8);
+    const sx=rect.right+40+Math.random()*60, sy=rect.bottom-40-Math.random()*80, dur=950+Math.random()*350, [rx,ry]=FACE_ROT[v];
+    const spinX=360*(2+Math.floor(Math.random()*2)), spinY=360*(2+Math.floor(Math.random()*2)), rz=Math.random()*40-20;
+    w.animate([{transform:`translate(${sx}px,${sy}px)`},{transform:`translate(${(sx+tx)/2}px,${ty-120}px)`,offset:.45},{transform:`translate(${tx+(tx-sx)*0.04}px,${ty}px)`,offset:.75},{transform:`translate(${tx}px,${ty-14}px)`,offset:.86},{transform:`translate(${tx}px,${ty}px)`}],{duration:dur,easing:"cubic-bezier(.25,.7,.35,1)",fill:"forwards"});
+    w.firstChild.animate([{transform:`rotateX(${Math.random()*360}deg) rotateY(${Math.random()*360}deg) rotateZ(0deg)`},{transform:`rotateX(${rx+spinX}deg) rotateY(${ry+spinY}deg) rotateZ(${rz}deg)`}],{duration:dur,easing:"cubic-bezier(.15,.75,.3,1)",fill:"forwards"});
+    sh.animate([{transform:`translate(${sx}px,${sy+50}px) scale(.6)`,opacity:.2},{transform:`translate(${tx+3}px,${ty+52}px) scale(1)`,opacity:.8}],{duration:dur,easing:"ease-out",fill:"forwards"});
+    if(vs!=null&&d.v!=="!"&&+d.v>=vs) setTimeout(()=>w.firstChild.classList.add("hit"),dur);
+  });
+  setTimeout(res,1500);
+}); }
+// ---------- physics dice: a real rigid-body simulation decides which face lands up ----------
+const CANNON_URL="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js";
+let CANNON_P=null; const loadCannon=()=>CANNON_P||(CANNON_P=import(CANNON_URL).catch(e=>{ CANNON_P=null; throw e; }));
+const rnd=()=>{ const a=new Uint32Array(1); crypto.getRandomValues(a); return a[0]/4294967296; };   // throw strength/spin only
+// local face normals of the CSS cube: 1 +z, 6 −z, 2 +x, 5 −x, 3 −y, 4 +y   (world: x right, y down the screen, z up toward you)
+const FACE_N=[[1,[0,0,1]],[6,[0,0,-1]],[2,[1,0,0]],[5,[-1,0,0]],[3,[0,-1,0]],[4,[0,1,0]]];
+async function physicsRoll(dice){
+  const C=await loadCannon();
+  const fx=document.getElementById("dicefx"), rect=stage.getBoundingClientRect(), PX=46; fx.innerHTML="";
+  const W=rect.width/PX, H=rect.height/PX;
+  const world=new C.World({gravity:new C.Vec3(0,0,-60), allowSleep:true}); world.broadphase=new C.NaiveBroadphase();
+  const mDie=new C.Material("die"), mTab=new C.Material("table");
+  world.addContactMaterial(new C.ContactMaterial(mDie,mTab,{friction:0.32,restitution:0.38}));
+  world.addContactMaterial(new C.ContactMaterial(mDie,mDie,{friction:0.25,restitution:0.45}));
+  const plane=(pos,axis,ang)=>{ const b=new C.Body({mass:0,material:mTab,shape:new C.Plane()}); b.position.set(...pos); if(axis) b.quaternion.setFromAxisAngle(new C.Vec3(...axis),ang); world.addBody(b); };
+  plane([0,0,0]);                                   // table (normal +z)
+  plane([0.2,0,0],[0,1,0],Math.PI/2);               // left wall  (normal +x)
+  plane([W-0.2,0,0],[0,1,0],-Math.PI/2);            // right wall (normal −x)
+  plane([0,0.2,0],[1,0,0],-Math.PI/2);              // top wall   (normal +y)
+  plane([0,H-0.2,0],[1,0,0],Math.PI/2);             // bottom wall(normal −y)
+  const items=dice.map((d,i)=>{
+    const b=new C.Body({mass:1,material:mDie,shape:new C.Box(new C.Vec3(0.5,0.5,0.5)),linearDamping:0.08,angularDamping:0.12,sleepSpeedLimit:0.25,sleepTimeLimit:0.35});
+    b.position.set(W-1.2-rnd()*0.8, H*(0.35+0.4*rnd())+(i-dice.length/2)*0.4, 2.5+rnd()*2.5);
+    b.quaternion.setFromEuler(rnd()*6.28,rnd()*6.28,rnd()*6.28);
+    b.velocity.set(-(11+rnd()*9), (rnd()-0.5)*8, 2+rnd()*4);
+    b.angularVelocity.set((rnd()-0.5)*30,(rnd()-0.5)*30,(rnd()-0.5)*30);
+    world.addBody(b);
+    const sh=document.createElement("div"); sh.className="shadow"; fx.appendChild(sh);
+    const w=document.createElement("div"); w.className="dw "+(d.k==="w"?"w":"b");
+    w.innerHTML=`<div class="cube">${[1,2,3,4,5,6].map(k=>`<div class="f f${k} ${d.k==="w"&&k===1?"bang":""}">${d.k==="w"&&k===1?"!":k}</div>`).join("")}</div>`; fx.appendChild(w);
+    return {d,b,w,sh};
+  });
+  const topFace=b=>{ let best=null,bz=-2; for(const [v,n] of FACE_N){ const z=b.quaternion.vmult(new C.Vec3(...n)).z; if(z>bz){ bz=z; best=v; } } return {v:best,flat:bz>0.96}; };
+  const draw=()=>{ for(const it of items){ const p=it.b.position, q=it.b.quaternion, s=1+Math.max(0,p.z-0.5)*0.09;
+    const x=p.x*PX+rect.left-28, y=p.y*PX+rect.top-28;
+    const xx=1-2*(q.y*q.y+q.z*q.z), xy=2*(q.x*q.y-q.z*q.w), xz=2*(q.x*q.z+q.y*q.w), yx=2*(q.x*q.y+q.z*q.w), yy=1-2*(q.x*q.x+q.z*q.z), yz=2*(q.y*q.z-q.x*q.w), zx=2*(q.x*q.z-q.y*q.w), zy=2*(q.y*q.z+q.x*q.w), zz=1-2*(q.x*q.x+q.y*q.y);
+    it.w.style.transform=`translate(${x}px,${y}px) scale(${s})`;
+    it.w.firstChild.style.transform=`matrix3d(${xx},${yx},${zx},0,${xy},${yy},${zy},0,${xz},${yz},${zz},0,0,0,0,1)`;
+    it.sh.style.transform=`translate(${x+3+p.z*6}px,${y+40+p.z*8}px) scale(${Math.max(.4,1-p.z*0.08)})`; it.sh.style.opacity=String(Math.max(.25,.85-p.z*0.1)); } };
+  return await new Promise(res=>{
+    let last=performance.now(), t0=last, nudges=0;
+    const step=now=>{ const dt=Math.min(0.05,(now-last)/1000); last=now; world.step(1/120,dt,8); draw();
+      const resting=items.every(it=>it.b.sleepState===C.Body.SLEEPING||(it.b.velocity.length()<0.08&&it.b.angularVelocity.length()<0.1&&it.b.position.z<0.6));
+      if(resting||now-t0>7000){
+        const cocked=items.filter(it=>!topFace(it.b).flat);
+        if(cocked.length&&nudges<4&&now-t0<7000){ nudges++; cocked.forEach(it=>{ it.b.wakeUp(); it.b.velocity.set((rnd()-0.5)*4,(rnd()-0.5)*4,6); it.b.angularVelocity.set((rnd()-0.5)*14,(rnd()-0.5)*14,(rnd()-0.5)*14); }); requestAnimationFrame(step); return; }  // a die leaning on another or a wall gets re-tossed, like a real "cocked" die
+        items.forEach(it=>{ const v=topFace(it.b).v; it.d.v=it.d.k==="w"&&v===1?"!":v; });
+        res(items); return; }
+      requestAnimationFrame(step); };
+    requestAnimationFrame(step); });
+}
+// roll a set of dice: physics if available, otherwise random numbers + a simple animation
+async function rollDice(dice,vs){
+  try{ const items=await physicsRoll(dice); items.forEach(it=>{ if(vs!=null&&it.d.v!=="!"&&+it.d.v>=vs) it.w.firstChild.classList.add("hit"); }); await sleep(500); return "physics"; }
+  catch(e){ dice.forEach(d=>{ const v=1+Math.floor(rnd()*6); d.v=d.k==="w"&&v===1?"!":v; }); await throwDice(dice,vs); return "random"; }
+}
+
+function clearDice(){ const fx=document.getElementById("dicefx"); fx.innerHTML=""; }
 function rollPrompt(o){ // o: {w,b,vs,why,who,preview}
   return new Promise(res=>{
-    const box=document.getElementById("rollbox"); let dice=null, pick=null;
+    const box=document.getElementById("rollbox"); let dice=null, pick=null, auto=false, left=0, timer=null;
+    const tick=()=>{ clearTimeout(timer); if(!auto) return; if(left<=0){ const g=box.querySelector("#rb-go"); if(g) g.click(); return; } timer=setTimeout(()=>{ left--; if(!auto) return; const a=box.querySelector("#rb-auto"); if(a) a.textContent=`Applying the result in ${left}s…`; tick(); },1000); };
     const roll1=k=>{ const v=1+Math.floor(Math.random()*6); return k==="w"&&v===1?"!":v; };
     const draw=()=>{
       const sc=dice?scoreDice(dice,o.vs):null;
@@ -2071,21 +2245,23 @@ function rollPrompt(o){ // o: {w,b,vs,why,who,preview}
         ${dice?`<div class="rb-dice">${dice.map((d,i)=>`<button class="chip ${d.k==="w"?"w":"b"} ${d.v==="!"?"bang":""} ${pick===i?"pk":""}" data-d="${i}">${d.v}</button>`).join("")}</div>
           <div class="rb-score"><b>${o.vs!=null?`${sc.hits} hit${sc.hits===1?"":"s"}`:"Rolled"}</b>${sc.bang?` · <span class="bad">${sc.bang} "!"</span>`:""}</div>
           ${pick!=null?`<div class="row">${dice[pick].v==="!"?"":`<button class="sm" data-adj="2">+2</button><button class="sm" data-adj="-2">−2</button><button class="sm" data-adj="1">+1</button><button class="sm" data-adj="-1">−1</button>`}<button class="sm" data-adj="re">Reroll</button><button class="sm" data-adj="x">Done</button></div>`
-            :`<div class="muted">Using a Focus token? Tap a die to reroll or change it.</div>`}`:""}
+            :`<div class="muted">Using a Focus token? Tap a die to reroll or change it.</div>`}
+          ${auto?`<div class="rb-auto"><span id="rb-auto">Applying the result in ${left}s…</span> <button class="sm" id="rb-hold" style="min-height:28px;padding:2px 8px">Wait — I'll use Focus</button></div>`:""}`:""}
         ${o.preview&&o.preview.length?`<div class="rb-plan"><span class="muted">Plan after this roll:</span>${o.preview.map(l=>`<div>${esc(l)}</div>`).join("")}</div>`:""}
         <div class="row">${dice?`<button class="on" id="rb-go" style="flex:1">Continue the turn</button>`:`<button class="on" id="rb-roll" style="flex:1">Roll</button>`}<button class="sm danger" id="rb-stop">Stop here</button></div>`;
       box.style.display="block";
       const q=s_=>box.querySelector(s_);
-      if(q("#rb-roll")) q("#rb-roll").onclick=()=>{ dice=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:roll1(k)})); draw(); };
-      box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
+      if(q("#rb-roll")) q("#rb-roll").onclick=async()=>{ const ds=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:null})); box.style.display="none"; await rollDice(ds,o.vs); dice=ds; auto=S.autoApply!==false; left=4; draw(); tick(); };
+      box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ auto=false; pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
+      if(q("#rb-hold")) q("#rb-hold").onclick=()=>{ auto=false; draw(); };
       box.querySelectorAll("[data-adj]").forEach(b=>b.onclick=()=>{ const a=b.dataset.adj, d=dice[pick];
-        if(a==="re") d.v=roll1(d.k); else if(a!=="x"){ d.v=d.v+(+a); d.mod=true; } if(a!=="re") pick=null; draw(); });
-      if(q("#rb-go")) q("#rb-go").onclick=()=>{ box.style.display="none"; const sc=scoreDice(dice,o.vs);
+        if(a==="re"){ const one=[{k:d.k,v:null}]; box.style.display="none"; rollDice(one,o.vs).then(()=>{ d.v=one[0].v; d.mod=true; pick=null; draw(); }); return; } else if(a!=="x"){ d.v=d.v+(+a); d.mod=true; } pick=null; draw(); });
+      if(q("#rb-go")) q("#rb-go").onclick=()=>{ clearTimeout(timer); auto=false; box.style.display="none"; clearDice(); const sc=scoreDice(dice,o.vs);
         const parts=[]; const ws=dice.filter(d=>d.k==="w").map(d=>d.v), bs=dice.filter(d=>d.k==="b").map(d=>d.v);
         if(ws.length) parts.push("white "+ws.join(", ")); if(bs.length) parts.push("black "+bs.join(", "));
         commit(()=>{}, `rolled ${parts.join(" · ")}${o.why?" — "+o.why:""}${o.vs!=null?` → ${sc.hits} hit${sc.hits===1?"":"s"}`:""}${sc.bang?` · ${sc.bang} "!"`:""}`);
         res({...sc, dice}); };
-      q("#rb-stop").onclick=()=>{ box.style.display="none"; res(null); };
+      q("#rb-stop").onclick=()=>{ clearTimeout(timer); auto=false; box.style.display="none"; clearDice(); res(null); };
     };
     draw();
   });
@@ -2166,7 +2342,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="3.3";
+const APP_VERSION="3.6";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
