@@ -330,7 +330,7 @@ const LAYOUTS = {
       ...[0,1,2,4,5].map(c=>"h:13,"+c),
       "v:17,0","v:18,0","v:19,0","v:17,3","v:18,3","v:19,3","h:16,1","h:16,3" ],   // bottom-left booths: walled, open only at C16→C17                      // bottom of the rooms, opening D13/D14 to the row-14 corridor
     arrows:{"1,1":1,"1,2":1,"2,1":0,"7,0":1,"12,0":1},   // 0 up, 1 right, 2 down, 3 left
-    marks:{"1,1":"radio"},
+    marks:{"1,1":"radio"}, counts:{"2,2":5},
     pieces:[ {type:"snake",r:19,c:6},
       {type:"guard",r:1,c:9,facing:1},{type:"guard",r:4,c:6,facing:2},{type:"guard",r:5,c:15,facing:2},{type:"guard",r:9,c:2,facing:1},
       {type:"camera",r:3,c:12,fg:2,fo:3},{type:"camera",r:10,c:2,fg:2,fo:3},{type:"camera",r:2,c:6,fg:1,fo:2},
@@ -1040,6 +1040,7 @@ function renderGamePane(){
   el.innerHTML = `
   <div class="card"><div class="row"><label>Round</label><button class="sm" id="rdn">−</button><b style="font-size:18px">${st.round}</b><button class="sm" id="rup">+</button><b style="margin-left:auto">${st.phase} phase</b></div>
     <div class="row"><label>Rules check</label><button class="sm ${st.rules!==false?"on":""}" id="rules-t">${st.rules!==false?"On — actions are checked":"Off — free movement"}</button></div>
+    <div class="row"><button class="on" id="guard-turn" style="flex:1;background:#7a2f25;border-color:#c0392b">🃏 Guards' turn — enter the Guard Order card</button></div>
     <div class="row"><button class="on" id="next-phase" style="flex:1">${st.phase==="Player"?"End player phase → Enemy":"End enemy phase → next round"}</button></div></div>
   ${st.defeat?`<div class="card"><div class="row"><label>Defeated (${esc(st.defeat.zone)})</label><button class="sm" data-def="-1">−</button><b style="font-size:18px">${st.defeat.count||0} / ${st.defeat.goal}</b><button class="sm" data-def="1">+</button></div></div>`:""}
   ${st.shafts?`<div class="card"><div class="row"><label>Elevator</label>${Object.keys(st.shafts).map(k=>`<button class="sm ${st.lift===k?"on":""}" data-lift="${esc(k)}">${esc(k)}</button>`).join("")}<button class="sm ${!st.lift?"on":""}" data-lift="">Not here</button></div><p class="muted">Players move it with Interact; these buttons are for fixing it by hand.</p></div>`:""}
@@ -1071,6 +1072,7 @@ function renderGamePane(){
   el.querySelectorAll("[data-deck]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.deck.split(","); commit(s=>{ s[k]=Math.max(0,s[k]+(+d)); }); });
   on("draw",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, st.blue>0?`Guard Order card drawn (blue left: ${st.blue-1})`:`RED Guard Order card drawn (red left: ${Math.max(0,st.red-1)}) — check for Game Over`));
   on("burn",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `Guard Order card burned to the bottom — if it was Game Over, the stage fails`));
+  on("guard-turn",()=>{ if(EN.busy){ toast("The guards are still moving"); return; } openGuardCard(); });
   on("cam",()=>{ commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flipped to ${st.cam==="green"?"orange":"green"}`); autoSpot(); });
   on("los-all",()=>{ S.losAll=!S.losAll; syncEye(); refresh(); });
   on("order",()=>{ S.order=!S.order; refresh(); });
@@ -1681,6 +1683,170 @@ async function afterAct(p,kind,msg){ const q=P(p.id);
   return msg; }
 const ACTION_CMDS=/^(elevator|sneak|dash|hth|combo|takedown|shoot|slash|stealth|recharge|hack|search|access|knock|ration|interact|drag|focus|focusmove|disguise|end)\b/i;
 
+// ---------- enemy phase automation (guard AI following the rulebook's Enemy Phase) ----------
+const EN={ busy:false, stop:false, last:null };
+const inZone=(z,r)=>!z||(r>=z.r0&&r<=z.r1);
+function zonesAll(){ return S.st.zones&&S.st.zones.length?S.st.zones:[null]; }
+function zoneActive(z){ return S.st.pieces.some(p=>(isPlayer(p)||p.type==="attn")&&inZone(z,p.r)); }
+function zoneOfPiece(p){ return zonesAll().find(z=>inZone(z,p.r)); }
+const sameZone=(a,b)=>zoneOfPiece(a)===zoneOfPiece(b);
+const inBounds=(r,c)=>r>=0&&c>=0&&r<S.st.rows&&c<S.st.cols;
+// can a guard step from (r,c) in direction d? returns the landing square or null
+function guardStep(g,r,c,d,{ignore}={}){
+  const r2=r+DR[d], c2=c+DC[d];
+  if(!inBounds(r2,c2)||wallBetween(r,c,r2,c2)||blocked(r2,c2)) return null;
+  const f=S.st.pieces.find(p=>p.r===r2&&p.c===c2&&p.id!==g.id&&blocksFig(p));
+  if(!f) return {r:r2,c:c2,d};
+  if(ignore&&f.id===ignore) return {r:r2,c:c2,d};
+  if(f.type!=="guard") return null;                       // players and boxes block; only guards can be leapfrogged
+  const r3=r2+DR[d], c3=c2+DC[d];
+  if(!inBounds(r3,c3)||wallBetween(r2,c2,r3,c3)||blocked(r3,c3)) return null;
+  if(S.st.pieces.some(p=>p.r===r3&&p.c===c3&&p.id!==g.id&&blocksFig(p))) return null;
+  return {r:r3,c:c3,d,leap:true};
+}
+// shortest path (fewest spaces, then fewest turns) from guard to target square; target may hold a player
+function guardPath(g,tr,tc){
+  const key3=(r,c,d)=>r*1000+c*10+d, best=new Map(), q=[];
+  for(let d=0;d<4;d++){ const k=key3(g.r,g.c,d); best.set(k,{s:0,t:d===g.facing?0:1,prev:null,r:g.r,c:g.c,d}); q.push(k); }
+  let found=null;
+  while(q.length){ q.sort((a,b)=>{ const A=best.get(a),B=best.get(b); return A.s-B.s||A.t-B.t; }); const k=q.shift(), n=best.get(k);
+    if(n.r===tr&&n.c===tc){ found=n; break; }
+    for(let d=0;d<4;d++){ let st_=guardStep(g,n.r,n.c,d);
+      if(!st_){ const r2=n.r+DR[d], c2=n.c+DC[d]; if(r2===tr&&c2===tc&&inBounds(r2,c2)&&!wallBetween(n.r,n.c,r2,c2)&&!blocked(r2,c2)) st_={r:r2,c:c2,d}; else continue; }
+      const s=n.s+1, t=n.t+(d===n.d?0:1), k2=key3(st_.r,st_.c,d), o=best.get(k2);
+      if(!o||s<o.s||(s===o.s&&t<o.t)){ best.set(k2,{s,t,prev:k,r:st_.r,c:st_.c,d,leap:st_.leap}); if(!q.includes(k2)) q.push(k2); } } }
+  if(!found) return null;
+  const path=[]; let n=found; while(n&&n.prev!=null){ path.unshift({r:n.r,c:n.c,d:n.d,leap:n.leap}); n=best.get(n.prev); }
+  return path;
+}
+const tokenAt=(r,c)=>S.st.pieces.filter(p=>p.r===r&&p.c===c&&(p.type==="attn"||p.type==="ko"||p.type==="dead"));
+function playersSeenBy(g){ return S.st.pieces.filter(p=>isPlayer(p)&&!p.disguised&&!p.stealth&&los(g,p.r,p.c)); }
+function guardFace(g,d,why){ if(g.facing===d) return; commit(st=>{ st.pieces.find(x=>x.id===g.id).facing=d; }, `${nameOf(g)} faces ${DIRN[d]}${why?" ("+why+")":""}`); }
+function guardMoveTo(g,s,mode){ const from=sq(g.r,g.c); commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=s.r; q.c=s.c; q.facing=s.d; }, `${nameOf(g)} ${from} ${mode}${s.leap?" (leapfrog)":""} ${sq(s.r,s.c)}`); }
+function enemyAsk(title,text,buttons){ return new Promise(res=>{ const box=document.getElementById("rollbox");
+  box.innerHTML=`<div class="rb-title">${esc(title)}</div><div style="margin:6px 0 10px">${text}</div><div class="row">${buttons.map((b,i)=>`<button class="${i===0?"on":"sm"}" data-ea="${i}" style="${i===0?"flex:1":""}">${esc(b)}</button>`).join("")}</div>`;
+  box.style.display="block"; box.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>{ box.style.display="none"; res(+b.dataset.ea); }); }); }
+async function guardReaction(g){
+  const toks=tokenAt(g.r,g.c); if(!toks.length) return;
+  addLog(`${nameOf(g)} is on ${toks.map(t=>t.type==="attn"?`${t.owner}'s ${t.mode==="alert"?"!":"?"}`:t.type==="ko"?"a KO guard":"a dead guard").join(" and ")} → REACTION`); refresh();
+  const a=await enemyAsk(`⚠ ${nameOf(g)} reacts at ${sq(g.r,g.c)}`,`Draw the top <b>Guard Reaction</b> card and resolve it for ${esc(toks.map(t=>t.type==="attn"?t.owner+"'s "+(t.mode==="alert"?"!":"?"):t.type==="ko"?"KO guard":"dead guard").join(", "))}, top to bottom. Move tokens/guards on this board to match, then continue.`,["Done — continue","Stop the enemy phase"]);
+  if(a===1) EN.stop=true; }
+async function guardAttack(g){
+  const seen=playersSeenBy(g); if(!seen.length) return false;
+  seen.forEach(pl=>{ const t=S.st.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===(pl.label||"").toLowerCase()); if(!(t&&t.mode==="alert"&&t.r===pl.r&&t.c===pl.c)) playerToken(pl,"alert"); });
+  const dist=pl=>{ const p=guardPath(g,pl.r,pl.c); return p?p.length:99; }; const tgt=seen.sort((a,b)=>dist(a)-dist(b))[0];
+  const nb=g.type==="boss"&&g.atk?g.atk:2;
+  addLog(`${nameOf(g)} sees ${seen.map(nameOf).join(", ")} → ! and attacks ${nameOf(tgt)}`); refresh();
+  const r=await rollPrompt({w:0,b:nb,vs:defOf(tgt),why:`${nameOf(g)} attacks ${nameOf(tgt)} (${nb} black vs Defense ${defOf(tgt)})`});
+  if(r){ commit(()=>{}, `${nameOf(g)} ATTACKS ${nameOf(tgt)} → ${r.hits} hit${r.hits===1?"":"s"}`); if(r.hits) hurt(P(tgt.id),r.hits); } else EN.stop=true;
+  return true; }
+// find a new path: turn left/right toward an open space (card arrow breaks ties / keeps turning)
+function newPathFacing(g,arrow){ const L=(g.facing+3)%4, Rr=(g.facing+1)%4, ok=d=>!!guardStep(g,g.r,g.c,d);
+  if(ok(L)&&ok(Rr)) return arrow==="L"?L:Rr; if(ok(L)) return L; if(ok(Rr)) return Rr;
+  for(let i=1;i<4;i++){ const d=(g.facing+(arrow==="L"?-i:i)+8)%4; if(ok(d)) return d; } return null; }
+async function activateGuard(gid,card){
+  let g=P(gid); if(!g) return;
+  // already on a token, or already sees a player
+  if(tokenAt(g.r,g.c).length){ if(await guardAttack(g)){} await guardReaction(P(gid)); return; }
+  if(await guardAttack(g)) return;
+  const z=zoneOfPiece(g), zp=S.st.pieces.filter(p=>inZone(z,p.r));
+  const alerts=zp.filter(p=>p.type==="attn"&&p.mode==="alert"), qs=zp.filter(p=>p.type==="attn"&&p.mode!=="alert");
+  let mode="PATROL", target=null, n=card.blue;
+  const pl=(t)=>{ const p=guardPath(g,t.r,t.c); return p?p.length:Infinity; };
+  if(alerts.length){ mode="ALERT"; n=card.red; target=alerts.sort((a,b)=>pl(a)-pl(b))[0]; }
+  else {
+    const guards=zp.filter(p=>p.type==="guard");
+    const mine=qs.filter(t=>{ const d=pl(t); return d<Infinity && guards.every(o=>o.id===g.id||(guardPath(o,t.r,t.c)||{length:Infinity}).length>=d); });
+    if(mine.length){ mode="INVESTIGATE"; target=mine.sort((a,b)=>pl(a)-pl(b))[0]; }
+    else { const cams=zp.filter(p=>p.type==="camera"); const bodies=zp.filter(p=>(p.type==="ko"||p.type==="dead")&&(los(g,p.r,p.c)||cams.some(c=>los(c,p.r,p.c))));
+      if(bodies.length){ mode="INVESTIGATE"; target=bodies.sort((a,b)=>pl(a)-pl(b))[0]; } } }
+  addLog(`${nameOf(g)} — ${mode}${target?` toward ${target.type==="attn"?target.owner+"'s "+(target.mode==="alert"?"!":"?"):target.type==="ko"?"KO guard":"dead guard"} at ${sq(target.r,target.c)}`:""} · moves ${n}`); refresh();
+  if(target){
+    const path=guardPath(g,target.r,target.c);
+    if(!path){ addLog(`${nameOf(g)} has no path — stays put`); return; }
+    let i=0;
+    for(;i<Math.min(n,path.length);i++){ const s=path[i];
+      if(S.st.pieces.some(p=>p.r===s.r&&p.c===s.c&&p.id!==g.id&&blocksFig(p))){ guardFace(g,s.d,"path blocked"); break; }
+      guardMoveTo(g,s,mode); g=P(gid); await sleep(300); if(EN.stop) return;
+      if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
+      if(tokenAt(g.r,g.c).length){ await guardReaction(g); return; } }
+    g=P(gid); if(i<path.length && !playersSeenBy(g).length) guardFace(g,path[i].d,"faces along his path");
+    return; }
+  // patrol: forward as far as possible; forced arrows turn at once; ends on a corner icon -> find a new path
+  let left=n, guard=0;
+  while(left>0&&guard++<40){ g=P(gid);
+    const s=guardStep(g,g.r,g.c,g.facing);
+    if(!s){ const d=newPathFacing(g,card.arrow); if(d==null){ addLog(`${nameOf(g)} is boxed in — activation ends`); return; } guardFace(g,d,"blocked, finds a new path"); await sleep(200); continue; }
+    guardMoveTo(g,s,"PATROL"); left--; g=P(gid); await sleep(300); if(EN.stop) return;
+    const arw=(S.st.arrows||{})[key(g.r,g.c)]; if(arw!=null&&arw!==g.facing) guardFace(g,arw,"forced arrow");
+    g=P(gid);
+    if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
+    if(tokenAt(g.r,g.c).length){ await guardReaction(g); return; } }
+  g=P(gid); if(!g||playersSeenBy(g).length) return;
+  if(S.st.cells[key(g.r,g.c)]==="corner"){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"ended on a corner icon"); }
+  else if(!guardStep(g,g.r,g.c,g.facing)){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"faces an obstacle"); }
+  await guardAttack(P(gid));
+}
+function spawnFacing(st,r,c){ const a=(st.arrows||{})[key(r,c)]; if(a!=null) return a; for(const d of [2,1,3,0]){ const r2=r+DR[d],c2=c+DC[d]; if(inBounds(r2,c2)&&!wallBetween(r,c,r2,c2)&&!blocked(r2,c2)) return d; } return 2; }
+function burnCard(why){ commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `${why} → reveal the top Guard Order card and put it on the bottom (if it's GAME OVER, the stage fails)`); }
+async function guardActionSection(card){
+  const st=S.st, zones=zonesAll().filter(zoneActive);
+  if(card.action==="waken"){
+    for(const k of st.pieces.filter(p=>p.type==="ko"&&zones.some(z=>inZone(z,p.r)))){
+      if((k.stars||2)>1) commit(s=>{ s.pieces.find(x=>x.id===k.id).stars=1; }, `Waken: KO token at ${sq(k.r,k.c)} → ★`);
+      else { commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==k.id); s.pieces.push({id:s.nextId++,type:"guard",r:k.r,c:k.c,label:k.from||("G"+s.guardNo++),facing:spawnFacing(s,k.r,k.c),hp:2,dmg:0,kod:0}); }, `Waken: ${k.from||"guard"} gets up at ${sq(k.r,k.c)} — players may change his facing`); } } }
+  if(card.action==="radio"){
+    for(const z of zones){
+      const counts=Object.entries(st.counts||{}).filter(([k])=>inZone(z,+k.split(",")[0])), radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0]));
+      if(!counts.length||!radios.length) continue;
+      const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).length;
+      while(have<want){ const [r,c]=radios[0].split(",").map(Number); let spot=null;
+        const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
+        if(free(r,c)) spot={r,c}; else for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; }
+        if(!spot){ burnCard(`Radio-In: no room to spawn${z?" in the "+z.name:""}`); break; }
+        commit(s=>{ const g={id:s.nextId++,type:"guard",r:spot.r,c:spot.c,facing:spawnFacing(s,spot.r,spot.c)}; initPiece(g,s); s.pieces.push(g); }, `Radio-In: a guard spawns at ${sq(spot.r,spot.c)}${z?" ("+z.name+")":""}`);
+        have++; await sleep(250); } } }
+  if(card.action==="lost"){ const n=Math.floor(st.pieces.filter(p=>p.type==="dead").length/3); for(let i=0;i<n;i++) burnCard("Lost Contact (3 dead guards)"); if(!n) addLog("Lost Contact: fewer than 3 dead guard tokens — nothing happens"); }
+  if(card.action==="stay"){
+    for(const pl of st.pieces.filter(isPlayer).filter(p=>zones.some(z=>inZone(z,p.r)))){
+      const near=st.pieces.some(g=>g.type==="guard"&&Math.abs(g.r-pl.r)+Math.abs(g.c-pl.c)<=2&&(()=>{ const r0=Math.min(g.r,pl.r),r1=Math.max(g.r,pl.r),c0=Math.min(g.c,pl.c),c1=Math.max(g.c,pl.c); for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++) if(blocked(r,c)) return false; return true; })());
+      const al=st.pieces.some(x=>x.type==="attn"&&x.mode==="alert"&&(x.owner||"").toLowerCase()===(pl.label||"").toLowerCase());
+      if(near&&!al){ playerToken(pl,"q"); addLog(`Stay Alert: ${nameOf(pl)} is within 2 of a guard → ? under ${nameOf(pl)}`); } } }
+}
+async function runEnemyPhase(card){
+  if(EN.busy) return; EN.busy=true; EN.stop=false; EN.last=card;
+  try{
+    if(S.st.phase!=="Enemy") commit(s=>{ s.phase="Enemy"; }, `— Enemy phase, round ${S.st.round} —`);
+    commit(s=>{ if(card.color==="red") s.red=Math.max(0,s.red-1); else s.blue=Math.max(0,s.blue-1); },
+      `Guard Order card: ${card.over?"GAME OVER":`${card.color} · patrol ${card.blue} · alert ${card.red} · turn ${card.arrow==="L"?"left ⟲":"right ⟳"}${card.action!=="none"?" · "+({waken:"Waken Guard",radio:"Radio-In",lost:"Lost Contact",stay:"Stay Alert"})[card.action]:""}${card.cam?" · camera flip":""}`}`);
+    if(card.over){ addLog("GAME OVER card revealed — the stage is failed"); toast("Game Over"); return; }
+    await guardActionSection(card); if(EN.stop) return;
+    if(card.cam&&S.st.pieces.some(p=>p.type==="camera")){ commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flip to ${S.st.cam==="green"?"orange":"green"}`); await autoSpot(); await sleep(300); }
+    const zs=zonesAll().filter(zoneActive).sort((a,b)=>a&&b?(S.st.priority[0]==="T"?a.r0-b.r0:b.r0-a.r0):0), ord=activationOrder();
+    for(const z of zs){ const gs=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).sort((a,b)=>ord[a.id]-ord[b.id]).map(p=>p.id);
+      for(const id of gs){ if(EN.stop) break; if(!P(id)) continue; S.sel=id; refresh(); await activateGuard(id,card); await sleep(250); } }
+    S.sel=null; addLog(EN.stop?"Enemy phase stopped by the players":"Enemy phase done — check the board, then start the next round"); toast(EN.stop?"Enemy phase stopped":"Guards done");
+  } finally { EN.busy=false; refresh(); }
+}
+function openGuardCard(){
+  const box=document.getElementById("rollbox"), c=Object.assign({color:S.st.blue>0?"blue":"red",blue:2,red:4,arrow:"R",action:"none",cam:false,over:false},EN.last||{},{over:false,color:S.st.blue>0?"blue":"red"});
+  const draw=()=>{ const opt=(k,v,l)=>`<button class="sm ${c[k]===v?"on":""}" data-k="${k}" data-v="${v}">${l}</button>`, num=(k,l)=>`<div class="row"><label>${l}</label><button class="sm" data-n="${k},-1">−</button><b style="font-size:18px;min-width:22px;text-align:center">${c[k]}</b><button class="sm" data-n="${k},1">+</button></div>`;
+    box.innerHTML=`<div class="rb-title">🃏 Guard Order card — copy what your card shows</div>
+      <div class="row"><label>Card</label>${opt("color","blue","Blue")}${opt("color","red","Red")}<button class="sm ${c.over?"on":""}" data-over="1" style="${c.over?"background:#7a2f25":""}">GAME OVER</button></div>
+      ${c.over?"":`${num("blue","Patrol # (blue)")}${num("red","Alert # (red)")}
+      <div class="row"><label>Turn arrow</label>${opt("arrow","L","⟲ Left")}${opt("arrow","R","⟳ Right")}</div>
+      <div class="row" style="flex-wrap:wrap"><label>Guard action</label>${opt("action","none","None")}${opt("action","waken","Waken")}${opt("action","radio","Radio-In")}${opt("action","lost","Lost Contact")}${opt("action","stay","Stay Alert")}</div>
+      <div class="row"><label>Camera icon</label>${opt("cam",false,"No")}${opt("cam",true,"Flip cameras")}</div>`}
+      <div class="row"><button class="on" id="gc-go" style="flex:1">Run the guards</button><button class="sm danger" id="gc-x">Cancel</button></div>
+      <p class="muted" style="margin:6px 0 0">The board moves every guard by the rulebook: Alert (red #) toward the nearest !, Investigate (blue #) toward a ? or a body, otherwise Patrol (blue #). It stops for attacks (you roll) and Reaction cards (you resolve).</p>`;
+    box.style.display="block";
+    box.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{ const v=b.dataset.v; c[b.dataset.k]=v==="true"?true:v==="false"?false:v; draw(); });
+    box.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.n.split(","); c[k]=Math.max(0,Math.min(9,c[k]+(+d))); draw(); });
+    box.querySelector("[data-over]").onclick=()=>{ c.over=!c.over; draw(); };
+    box.querySelector("#gc-go").onclick=()=>{ box.style.display="none"; if(innerWidth<900) closeSheet(); runEnemyPhase({...c}); };
+    box.querySelector("#gc-x").onclick=()=>{ box.style.display="none"; }; };
+  draw(); }
+
 // ---------- turn scripts with dice rolls ----------
 const SCRIPT_CMDS=/^(elevator|move|face|dmg|kodmg|token|flip|ko|kill|remove|place|roll|noise|attack|if|note|stop|ask|sneak|dash|hth|combo|takedown|shoot|slash|stealth|recharge|hack|search|access|knock|ration|interact|drag|focus|focusmove|disguise|end)\b/i;
 function parseDice(spec){
@@ -1803,7 +1969,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="2.4";
+const APP_VERSION="2.5";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
