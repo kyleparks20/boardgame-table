@@ -1,0 +1,1133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1110">
+<title>Sneaking Table</title>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0b0f0e; --panel:#141a18; --panel2:#1b2320; --line:#2c3833; --text:#dbe6df; --muted:#8aa094;
+  --accent:#5fd38a; --accent2:#2e7d4f; --warn:#e5a63a; --danger:#e0533f;
+  --tabh:58px; --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overscroll-behavior:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;cursor:pointer;touch-action:manipulation}
+button:active{transform:scale(.97)}
+button.on{background:var(--accent2);border-color:var(--accent);color:#fff}
+button.danger{border-color:#7a2f25;color:#ffb3a8}
+button.sm{min-height:38px;padding:6px 10px;font-size:14px}
+input[type=number],input[type=text],select,textarea{background:#0f1513;border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-height:42px}
+textarea{width:100%;min-height:80px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;resize:vertical}
+input[type=range]{accent-color:var(--accent);height:32px}
+/* header */
+header{position:fixed;top:0;left:0;right:0;height:48px;display:flex;align-items:center;gap:8px;padding:0 10px;padding-top:env(safe-area-inset-top,0);background:#0b0f0ee6;border-bottom:1px solid var(--line);z-index:20;backdrop-filter:blur(6px)}
+header h1{font-size:14px;margin:0;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);white-space:nowrap}
+header .info{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+header button{min-height:34px;padding:4px 10px;font-size:13px}
+#net-dot{width:10px;height:10px;border-radius:50%;background:#555;display:inline-block;flex:none}
+#net-dot.ok{background:var(--accent)} #net-dot.wait{background:var(--warn)}
+/* stage */
+#stage{position:fixed;top:48px;left:0;right:0;bottom:calc(var(--tabh) + var(--safe-b));touch-action:none;background:#070a09}
+#board{display:block;width:100%;height:100%;touch-action:none}
+.zoom{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;z-index:5;transition:bottom .15s}
+#stage.qb .zoom,#stage.qb #eye,#stage.qb #hover{bottom:86px}
+#eye{position:absolute;left:8px;bottom:8px;z-index:5;min-height:36px!important;padding:4px 10px!important;font-size:13px;background:#141a18cc;transition:bottom .15s}
+.zoom button{width:40px;height:40px;min-height:40px;padding:0;font-size:18px;background:#141a18cc}
+#hover{position:absolute;left:150px;bottom:14px;background:#000a;padding:3px 8px;border-radius:7px;font-size:12px;color:var(--muted);pointer-events:none;transition:bottom .15s}
+#hover:empty{display:none}
+#armed{position:absolute;left:50%;transform:translateX(-50%);top:10px;background:var(--accent2);color:#fff;padding:8px 14px;border-radius:20px;font-size:14px;display:none;z-index:6}
+#armed button{min-height:30px;padding:2px 10px;margin-left:8px;font-size:13px;background:#0005}
+/* quick piece bar */
+#qbar{position:absolute;left:8px;right:8px;bottom:8px;background:#141a18f2;border:1px solid var(--line);border-radius:14px;padding:8px;display:none;gap:6px;align-items:center;z-index:6;overflow-x:auto}
+#qbar .name{font-weight:700;white-space:nowrap;padding:0 4px}
+#qbar button{flex:none}
+/* tab bar */
+nav{position:fixed;left:0;right:0;bottom:0;height:calc(var(--tabh) + var(--safe-b));padding-bottom:var(--safe-b);display:flex;background:#0f1412;border-top:1px solid var(--line);z-index:30;overflow-x:auto}
+nav button{flex:1 1 0;min-width:0;border:0;border-radius:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:var(--muted);padding:4px 6px}
+nav button .ic{font-size:19px;line-height:1}
+nav button.on{color:var(--accent);background:#5fd38a14}
+/* sheet */
+#sheet{position:fixed;z-index:25;background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column;transition:transform .22s ease;
+  left:0;right:0;bottom:calc(var(--tabh) + var(--safe-b));max-height:64vh;border-radius:16px 16px 0 0;transform:translateY(110%)}
+#sheet.open{transform:none}
+#sheet .grab{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+#sheet .grab .bar{width:40px;height:5px;border-radius:3px;background:#3a4a43;margin:0 auto 0 0}
+#sheet .grab h2{font-size:15px;margin:0;flex:1}
+#sheet .body{overflow:auto;padding:10px 14px 18px}
+@media (min-width:900px){
+  #sheet{left:auto;top:48px;right:0;bottom:calc(var(--tabh) + var(--safe-b));width:380px;max-height:none;border-radius:0;transform:translateX(105%)}
+  #sheet.open{transform:none}
+  nav{justify-content:center} nav button{flex:0 0 92px}
+}
+.pane{display:none}.pane.show{display:block}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:12px 0 6px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.grid2 button{display:flex;align-items:center;gap:8px;text-align:left}
+.sw{width:22px;height:22px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.row label{color:var(--muted);font-size:13px;min-width:78px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
+.muted{color:var(--muted);font-size:13px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;border-radius:7px;margin:3px;font-weight:800;font-size:17px}
+.chip.w{background:#eee;color:#111}.chip.w.bang{color:var(--danger)}
+.chip.b{background:#111;color:#eee;border:1px solid #444}
+.log div{padding:6px 0;border-bottom:1px solid #1f2925;font-size:13px}
+.log b{color:var(--accent)}
+.bad{color:var(--danger)}
+.focus button.spent{opacity:.4;text-decoration:line-through}
+#menu{position:fixed;inset:0;z-index:50;background:#070a09;display:none;overflow:auto;padding:calc(20px + env(safe-area-inset-top,0)) 16px 30px}
+#menu.open,#hist.open{display:block}
+#hist{position:fixed;inset:0;z-index:50;background:#070a09;display:none;overflow:auto;padding:calc(16px + env(safe-area-inset-top,0)) 16px 30px}
+#hist .wrap{max-width:620px;margin:0 auto}
+#hist h2{font-size:20px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:6px 0}
+.hround{margin:14px 0 4px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.hphase{font-size:12px;color:var(--muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.08em}
+.hactor{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--c,#555);border-radius:10px;padding:8px 10px;margin:6px 0}
+.hactor b{display:block;margin-bottom:2px}
+.hactor div{font-size:13px;padding:2px 0}
+.hactor .path{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+#menu .wrap{max-width:560px;margin:0 auto}
+#menu h2{font-size:22px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:6px 0 4px}
+.stagebtn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;margin:8px 0;padding:14px 16px}
+.stagebtn b{font-size:17px}
+.save-row{display:flex;gap:8px;align-items:center;margin:8px 0}
+.save-row .meta{flex:1;min-width:0}
+.save-row .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<header>
+  <button id="menu-btn" aria-label="Menu">☰</button>
+  <h1>Sneaking Table</h1>
+  <span class="info" id="round-hdr"></span>
+  <button id="undo" aria-label="Undo">↶</button>
+  <button id="redo" aria-label="Redo">↷</button>
+  <button id="hist-btn" aria-label="Play-by-play history">📜</button>
+  <span id="net-dot" title="Connection"></span>
+</header>
+
+<div id="stage">
+  <canvas id="board"></canvas>
+  <div id="hover">—</div>
+  <div id="armed"><span id="armed-txt"></span><button id="armed-x">Cancel</button></div>
+  <button id="eye"></button>
+  <div class="zoom">
+    <button id="zin" aria-label="Zoom in">+</button>
+    <button id="zout" aria-label="Zoom out">−</button>
+    <button id="zfit" aria-label="Fit board" style="font-size:13px">Fit</button>
+  </div>
+  <div id="qbar"></div>
+</div>
+
+<div id="sheet" aria-hidden="true">
+  <div class="grab"><span class="bar"></span><h2 id="sheet-title"></h2><button class="sm" id="sheet-x">Close</button></div>
+  <div class="body">
+    <div class="pane" id="pane-build"></div>
+    <div class="pane" id="pane-piece"></div>
+    <div class="pane" id="pane-game"></div>
+    <div class="pane" id="pane-dice">
+      <div class="card">
+        <div class="row"><label>White dice</label><button class="sm" data-dn="dw,-1">−</button><b id="dw-v">1</b><button class="sm" data-dn="dw,1">+</button></div>
+        <div class="row"><label>Black dice</label><button class="sm" data-dn="db,-1">−</button><b id="db-v">0</b><button class="sm" data-dn="db,1">+</button></div>
+        <div class="row"><input type="text" id="dfor" placeholder="What for? (e.g. Snake noise check)" style="flex:1"></div>
+        <div class="row"><button id="roll" class="on" style="flex:1">Roll</button></div>
+        <div class="row"><button class="sm" data-preset="0,2">Guard attack · 2 black</button><button class="sm" data-preset="2,1">Combo · 2W + 1B</button><button class="sm" data-preset="1,0">1 white</button></div>
+        <div id="dice-out"></div>
+        <p class="muted">White dice show <b>!</b> on the 1 face. Every roll is shared in the Log.</p>
+      </div>
+    </div>
+    <div class="pane" id="pane-log"><div class="log" id="log"></div></div>
+    <div class="pane" id="pane-map"></div>
+    <div class="pane" id="pane-net"></div>
+    <div class="pane" id="pane-ai">
+      <div class="card"><b>1 · Send the board to your AI</b>
+        <div class="row"><label>It plays</label><select id="ai-who" style="flex:1"></select></div>
+        <div class="row"><button class="on" id="ai-copy" style="flex:1">Copy board for AI</button></div>
+        <p class="muted">Paste it to Claude, Muse, or any AI. It includes the map, walls, every piece and token, health, the deck, and how to reply.</p>
+        <textarea id="ai-text" readonly style="display:none;min-height:160px"></textarea></div>
+      <div class="card"><b>2 · Paste the AI's reply</b>
+        <textarea id="ai-in" placeholder="Paste the whole reply. Only the command lines are used, e.g.&#10;move Snake G17&#10;token Snake ? G17"></textarea>
+        <div class="row"><button class="on" id="ai-apply" style="flex:1">Apply moves</button></div>
+        <div class="muted" id="ai-out"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="menu" aria-hidden="true"><div class="wrap">
+  <div class="row" style="justify-content:space-between"><h2>Sneaking Table</h2><button class="sm" id="menu-x">Back to board</button></div>
+  <h3>New game</h3>
+  <div id="stage-list"></div>
+  <h3>Continue</h3>
+  <div id="save-list"></div>
+  <div class="row"><button class="sm" id="menu-loadfile">Load a save file</button></div>
+  <p class="muted">Starting layouts are approximate schematics with the starting pieces and facings. Fix anything that doesn't match your table with the Build and Map tabs.</p>
+</div></div>
+
+<div id="hist" class="menuish" aria-hidden="true"><div class="wrap">
+  <div class="row" style="justify-content:space-between"><h2>Play-by-play</h2><button class="sm" id="hist-x">Back to board</button></div>
+  <div class="row"><select id="hist-filter" style="flex:1"></select></div>
+  <div id="hist-body"></div>
+</div></div>
+
+<nav id="tabs">
+  <button data-pane="build"><span class="ic">✚</span>Build</button>
+  <button data-pane="piece"><span class="ic">◉</span>Piece</button>
+  <button data-pane="game"><span class="ic">⏱</span>Game</button>
+  <button data-pane="dice"><span class="ic">⚄</span>Dice</button>
+  <button data-pane="log"><span class="ic">☰</span>Log</button>
+  <button data-pane="map"><span class="ic">▦</span>Map</button>
+  <button data-pane="ai"><span class="ic">🤖</span>AI</button>
+  <button data-pane="net"><span class="ic">⇄</span>Connect</button>
+</nav>
+
+<input type="file" id="bg-file" accept="image/*" hidden>
+<input type="file" id="load-file" accept=".json,application/json" hidden>
+<script>
+"use strict";
+// ---------- piece catalog ----------
+const TYPES = {
+  snake:{name:"Snake",short:"S",kind:"player",color:"#3d8ee6",hp:4,focus:["Reroll","+2","-2","-1 die / Move 1"]},
+  meryl:{name:"Meryl",short:"M",kind:"player",color:"#e05c93",hp:4,focus:["+2","+/-1","+1 action","+1 die"]},
+  otacon:{name:"Otacon",short:"O",kind:"player",color:"#d6b23c",hp:4,focus:["+/-1","Reroll black","+/-2","+1 black"]},
+  fox:{name:"Gray Fox",short:"F",kind:"player",color:"#9fb3c8",hp:4,focus:["+2","+/-2","-1 black","Dash +2"]},
+  guard:{name:"Guard",short:"G",kind:"guard",color:"#5f8f4c",hp:2},
+  boss:{name:"Boss",short:"B",kind:"boss",color:"#c0392b",hp:10},
+  camera:{name:"Camera",short:"C",kind:"camera",color:"#e07b2a"},
+  attn:{name:"? / ! token",short:"?",kind:"token",color:"#2f7fd6"},
+  ko:{name:"KO guard",short:"★",kind:"token",color:"#c9a227"},
+  dead:{name:"Dead guard",short:"☠",kind:"token",color:"#a33"},
+  event:{name:"Event",short:"A",kind:"token",color:"#b5302a"},
+  box:{name:"Box",short:"▢",kind:"figure",color:"#a37b4a"},
+  door:{name:"Locked door",short:"🔒",kind:"token",color:"#7a2a2a"},
+  terminal:{name:"Terminal",short:"T",kind:"token",color:"#3aa7a0"},
+  marker:{name:"Marker",short:"•",kind:"token",color:"#888"}
+};
+const PALETTE = ["snake","meryl","otacon","fox","guard","boss","camera","attn","ko","dead","event","box","door","terminal","marker"];
+const DR=[-1,0,1,0], DC=[0,1,0,-1], DIRN=["up","right","down","left"];
+const CELL = { obstacle:{fill:"#4a2626",line:"#c0392b"}, void:{fill:"#060807"}, exit:{fill:"#3a3410"}, corner:{fill:null}, stairs:{fill:"#262d2a"}, barracks:{fill:"#1f3a28"}, elevator:{fill:"#33403f"}, stairsv:{fill:"#262d2a"} };
+const CS=40, M=26; // base square size and label margin (board units)
+
+// ---------- stage layouts (approximate schematics; edit freely) ----------
+const LAYOUTS = {
+  stage1: {
+    name:"Stage 1 · Cargo Dock", note:"Snake only · reach A, then use the elevator with no red alert",
+    rowStart:0, priority:"BL", blue:10, red:7,
+    map:[
+      "xxxLLxxxx",
+      "x........",
+      "x.##.##..",
+      "x.##.##..",
+      "x........",
+      "x........",
+      "x........",
+      "....+....",
+      ".#.xxxx#.",
+      "...xxxx..",
+      "...xxxx.."],
+    walls:[ "h:0,3",                                                       // elevator: enter D0 only from E0
+      "h:4,1","h:4,3", "v:5,0","v:6,0","v:5,3","v:6,3", "h:6,1","h:6,2","h:6,3",   // left room, door at C4
+      "h:4,6", "v:5,4","v:6,4","v:5,6","v:6,6", "h:6,5","h:6,6",                   // right room, door at F4
+      "h:9,1" ],                                                            // wall under B9
+    pieces:[ {type:"snake",r:9,c:1},
+      {type:"guard",r:1,c:2,facing:3},{type:"guard",r:4,c:3,facing:1},{type:"guard",r:3,c:7,facing:2},
+      {type:"event",r:1,c:5,label:"A"} ]
+  },
+  stage2: {
+    name:"Stage 2 · Heliport", note:"Snake only · reach A, then end a turn on an Exit · optional B",
+    rowStart:0, priority:"TL", blue:13, red:7,
+    map:[
+      "xxxxxxExxx.xxxxx","xBB..........+..","xBBE##....#.#.V.","xxx...+##+...VV.","xxxxx#....##+...",
+      "xx....+#.+...##.","xx.xxx....##.##.","..+..++.+++.+..+","...##.....+..##.","...+.........##.",
+      "............+..+",".............##.","...+.+V......##.","...........V+..+","...+.........##.",
+      "xxxxx#.S.....##.","..+.+..+....+...",".#.#.##.xxxxxxxx",".....##.xxxxxxxx",".#.#....xxxxxxxx"],
+    walls:[ ...[3,4,5,6,7,8,9,10,11,12,14,15].map(c=>"h:1,"+c), "h:2,13","h:2,14", ...[13,14,15].map(c=>"h:3,"+c), "h:2,7","h:2,8","v:3,6","v:3,8", "v:4,6","v:5,6","v:6,6","v:4,8","v:5,8","v:6,8","h:6,7",
+      ...[6,7,8,9,11].map(c=>"h:7,"+c), ...[8,9,10,11,13,14,15].map(r=>"v:"+r+",5"),
+      ...[8,9,10,11,12,14,15].map(r=>"v:"+r+",11"), ...[6,8,9,10,11].map(c=>"h:15,"+c),
+      "v:8,1","v:9,1",                                        // top-left room: right wall on rows 8-9 (open to C7)
+      ...[0,1,2,4,5].map(c=>"h:9,"+c),                       // top wall of both lower rooms (rows 9/10, A-F)
+      "v:10,2","v:11,2","v:13,2",                              // B room right wall, doorway C12|D12
+      ...[0,1,2,4,5].map(c=>"h:13,"+c),
+      "v:17,0","v:18,0","v:19,0","v:17,3","v:18,3","v:19,3","h:16,1","h:16,3" ],   // bottom-left booths: walled, open only at C16→C17                      // bottom of the rooms, opening D13/D14 to the row-14 corridor
+    pieces:[ {type:"snake",r:19,c:6},
+      {type:"guard",r:1,c:9,facing:1},{type:"guard",r:4,c:6,facing:2},{type:"guard",r:5,c:15,facing:2},{type:"guard",r:9,c:2,facing:1},
+      {type:"camera",r:3,c:12,fg:2,fo:3},{type:"camera",r:10,c:2,fg:2,fo:3},{type:"camera",r:2,c:6,fg:1,fo:2},
+      {type:"event",r:4,c:7,label:"A"},{type:"event",r:11,c:0,label:"B",color:"#2f8f4e"} ]
+  }
+};
+const CHAR={"x":"void","#":"obstacle","E":"exit","+":"corner","S":"stairs","B":"barracks","L":"elevator","V":"stairsv"};
+
+// ---------- state ----------
+function defaultState(){
+  return {ver:0, cols:16, rows:20, cells:{}, walls:{}, pieces:[], nextId:1, guardNo:1, rowStart:1,
+    round:1, phase:"Player", blue:13, red:7, cam:"green", priority:"TL", losMode:"line", log:[],
+    bgOpacity:0.55, bgVer:0, bgRect:{x:0,y:0,w:100,h:100}, stage:"Custom board"};
+}
+function buildPreset(name){
+  const L=LAYOUTS[name], st=defaultState(); st.stage=L.name;
+  st.rows=L.map.length; st.cols=L.map[0].length; st.rowStart=L.rowStart; st.priority=L.priority; st.blue=L.blue; st.red=L.red;
+  L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
+  L.walls.forEach(w=>st.walls[w]=1);
+  L.pieces.forEach(p=>{ const q=Object.assign({id:st.nextId++},p); initPiece(q,st); st.pieces.push(q); });
+  return st;
+}
+function initPiece(p,st){
+  const T=TYPES[p.type];
+  if(T.kind==="player"){ p.label=p.label||T.name; p.hp=T.hp; p.dmg=0; p.focus=[true,true,true,true]; }
+  if(p.type==="guard"){ p.label="G"+(st.guardNo++); if(p.facing==null) p.facing=2; p.hp=2; p.dmg=0; p.kod=0; }
+  if(p.type==="boss"){ p.label=p.label||"Boss"; if(p.facing==null) p.facing=2; p.hp=T.hp; p.dmg=0; }
+  if(p.type==="camera"){ if(p.fg==null) p.fg=2; if(p.fo==null) p.fo=3; }
+  if(p.type==="attn"){ p.mode=p.mode||"q"; p.owner=p.owner||"Snake"; }
+  if(p.type==="ko") p.stars=p.stars||2;
+  if(p.type==="event") p.label=p.label||"A";
+  if(p.type==="door"){ p.level=p.level||2; p.open=false; }
+}
+const S = {
+  st: defaultState(), bg:null, bgImg:null, sel:null, tool:"move", addType:null,
+  undo:[], redo:[], losAll:true, order:false, drag:null, paintSnap:null, hover:null,
+  view:{x:0,y:0,z:1}, pane:null, dw:1, db:0,
+  me: loadLS("st-name") || "Player"
+};
+function loadLS(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function saveLS(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function restore(){
+  const raw = loadLS("st-state");
+  if(raw){ try{ S.st = Object.assign(defaultState(), JSON.parse(raw)); }catch(e){} }
+  const bg = loadLS("st-bg"); if(bg) setBg(bg, false);
+})();
+
+const key=(r,c)=>r+","+c;
+const colName=c=>{ let s=""; c++; while(c>0){ const m=(c-1)%26; s=String.fromCharCode(65+m)+s; c=Math.floor((c-1)/26);} return s; };
+const sq=(r,c)=>colName(c)+(r+(S.st.rowStart??1));
+const P=id=>S.st.pieces.find(p=>p.id===id);
+const nameOf=p=>p.label||TYPES[p.type].name;
+
+function snapshot(){ return JSON.stringify(S.st); }
+function persist(){ saveLS("st-state", snapshot()); }
+function addLog(m){ S.st.log.unshift({t:Date.now(), w:S.me, m, r:S.st.round, ph:S.st.phase}); if(S.st.log.length>300) S.st.log.length=300; }
+function commit(fn, msg){
+  S.undo.push(snapshot()); if(S.undo.length>150) S.undo.shift(); S.redo=[];
+  fn(S.st); if(msg) addLog(msg);
+  S.st.ver++; persist(); refresh(); net.sendState();
+}
+function undo(){ if(!S.undo.length) return; S.redo.push(snapshot()); S.st=JSON.parse(S.undo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
+function redo(){ if(!S.redo.length) return; S.undo.push(snapshot()); S.st=JSON.parse(S.redo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
+function afterReplace(){ if(S.sel && !P(S.sel)) S.sel=null; persist(); refresh(); }
+function refresh(){ render(); renderSide(); renderQbar(); if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
+
+// ---------- rules ----------
+function blocked(r,c){
+  const t=S.st.cells[key(r,c)];
+  if(t==="obstacle"||t==="void") return true;
+  return S.st.pieces.some(p=>p.type==="door"&&p.r===r&&p.c===c&&!p.open);
+}
+function wall(t,r,c){ return !!S.st.walls[t+":"+r+","+c]; } // h = bottom edge of (r,c); v = right edge
+function facingOf(p){ return p.type==="camera" ? (S.st.cam==="green" ? p.fg : p.fo) : p.facing; }
+// Rulebook LOS: a guard/camera sees every square in front of it (the rows or columns it faces) as long as
+// the box spanning both squares holds no obstacle, no-go square, locked door or wall. Cameras never see their own square.
+function los(p, tr, tc){
+  if(tr===p.r && tc===p.c) return false;
+  const f=facingOf(p);
+  if(f!=null){
+    if(f===0 && !(tr<p.r)) return false;
+    if(f===2 && !(tr>p.r)) return false;
+    if(f===1 && !(tc>p.c)) return false;
+    if(f===3 && !(tc<p.c)) return false;
+  }
+  const r0=Math.min(p.r,tr), r1=Math.max(p.r,tr), c0=Math.min(p.c,tc), c1=Math.max(p.c,tc);
+  for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){ if((r===p.r&&c===p.c)||(r===tr&&c===tc)) continue; if(blocked(r,c)) return false; }
+  for(let r=r0;r<r1;r++) for(let c=c0;c<=c1;c++) if(wall("h",r,c)) return false;
+  for(let r=r0;r<=r1;r++) for(let c=c0;c<c1;c++) if(wall("v",r,c)) return false;
+  return true;
+}
+const isViewer=p=>p && (p.type==="guard"||p.type==="boss"||p.type==="camera") && facingOf(p)!=null;
+function computeLOS(){
+  const st=S.st, viewers = S.losAll ? st.pieces.filter(isViewer) : (isViewer(P(S.sel)) ? [P(S.sel)] : []);
+  const seen=new Set(), spotted=[], beams=[];
+  for(const v of viewers){ const cells=new Set();
+    for(let r=0;r<st.rows;r++) for(let c=0;c<st.cols;c++){
+      const t=st.cells[key(r,c)]; if(t==="obstacle"||t==="void") continue; if(los(v,r,c)){ seen.add(key(r,c)); cells.add(key(r,c)); } }
+    beams.push({v,cells}); }
+  for(const pl of st.pieces.filter(p=>TYPES[p.type].kind==="player"))
+    for(const v of st.pieces.filter(isViewer)) if(!pl.disguised && los(v,pl.r,pl.c)) spotted.push({pl,v});
+  return {seen, spotted, beams};
+}
+function beamColor(v){ return v.type==="camera" ? (S.st.cam==="green"?[63,191,99]:[224,123,42]) : v.type==="boss" ? [255,80,60] : [255,184,48]; }
+function activationOrder(){
+  const pr=S.st.priority, gs=S.st.pieces.filter(p=>p.type==="guard");
+  gs.sort((a,b)=> (pr[0]==="T"?a.r-b.r:b.r-a.r) || (pr[1]==="L"?a.c-b.c:b.c-a.c));
+  const m={}; gs.forEach((g,i)=>m[g.id]=i+1); return m;
+}
+
+// ---------- view (pan / zoom) ----------
+const stage=document.getElementById("stage"), cv=document.getElementById("board"), ctx=cv.getContext("2d");
+const boardW=()=>M+S.st.cols*CS, boardH=()=>M+S.st.rows*CS;
+function fitView(){
+  const w=stage.clientWidth, h=stage.clientHeight, pad=12;
+  const z=Math.max(0.2, Math.min((w-pad*2)/boardW(), (h-pad*2)/boardH()));
+  S.view={z, x:(w-boardW()*z)/2, y:Math.max(pad,(h-boardH()*z)/2)}; render();
+}
+function zoomAt(f, cx, cy){
+  const v=S.view, z=Math.max(0.2, Math.min(5, v.z*f)), k=z/v.z;
+  v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.z=z; render();
+}
+function toBoard(clientX, clientY){
+  const b=cv.getBoundingClientRect(), v=S.view;
+  const bx=(clientX-b.left-v.x)/v.z - M, by=(clientY-b.top-v.y)/v.z - M;
+  const c=Math.floor(bx/CS), r=Math.floor(by/CS);
+  return {x:bx, y:by, r, c, fx:bx/CS-c, fy:by/CS-r, ok:r>=0&&c>=0&&r<S.st.rows&&c<S.st.cols};
+}
+
+// ---------- rendering ----------
+function render(){
+  const st=S.st, dpr=window.devicePixelRatio||1, W=stage.clientWidth, H=stage.clientHeight;
+  if(cv.width!==Math.round(W*dpr) || cv.height!==Math.round(H*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); }
+  ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#070a09"; ctx.fillRect(0,0,cv.width,cv.height);
+  const v=S.view; ctx.setTransform(dpr*v.z,0,0,dpr*v.z,dpr*v.x,dpr*v.y);
+  // labels
+  ctx.fillStyle="#8aa094"; ctx.font="bold 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(let c=0;c<st.cols;c++) ctx.fillText(colName(c), M+c*CS+CS/2, M/2);
+  for(let r=0;r<st.rows;r++) ctx.fillText(r+(st.rowStart??1), M/2, M+r*CS+CS/2);
+  ctx.save(); ctx.translate(M,M);
+  const bw=st.cols*CS, bh=st.rows*CS;
+  ctx.fillStyle="#232a27"; ctx.fillRect(0,0,bw,bh);
+  if(S.bgImg){ const b=st.bgRect||{x:0,y:0,w:100,h:100};
+    ctx.save(); ctx.beginPath(); ctx.rect(0,0,bw,bh); ctx.clip(); ctx.globalAlpha=st.bgOpacity;
+    ctx.drawImage(S.bgImg, b.x/100*bw, b.y/100*bh, b.w/100*bw, b.h/100*bh); ctx.restore(); }
+  for(const k in st.cells){
+    const [r,c]=k.split(",").map(Number), t=st.cells[k], x=c*CS, y=r*CS, d=CELL[t]; if(!d||r>=st.rows||c>=st.cols) continue;
+    const ins = t==="obstacle" ? 5 : 0;
+    if(d.fill){ ctx.globalAlpha=S.bgImg?0.7:1; ctx.fillStyle=d.fill; ctx.fillRect(x+ins,y+ins,CS-ins*2,CS-ins*2); ctx.globalAlpha=1; }
+    if(t==="obstacle"){ ctx.strokeStyle=d.line; ctx.lineWidth=2; ctx.strokeRect(x+ins,y+ins,CS-ins*2,CS-ins*2); }
+    if(t==="exit"){ ctx.save(); ctx.beginPath(); ctx.rect(x,y,CS,CS); ctx.clip(); ctx.strokeStyle="#d4b20f"; ctx.lineWidth=5;
+      for(let i=-CS;i<CS*2;i+=CS/3){ ctx.beginPath(); ctx.moveTo(x+i,y); ctx.lineTo(x+i+CS,y+CS); ctx.stroke(); } ctx.restore();
+      ctx.fillStyle="#000c"; ctx.fillRect(x,y+CS*.3,CS,CS*.4); ctx.fillStyle="#f2d23a"; ctx.font="bold 11px system-ui"; ctx.fillText("EXIT",x+CS/2,y+CS/2); }
+    if(t==="corner"){ ctx.fillStyle="#cfd8d3aa"; ctx.font="20px system-ui"; ctx.fillText("⇄",x+CS/2,y+CS/2+1); }
+    if(t==="stairsv"){ ctx.strokeStyle="#55615b"; ctx.lineWidth=1; for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(x+i*CS/5,y+3); ctx.lineTo(x+i*CS/5,y+CS-3); ctx.stroke(); } }
+    if(t==="stairs"){ ctx.strokeStyle="#55615b"; ctx.lineWidth=1; for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(x+3,y+i*CS/5); ctx.lineTo(x+CS-3,y+i*CS/5); ctx.stroke(); } }
+    if(t==="barracks"){ ctx.fillStyle="#7fd39a"; ctx.font="bold 13px system-ui"; ctx.fillText("B",x+CS/2,y+CS/2); }
+    if(t==="elevator"){ ctx.strokeStyle="#7f9a96"; ctx.lineWidth=2; ctx.strokeRect(x+3,y+3,CS-6,CS-6); ctx.fillStyle="#b9cfca"; ctx.font="16px system-ui"; ctx.fillText("⇅",x+CS/2,y+CS/2+1); }
+  }
+  ctx.strokeStyle="#ffffff16"; ctx.lineWidth=1/v.z;
+  for(let c=0;c<=st.cols;c++){ ctx.beginPath(); ctx.moveTo(c*CS,0); ctx.lineTo(c*CS,bh); ctx.stroke(); }
+  for(let r=0;r<=st.rows;r++){ ctx.beginPath(); ctx.moveTo(0,r*CS); ctx.lineTo(bw,r*CS); ctx.stroke(); }
+  const L=computeLOS(); S.lastLOS=L;
+  const tNow=performance.now()/1000, pulse=0.75+0.25*Math.sin(tNow*3);
+  for(const b of L.beams){ const [R_,G_,B_]=beamColor(b.v);
+    for(const k of b.cells){ const [r,c]=k.split(",").map(Number), d=Math.abs(r-b.v.r)+Math.abs(c-b.v.c);
+      const a=(0.42-Math.min(d,12)*0.025)*pulse; ctx.fillStyle=`rgba(${R_},${G_},${B_},${Math.max(0.08,a).toFixed(3)})`; ctx.fillRect(c*CS,r*CS,CS,CS);
+      // scanline shimmer
+      ctx.fillStyle=`rgba(${R_},${G_},${B_},0.10)`; const sl=((tNow*30+d*8)%CS); ctx.fillRect(c*CS, r*CS+sl, CS, 2); }
+    // outline the edge of what this viewer sees
+    ctx.strokeStyle=`rgba(${R_},${G_},${B_},0.95)`; ctx.lineWidth=2; ctx.setLineDash([6,4]); ctx.lineDashOffset=-tNow*12; ctx.beginPath();
+    for(const k of b.cells){ const [r,c]=k.split(",").map(Number), x=c*CS, y=r*CS;
+      if(!b.cells.has((r-1)+","+c)){ ctx.moveTo(x,y); ctx.lineTo(x+CS,y); }
+      if(!b.cells.has((r+1)+","+c)){ ctx.moveTo(x,y+CS); ctx.lineTo(x+CS,y+CS); }
+      if(!b.cells.has(r+","+(c-1))){ ctx.moveTo(x,y); ctx.lineTo(x,y+CS); }
+      if(!b.cells.has(r+","+(c+1))){ ctx.moveTo(x+CS,y); ctx.lineTo(x+CS,y+CS); } }
+    ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset=0; }
+  ctx.strokeStyle="#eef3ee"; ctx.lineWidth=4; ctx.lineCap="round";
+  // outer boundary: a wall wherever a playable square meets the board edge or a no-go square
+  { const isVoid=(r,c)=>r<0||c<0||r>=st.rows||c>=st.cols||st.cells[key(r,c)]==="void"; ctx.beginPath();
+    for(let r=0;r<st.rows;r++) for(let c=0;c<st.cols;c++){ if(isVoid(r,c)) continue; const x=c*CS, y=r*CS;
+      if(isVoid(r-1,c)){ ctx.moveTo(x,y); ctx.lineTo(x+CS,y); } if(isVoid(r+1,c)){ ctx.moveTo(x,y+CS); ctx.lineTo(x+CS,y+CS); }
+      if(isVoid(r,c-1)){ ctx.moveTo(x,y); ctx.lineTo(x,y+CS); } if(isVoid(r,c+1)){ ctx.moveTo(x+CS,y); ctx.lineTo(x+CS,y+CS); } }
+    ctx.stroke(); }
+  for(const k in st.walls){ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); ctx.beginPath();
+    if(t==="h"){ ctx.moveTo(c*CS,(r+1)*CS); ctx.lineTo((c+1)*CS,(r+1)*CS); } else { ctx.moveTo((c+1)*CS,r*CS); ctx.lineTo((c+1)*CS,(r+1)*CS); } ctx.stroke(); }
+  const order=S.order?activationOrder():{}, spottedIds=new Set(L.spotted.map(s=>s.pl.id));
+  const sorted=[...st.pieces].sort((a,b)=>(TYPES[a.type].kind==="token"?0:1)-(TYPES[b.type].kind==="token"?0:1));
+  for(const p of sorted){
+    let x=p.c*CS, y=p.r*CS;
+    if(S.drag && S.drag.id===p.id && S.drag.moved){ x=S.drag.x-CS/2; y=S.drag.y-CS/2; }
+    drawPiece(p,x,y,spottedIds.has(p.id),order[p.id]);
+  }
+  ctx.restore();
+  const h=S.hover; document.getElementById("hover").textContent = h ? sq(h.r,h.c) : "";
+  document.getElementById("round-hdr").textContent = `${st.stage||""} · R${st.round} ${st.phase} · cams ${st.cam}`;
+}
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function nameTag(text,x,y,color){
+  ctx.font="bold 10px system-ui"; const w=Math.min(CS-2, ctx.measureText(text).width+8);
+  ctx.fillStyle=color||"#000d"; rr(x+CS/2-w/2, y+CS-13, w, 12, 4); ctx.fill();
+  ctx.fillStyle="#fff"; ctx.fillText(text, x+CS/2, y+CS-6.5, CS-4);
+}
+function wedge(x,y,f,color){ // facing pointer on the square edge
+  const cx=x+CS/2, cy=y+CS/2-3, a=[-Math.PI/2,0,Math.PI/2,Math.PI][f], R=CS*0.5;
+  ctx.fillStyle=color; ctx.beginPath();
+  ctx.moveTo(cx+Math.cos(a)*R, cy+Math.sin(a)*R);
+  ctx.lineTo(cx+Math.cos(a+0.55)*R*0.62, cy+Math.sin(a+0.55)*R*0.62);
+  ctx.lineTo(cx+Math.cos(a-0.55)*R*0.62, cy+Math.sin(a-0.55)*R*0.62);
+  ctx.closePath(); ctx.fill(); ctx.strokeStyle="#000a"; ctx.lineWidth=1; ctx.stroke();
+}
+function drawPiece(p,x,y,spotted,orderNo){
+  const T=TYPES[p.type], cx=x+CS/2, cy=y+CS/2-3;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  if(p.type==="camera"){
+    const f=facingOf(p), col=S.st.cam==="green"?"#3fbf63":"#e07b2a";
+    if(f!=null) wedge(x,y,f,col);
+    ctx.fillStyle="#151515"; rr(x+9,y+7,CS-18,CS-20,5); ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle="#eee"; ctx.font="15px system-ui"; ctx.fillText("◉",cx,cy);
+    nameTag("CAM",x,y,"#000d");
+  } else if(p.type==="attn"){
+    const alert=p.mode==="alert"; ctx.fillStyle=alert?"#d0281c":"#2f7fd6"; rr(x+7,y+4,CS-14,CS-16,6); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 20px system-ui"; ctx.fillText(alert?"!":"?",cx,cy);
+    nameTag(p.owner||"", x,y, alert?"#7a120b":"#173f6b");
+  } else if(p.type==="ko"||p.type==="dead"){
+    ctx.fillStyle=p.type==="ko"?"#2a2a14":"#3a1212"; ctx.beginPath(); ctx.arc(cx,cy,13,0,7); ctx.fill();
+    ctx.strokeStyle=T.color; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=T.color; ctx.font="bold 12px system-ui"; ctx.fillText(p.type==="ko"?(p.stars===1?"★":"★★"):"☠",cx,cy+1);
+    nameTag(p.type==="ko"?"KO":"DEAD",x,y);
+  } else if(p.type==="event"){
+    ctx.fillStyle=p.color||"#b5302a"; rr(x+7,y+4,CS-14,CS-16,5); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 20px system-ui"; ctx.fillText(p.label||"A",cx,cy);
+  } else if(p.type==="door"){
+    ctx.fillStyle=p.open?"#2a3a2a":"#5a1d1d"; rr(x+4,y+10,CS-8,CS-22,4); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 10px system-ui"; ctx.fillText(p.open?"OPEN":"LOCK "+(p.level||""),cx,cy+2);
+  } else if(T.kind==="token"){
+    ctx.fillStyle=T.color; ctx.beginPath(); ctx.arc(cx,cy,11,0,7); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 11px system-ui"; ctx.fillText(p.hacked?"✓":(p.label||T.short),cx,cy+1);
+    nameTag(p.type==="terminal"&&p.hacked?"HACKED":T.name.split(" ")[0],x,y);
+  } else {
+    const f=p.facing;
+    if((T.kind==="guard"||T.kind==="boss") && f!=null) wedge(x,y,f,"#f5f5f5");
+    ctx.lineWidth=2; ctx.strokeStyle="#000b";
+    if(T.kind==="guard"){ ctx.fillStyle=T.color; rr(x+8,y+5,CS-16,CS-18,5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText(p.label||"G",cx,cy); }
+    else if(T.kind==="boss"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.moveTo(cx,y+2); ctx.lineTo(x+CS-6,cy); ctx.lineTo(cx,y+CS-12); ctx.lineTo(x+6,cy); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText("B",cx,cy); nameTag(p.label||"Boss",x,y,"#5e130b"); }
+    else if(T.kind==="player"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.arc(cx,cy,13,0,7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#fff"; ctx.font="bold 15px system-ui"; ctx.fillText(T.short,cx,cy+1);
+      nameTag((p.label||T.name).split(" ")[0], x,y, T.color); }
+    else { ctx.fillStyle=T.color; rr(x+7,y+5,CS-14,CS-18,3); ctx.fill(); ctx.stroke(); nameTag(T.name,x,y); }
+    if(p.disguised){ ctx.strokeStyle="#7fd39a"; ctx.setLineDash([3,2]); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,16,0,7); ctx.stroke(); ctx.setLineDash([]); }
+    const dmg=(p.dmg||0)+(p.kod||0);
+    if(dmg){ ctx.fillStyle="#e0533f"; ctx.beginPath(); ctx.arc(x+CS-7,y+7,7,0,7); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="bold 10px system-ui"; ctx.fillText(dmg,x+CS-7,y+7.5); }
+  }
+  if(orderNo){ ctx.fillStyle="#f2d23a"; ctx.beginPath(); ctx.arc(x+7,y+7,7,0,7); ctx.fill(); ctx.fillStyle="#000"; ctx.font="bold 10px system-ui"; ctx.fillText(orderNo,x+7,y+7.5); }
+  if(spotted){ const t=performance.now()/1000, rr_=19+3*Math.sin(t*6);
+    ctx.strokeStyle="#ff3b2f"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy+3,rr_,0,7); ctx.stroke();
+    ctx.fillStyle="#ff3b2f"; ctx.beginPath(); ctx.moveTo(cx,y-14); ctx.lineTo(cx+9,y+2); ctx.lineTo(cx-9,y+2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 12px system-ui"; ctx.fillText("!",cx,y-3); }
+  if(S.sel===p.id){ ctx.strokeStyle="#5fd38a"; ctx.lineWidth=2.5; ctx.setLineDash([5,3]); ctx.strokeRect(x+1.5,y+1.5,CS-3,CS-3); ctx.setLineDash([]); }
+}
+
+// ---------- input: one finger = tap/drag pieces/paint, two fingers = pan + pinch ----------
+const ptrs=new Map(); let gesture=null, tapStart=null;
+function topPieceAt(r,c){
+  const here=S.st.pieces.filter(p=>p.r===r&&p.c===c);
+  here.sort((a,b)=>(TYPES[b.type].kind==="token"?0:1)-(TYPES[a.type].kind==="token"?0:1));
+  return here[0];
+}
+cv.addEventListener("pointerdown",ev=>{
+  try{ cv.setPointerCapture(ev.pointerId); }catch(e){} ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(ptrs.size===2){ // start pinch: cancel any one-finger action
+    if(S.drag){ S.drag=null; } if(S.paintSnap){ S.st=JSON.parse(S.paintSnap); S.paintSnap=null; }
+    tapStart=null; const [a,b]=[...ptrs.values()];
+    gesture={d:Math.hypot(a.x-b.x,a.y-b.y), mx:(a.x+b.x)/2, my:(a.y+b.y)/2}; render(); return;
+  }
+  if(ptrs.size>2) return;
+  const h=toBoard(ev.clientX,ev.clientY);
+  tapStart={x:ev.clientX,y:ev.clientY,vx:S.view.x,vy:S.view.y,h,pan:false,mouse:ev.pointerType==="mouse"};
+  if(!h.ok) return;
+  if(S.addType) return; // place on release (so a pinch can cancel)
+  if(S.tool==="move"){ const p=topPieceAt(h.r,h.c); if(p){ S.sel=p.id; S.drag={id:p.id,r:h.r,c:h.c,x:h.x,y:h.y,moved:false}; refresh(); } return; }
+  if(S.tool!=="wall"){ S.paintSnap=snapshot(); paint(h); render(); }
+});
+cv.addEventListener("pointermove",ev=>{
+  if(!ptrs.has(ev.pointerId)){ if(ev.pointerType==="mouse"){ const h=toBoard(ev.clientX,ev.clientY); S.hover=h.ok?h:null; render(); } return; }
+  ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(gesture && ptrs.size>=2){
+    const [a,b]=[...ptrs.values()], d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2, r=cv.getBoundingClientRect();
+    S.view.x+=mx-gesture.mx; S.view.y+=my-gesture.my;
+    zoomAt(d/(gesture.d||d), mx-r.left, my-r.top);
+    gesture.d=d; gesture.mx=mx; gesture.my=my; return;
+  }
+  const h=toBoard(ev.clientX,ev.clientY); if(ev.pointerType==="mouse") S.hover=h.ok?h:null;
+  if(S.drag){ S.drag.x=h.x; S.drag.y=h.y; if(h.r!==S.drag.r||h.c!==S.drag.c) S.drag.moved=true; render(); return; }
+  if(S.paintSnap){ if(h.ok) paint(h); render(); return; }
+  if(tapStart){ // one-finger drag on empty board = pan
+    const dx=ev.clientX-tapStart.x, dy=ev.clientY-tapStart.y;
+    if(tapStart.pan || Math.hypot(dx,dy)>8){ tapStart.pan=true; S.view.x=tapStart.vx+dx; S.view.y=tapStart.vy+dy; render(); }
+  }
+});
+function endPtr(ev){
+  ptrs.delete(ev.pointerId);
+  if(gesture){ if(ptrs.size<2) gesture=null; tapStart=null; return; }
+  const h=toBoard(ev.clientX,ev.clientY);
+  if(S.drag){
+    const d=S.drag; S.drag=null; const p=P(d.id);
+    if(p && d.moved && h.ok && (h.r!==p.r||h.c!==p.c)){ const from=sq(p.r,p.c);
+      commit(st=>{ const q=st.pieces.find(x=>x.id===d.id); q.r=h.r; q.c=h.c; }, `${nameOf(p)} ${from} → ${sq(h.r,h.c)}`); }
+    else render();
+    tapStart=null; return;
+  }
+  if(S.paintSnap){ S.undo.push(S.paintSnap); S.redo=[]; S.paintSnap=null; S.st.ver++; persist(); net.sendState(); refresh(); tapStart=null; return; }
+  const wasTap = tapStart && !tapStart.pan; tapStart=null;
+  if(!wasTap || ev.type==="pointercancel") return;
+  if(!h.ok){ if(S.sel){ S.sel=null; refresh(); } return; }
+  if(S.addType){ placePiece(S.addType,h.r,h.c); return; }
+  if(S.tool==="wall"){ toggleWall(h); return; }
+  if(S.tool==="move"){ if(S.sel){ S.sel=null; refresh(); } }
+}
+cv.addEventListener("pointerup",endPtr); cv.addEventListener("pointercancel",endPtr);
+cv.addEventListener("pointerleave",ev=>{ if(ev.pointerType==="mouse"){ S.hover=null; render(); } });
+cv.addEventListener("wheel",ev=>{ ev.preventDefault(); const r=cv.getBoundingClientRect();
+  if(ev.ctrlKey||Math.abs(ev.deltaY)>=Math.abs(ev.deltaX)&&!ev.shiftKey&&ev.deltaMode===0&&Math.abs(ev.deltaY)<50&&ev.ctrlKey) zoomAt(Math.exp(-ev.deltaY*0.01), ev.clientX-r.left, ev.clientY-r.top);
+  else if(ev.deltaMode===0 && !ev.ctrlKey && (Math.abs(ev.deltaX)>0 || Math.abs(ev.deltaY)<40) && ev.deltaX!==0){ S.view.x-=ev.deltaX; S.view.y-=ev.deltaY; render(); }
+  else zoomAt(ev.deltaY<0?1.12:1/1.12, ev.clientX-r.left, ev.clientY-r.top);
+},{passive:false});
+document.getElementById("zin").onclick=()=>zoomAt(1.25, stage.clientWidth/2, stage.clientHeight/2);
+document.getElementById("zout").onclick=()=>zoomAt(0.8, stage.clientWidth/2, stage.clientHeight/2);
+document.getElementById("zfit").onclick=fitView;
+
+function paint(h){ const k=key(h.r,h.c); if(S.tool==="floor") delete S.st.cells[k]; else S.st.cells[k]=S.tool; }
+function toggleWall(h){
+  const {r,c,fx,fy}=h, d=[fy,1-fx,1-fy,fx], m=d.indexOf(Math.min(...d)); let k=null;
+  if(m===0 && r>0) k="h:"+(r-1)+","+c; if(m===2 && r<S.st.rows-1) k="h:"+r+","+c;
+  if(m===3 && c>0) k="v:"+r+","+(c-1); if(m===1 && c<S.st.cols-1) k="v:"+r+","+c;
+  if(k) commit(st=>{ if(st.walls[k]) delete st.walls[k]; else st.walls[k]=1; });
+}
+function placePiece(type,r,c){
+  commit(st=>{ const p={id:st.nextId++, type, r, c}; initPiece(p,st); st.pieces.push(p); S.sel=p.id; }, `Placed ${TYPES[type].name} at ${sq(r,c)}`);
+  S.addType=null; syncArmed();
+}
+document.addEventListener("keydown",ev=>{
+  if(/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==="z"){ ev.preventDefault(); undo(); return; }
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==="y"){ ev.preventDefault(); redo(); return; }
+  if(ev.key==="Escape"){ S.addType=null; S.sel=null; syncArmed(); closeSheet(); refresh(); return; }
+  const p=P(S.sel); if(!p) return;
+  const dirs={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3};
+  if(ev.key in dirs){ ev.preventDefault(); const d=dirs[ev.key];
+    if(ev.shiftKey && hasFacing(p)) { setFacing(p,d); return; } step(p,d); }
+  if(ev.key==="r"||ev.key==="R"){ if(hasFacing(p)) setFacing(p, ((facingOf(p)??0)+(ev.shiftKey?3:1))%4); }
+  if(ev.key==="Delete"||ev.key==="Backspace"){ removePiece(p); }
+  if(ev.key==="f"){ flipToken(p); }
+});
+function step(p,d){ const r=p.r+DR[d], c=p.c+DC[d]; if(r<0||c<0||r>=S.st.rows||c>=S.st.cols) return; const from=sq(p.r,p.c);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=r; q.c=c; }, `${nameOf(p)} ${from} → ${sq(r,c)}`); }
+const hasFacing=p=>["guard","boss","camera"].includes(p.type);
+function setFacing(p,d){ commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); if(q.type==="camera"){ if(st.cam==="green") q.fg=d; else q.fo=d; } else q.facing=d; }, `${nameOf(p)} faces ${DIRN[d]}`); }
+function removePiece(p){ S.sel=null; commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); }, `Removed ${nameOf(p)} from ${sq(p.r,p.c)}`); }
+function flipToken(p){
+  if(p.type==="attn") commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.mode=q.mode==="alert"?"q":"alert"; }, `${p.owner||""} token now ${p.mode==="alert"?"?":"! (alert)"}`);
+  if(p.type==="ko") commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.stars=q.stars===1?2:1; }, `KO token at ${sq(p.r,p.c)} → ${p.stars===1?2:1} star`);
+}
+
+// ---------- piece actions (shared by the quick bar and the Piece panel) ----------
+function hurt(p, n, ko){
+  const T=TYPES[p.type], nm=nameOf(p);
+  if(p.type==="guard"){
+    const dmg=ko?(p.dmg||0):Math.max(0,(p.dmg||0)+n), kod=ko?Math.max(0,(p.kod||0)+n):(p.kod||0), hp=p.hp||2;
+    if(dmg>=hp){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push({id:st.nextId++,type:"dead",r:p.r,c:p.c,from:p.label}); S.sel=null; }, `${nm} takes ${n} damage and is killed at ${sq(p.r,p.c)} → dead guard token`); return; }
+    if(kod>=hp){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push({id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}); S.sel=null; }, `${nm} takes ${n} KO damage and is knocked out at ${sq(p.r,p.c)} → KO token ★★`); return; }
+    commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.dmg=dmg; q.kod=kod; }, `${nm} ${n>0?"takes":"loses"} ${Math.abs(n)} ${ko?"KO ":""}damage (${dmg} dmg, ${kod} KO of ${hp})${n>0?" — if he isn't down by the end of the turn, the zone is alerted":""}`); return;
+  }
+  const dmg=Math.max(0,(p.dmg||0)+n), hp=p.hp||4; // bosses treat KO damage as normal damage
+  let msg=`${nm} ${n>0?"takes":"heals"} ${Math.abs(n)}${ko&&p.type==="boss"?" (KO counts as normal)":""} damage → ${Math.max(0,hp-dmg)}/${hp} health`;
+  if(dmg>=hp) msg += T.kind==="player" ? " — KILLED IN ACTION, stage failed" : " — DEFEATED";
+  commit(st=>{ st.pieces.find(x=>x.id===p.id).dmg=dmg; }, msg);
+}
+function convertGuard(p, to){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push(to==="ko"?{id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}:{id:st.nextId++,type:"dead",r:p.r,c:p.c,from:p.label}); S.sel=null; },
+  `${nameOf(p)} ${to==="ko"?"knocked out → KO token ★★":"killed → dead guard token"} at ${sq(p.r,p.c)}`); }
+function wakeGuard(k){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==k.id); const g={id:st.nextId++,type:"guard",r:k.r,c:k.c,label:k.from||("G"+st.guardNo++),facing:2,hp:2,dmg:0,kod:0}; st.pieces.push(g); S.sel=g.id; },
+  `${k.from||"KO'd guard"} wakes up at ${sq(k.r,k.c)} — players pick his facing (not into a wall)`); }
+function playerToken(p, mode){ // mode: "q" draw attention, "alert", "remove"
+  const owner=p.label||TYPES[p.type].name;
+  commit(st=>{ let t=st.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===owner.toLowerCase());
+    if(mode==="remove"){ if(t) st.pieces=st.pieces.filter(x=>x.id!==t.id); return; }
+    if(!t){ t={id:st.nextId++,type:"attn",owner,mode:mode==="alert"?"alert":"q"}; st.pieces.push(t); }
+    else if(mode==="alert") t.mode="alert";               // drawing attention moves it without flipping
+    t.r=p.r; t.c=p.c; },
+    mode==="remove"?`${owner}'s attention token removed`: mode==="alert"?`${owner} is SEEN — ! token under ${owner} at ${sq(p.r,p.c)}`:`${owner} draws attention at ${sq(p.r,p.c)}`);
+}
+// two-tap delete so pieces aren't removed by accident
+function confirmDel(btn, p){
+  if(!btn) return; const orig=btn.innerHTML; let t=null;
+  btn.onclick=()=>{
+    if(btn.dataset.armed){ clearTimeout(t); removePiece(p); return; }
+    btn.dataset.armed="1"; btn.innerHTML="Remove "+esc(nameOf(p))+"?"; btn.style.background="#7a2f25"; btn.style.color="#fff";
+    t=setTimeout(()=>{ delete btn.dataset.armed; btn.innerHTML=orig; btn.style.background=""; btn.style.color=""; },3000);
+  };
+}
+function upd(p, fn, msg){ commit(st=>fn(st.pieces.find(x=>x.id===p.id), st), msg); }
+function actionsFor(p){
+  const T=TYPES[p.type], nm=nameOf(p), A=[], add=(id,label,run,quick,cls)=>A.push({id,label,run,quick,cls});
+  if(hasFacing(p)){ add("ccw","⟲",()=>setFacing(p,((facingOf(p)??0)+3)%4),1); add("cw","⟳",()=>setFacing(p,((facingOf(p)??0)+1)%4),1); }
+  if(T.kind==="player"){
+    add("hit","+1 dmg",()=>hurt(p,1),1); add("heal","−1 dmg",()=>hurt(p,-1));
+    add("ration","Rations (heal 2)",()=>hurt(p,-2));
+    add("noise","? Draw attention",()=>playerToken(p,"q"),1); add("seen","! Seen",()=>playerToken(p,"alert"),1);
+    add("untoken","Remove my token",()=>playerToken(p,"remove"));
+    add("refocus","Refresh all focus",()=>upd(p,q=>{ q.focus=[true,true,true,true]; },`${nm} refreshes all focus tokens`));
+    if(p.type==="meryl") add("disg",p.disguised?"Drop disguise":"Disguise",()=>upd(p,q=>{ q.disguised=!q.disguised; },`Meryl ${p.disguised?"loses":"gains"} her disguise`),1);
+  }
+  if(p.type==="guard"){
+    add("hit","+1 dmg",()=>hurt(p,1),1); add("kohit","+1 KO",()=>hurt(p,1,true),1);
+    add("unhit","−1 dmg",()=>hurt(p,-1)); add("unko","−1 KO",()=>hurt(p,-1,true));
+    add("to-ko","Knock out",()=>convertGuard(p,"ko"),1); add("to-dead","Kill",()=>convertGuard(p,"dead"),1);
+  }
+  if(p.type==="boss"){ add("hit","+1 dmg",()=>hurt(p,1),1); add("heal","−1 dmg",()=>hurt(p,-1)); }
+  if(p.type==="camera") add("camflip",`Flip all cameras (now ${S.st.cam})`,()=>commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; },`Cameras flipped to ${S.st.cam==="green"?"orange":"green"}`),1);
+  if(p.type==="attn") add("flip",p.mode==="alert"?"Flip to ?":"Flip to !",()=>flipToken(p),1);
+  if(p.type==="ko"){ add("flip",p.stars===1?"Back to ★★":"Stir → ★",()=>flipToken(p),1); add("wake","Wake up → guard",()=>wakeGuard(p),1); }
+  if(p.type==="dead") add("mandown","Man down! (remove)",()=>removePiece(p),1);
+  if(p.type==="event") add("collect",`Collect ${p.label||"event"}`,()=>{ S.sel=null; commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); },`Event ${p.label||""} collected at ${sq(p.r,p.c)} — resolve it in the campaign book`); },1);
+  if(p.type==="door") add("door",p.open?"Lock door":"Unlock door",()=>upd(p,q=>{ q.open=!q.open; },`Door at ${sq(p.r,p.c)} ${p.open?"locked":"unlocked"}`),1);
+  if(p.type==="terminal") add("hack",p.hacked?"Un-hack":"Mark hacked",()=>upd(p,q=>{ q.hacked=!q.hacked; },`Terminal at ${sq(p.r,p.c)} ${p.hacked?"reset":"hacked"}`),1);
+  return A;
+}
+
+// ---------- sheet / tabs ----------
+const TITLES={ai:"Play with an AI",build:"Build",piece:"Selected piece",game:"Game",dice:"Dice",log:"Log",map:"Map",net:"Connect with a friend"};
+const sheet=document.getElementById("sheet");
+function openSheet(n){
+  S.pane=n; sheet.classList.add("open"); sheet.setAttribute("aria-hidden","false");
+  document.getElementById("sheet-title").textContent=TITLES[n];
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.pane===n));
+  document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("show",p.id==="pane-"+n));
+  renderSide(); if(n==="net") renderNetPane(); renderQbar();
+}
+function closeSheet(){ S.pane=null; sheet.classList.remove("open"); sheet.setAttribute("aria-hidden","true"); document.querySelectorAll("#tabs button").forEach(b=>b.classList.remove("on")); renderQbar(); }
+document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; if(S.pane===b.dataset.pane) closeSheet(); else openSheet(b.dataset.pane); });
+document.getElementById("sheet-x").onclick=closeSheet;
+function syncArmed(){
+  const a=document.getElementById("armed");
+  const txt = S.addType ? `Tap a square to place ${TYPES[S.addType].name}` : (S.tool!=="move" ? (S.tool==="wall"?"Wall mode: tap near a square edge":`Paint: ${S.tool} (drag to paint)`) : "");
+  a.style.display = txt ? "block" : "none"; document.getElementById("armed-txt").textContent=txt;
+  renderBuildPane();
+}
+document.getElementById("armed-x").onclick=()=>{ S.addType=null; S.tool="move"; syncArmed(); };
+
+const esc=s=>String(s??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+function renderSide(){ renderBuildPane(); renderPiecePane(); renderGamePane(); renderLog(); renderMapPane(); renderAiPane(); }
+function renderAiPane(){
+  const sel=document.getElementById("ai-who"); if(!sel) return; const cur=sel.dataset.picked?sel.value:"";
+  const players=S.st.pieces.filter(p=>TYPES[p.type].kind==="player").map(p=>p.label);
+  const opts=[...players,"Guards (referee)","Just reading"];
+  sel.innerHTML=opts.map(o=>`<option ${o===cur?"selected":""}>${esc(o)}</option>`).join("");
+}
+document.getElementById("ai-who").onchange=e=>{ e.target.dataset.picked="1"; };
+document.getElementById("ai-copy").onclick=()=>{ const who=document.getElementById("ai-who").value, t=boardText(who), ta=document.getElementById("ai-text");
+  ta.value=t; ta.style.display="block"; ta.select(); const b=document.getElementById("ai-copy");
+  const done=()=>{ b.textContent="Copied ✓ — paste it to your AI"; setTimeout(()=>b.textContent="Copy board for AI",2500); };
+  const fallback=()=>{ try{ ta.select(); if(document.execCommand("copy")) done(); else b.textContent="Select the text below and copy it"; }catch(_){ b.textContent="Select the text below and copy it"; } };
+  try{ navigator.clipboard.writeText(t).then(done, fallback); }catch(e){ fallback(); } };
+document.getElementById("ai-apply").onclick=()=>{ const res=applyMoves(document.getElementById("ai-in").value).filter(x=>!x.startsWith("·"));
+  document.getElementById("ai-out").innerHTML=res.length?res.map(x=>esc(x)).join("<br>"):"No command lines found in that reply.";
+  if(res.some(x=>x.startsWith("✓"))) document.getElementById("ai-in").value=""; };
+function renderBuildPane(){
+  const el=document.getElementById("pane-build");
+  const tool=(t,l)=>`<button class="sm ${!S.addType&&S.tool===t?"on":""}" data-tool="${t}">${l}</button>`;
+  el.innerHTML = `
+    <h3>Add a piece</h3><p class="muted" style="margin:0 0 8px">Tap one, then tap a square on the board.</p>
+    <div class="grid2">${PALETTE.map(t=>{ const T=TYPES[t]; return `<button class="sm ${S.addType===t?"on":""}" data-add="${t}"><span class="sw" style="background:${T.color}">${T.short}</span>${T.name}</button>`; }).join("")}</div>
+    <h3>Mode</h3><div class="grid2">${tool("move","✋ Move / select")}${tool("wall","▏Walls")}</div>
+    <h3>Paint squares</h3><div class="grid2">${tool("obstacle","■ Obstacle")}${tool("void","◼ No-go")}${tool("exit","⚠ Exit")}${tool("corner","⇄ Corner")}${tool("stairs","☰ Stairs ↕")}${tool("stairsv","‖ Stairs ↔")}${tool("barracks","B Barracks")}${tool("elevator","⇅ Elevator")}${tool("floor","◻ Erase")}</div>`;
+  el.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{ S.addType=S.addType===b.dataset.add?null:b.dataset.add; S.tool="move"; syncArmed(); if(S.addType && innerWidth<900) closeSheet(); });
+  el.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{ S.tool=b.dataset.tool; S.addType=null; syncArmed(); if(S.tool!=="move" && innerWidth<900) closeSheet(); });
+}
+// quick bar for the selected piece (always visible while something is selected)
+function renderQbar(){
+  const q=document.getElementById("qbar"), p=P(S.sel);
+  const show = p && !(S.pane && innerWidth<900); stage.classList.toggle("qb", !!show);
+  if(!show){ q.style.display="none"; return; }
+  const T=TYPES[p.type]; let h=`<span class="sw" style="background:${T.color}">${T.short}</span><span class="name">${esc(nameOf(p))} · ${sq(p.r,p.c)}</span>`;
+  const acts=actionsFor(p).filter(a=>a.quick);
+  if(p.hp) h+=`<span class="muted" style="white-space:nowrap">${p.type==="guard"?`${p.dmg||0}D ${p.kod||0}KO/${p.hp}`:`HP ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`}</span>`;
+  h+=acts.map((a,i)=>`<button class="sm" data-qa="${i}">${esc(a.label)}</button>`).join("");
+  h+=`<button class="sm" data-q="more">More…</button><button class="sm danger" data-q="del" aria-label="Delete">✕</button>`;
+  q.innerHTML=h; q.style.display="flex";
+  q.querySelectorAll("[data-qa]").forEach(b=>b.onclick=()=>acts[+b.dataset.qa].run());
+  q.querySelector('[data-q="more"]').onclick=()=>openSheet("piece");
+  confirmDel(q.querySelector('[data-q="del"]'), p);
+}
+function renderPiecePane(){
+  const el=document.getElementById("pane-piece"), p=P(S.sel), L=S.lastLOS||{spotted:[]};
+  const warn = L.spotted.length ? `<div class="card bad"><b>In line of sight:</b><br>${L.spotted.map(s=>`${esc(s.pl.label)} at ${sq(s.pl.r,s.pl.c)} ← ${esc(s.v.label||"Camera")} at ${sq(s.v.r,s.v.c)}`).join("<br>")}</div>` : "";
+  if(!p){ el.innerHTML = warn + `<p class="muted">Tap a piece on the board to select it. Drag it with one finger to move it. Use two fingers to move and zoom the board.</p>`; return; }
+  const T=TYPES[p.type], nm=nameOf(p);
+  let h = warn + `<div class="card"><div class="row"><span class="sw" style="background:${T.color}">${T.short}</span><b>${esc(T.name)}</b><span class="muted">at ${sq(p.r,p.c)}</span></div>`;
+  if(T.kind!=="token"||p.type==="event") h+=`<div class="row"><label>Name</label><input type="text" id="pl-label" value="${esc(p.label||"")}" style="flex:1"></div>`;
+  h+=`<div class="row"><label>Step</label>${["↑","→","↓","←"].map((a,i)=>`<button class="sm" data-step="${i}">${a}</button>`).join("")}</div>`;
+  if(hasFacing(p)){ const f=facingOf(p);
+    h+=`<div class="row"><label>Facing${p.type==="camera"?" ("+S.st.cam+")":""}</label>${["↑","→","↓","←"].map((a,i)=>`<button class="sm ${f===i?"on":""}" data-face="${i}">${a}</button>`).join("")}</div>`;
+    if(p.type==="camera") h+=`<p class="muted">Each camera has one facing per color. Flip the camera color in Game, then set the other facing.</p>`;
+    else h+=`<p class="muted">Red squares on the board show what ${esc(nm)} can see.</p>`; }
+  if(T.kind==="player"||p.type==="guard"||p.type==="boss")
+    h+=`<div class="row"><label>Status</label><b>${p.type==="guard"?`${p.dmg||0} damage · ${p.kod||0} KO damage · health ${p.hp}`:`${Math.max(0,(p.hp||0)-(p.dmg||0))} / ${p.hp} health`}</b></div>
+        <div class="row"><label>Max health</label><input type="number" id="pl-hp" value="${p.hp??""}" style="width:80px"></div>`;
+  if(p.type==="guard") h+=`<p class="muted">Damage that reaches his health turns him into a dead guard token; KO damage that reaches it turns him into a KO token.</p>`;
+  const acts=actionsFor(p);
+  if(acts.length) h+=`<div class="row" style="gap:6px">${acts.map((a,i)=>`<button class="sm" data-act="${i}">${esc(a.label)}</button>`).join("")}</div>`;
+  if(T.kind==="player"){
+    h+=`<div class="row focus"><label>Focus</label>${T.focus.map((n,i)=>`<button class="sm ${p.focus&&p.focus[i]?"":"spent"}" data-focus="${i}">${esc(n)}</button>`).join("")}</div>`;
+  }
+  if(p.type==="attn") h+=`<div class="row"><label>Side</label><button class="sm ${p.mode!=="alert"?"on":""}" data-mode="q">? Investigate</button><button class="sm ${p.mode==="alert"?"on":""}" data-mode="alert">! Alerted</button></div>
+     <div class="row"><label>Whose</label><input type="text" id="pl-owner" value="${esc(p.owner||"")}" style="flex:1"></div>`;
+  if(p.type==="ko") h+=`<p class="muted">${p.from?esc(p.from)+" · ":""}${p.stars===1?"★ — wakes on the next Waken Guard.":"★★ — the next Waken Guard turns this to ★."}</p>`;
+  if(p.type==="door") h+=`<div class="row"><label>Level</label><input type="number" id="door-lv" value="${p.level||2}" min="2" max="5" style="width:70px"></div>`;
+  h+=`<div class="row"><button class="sm" id="dup">Duplicate</button><button class="sm danger" id="del">Delete</button></div></div>`;
+  el.innerHTML=h;
+  const q=()=>S.st.pieces.find(x=>x.id===p.id), on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; }, ch=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onchange=f; };
+  el.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>step(p,+b.dataset.step));
+  el.querySelectorAll("[data-face]").forEach(b=>b.onclick=()=>setFacing(p,+b.dataset.face));
+  el.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>acts[+b.dataset.act].run());
+  el.querySelectorAll("[data-focus]").forEach(b=>b.onclick=()=>{ const i=+b.dataset.focus; commit(()=>{ q().focus[i]=!q().focus[i]; }, `${nm} ${p.focus[i]?"spent":"refreshed"} focus: ${T.focus[i]}`); });
+  el.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>commit(()=>{ q().mode=b.dataset.mode; }, `${p.owner||""} token set to ${b.dataset.mode==="alert"?"! (alert)":"?"}`));
+  el.querySelectorAll("[data-stars]").forEach(b=>b.onclick=()=>commit(()=>{ q().stars=+b.dataset.stars; }));
+  ch("pl-label",e=>commit(()=>{ q().label=e.target.value; }));
+  ch("pl-owner",e=>commit(()=>{ q().owner=e.target.value; }));
+  ch("pl-hp",e=>commit(()=>{ q().hp=+e.target.value; }));
+  ch("door-lv",e=>commit(()=>{ q().level=+e.target.value; }));
+
+  on("dup",()=>commit(st=>{ const c=JSON.parse(JSON.stringify(q())); c.id=st.nextId++; if(c.type==="guard") c.label="G"+(st.guardNo++); st.pieces.push(c); S.sel=c.id; }));
+  confirmDel(el.querySelector("#del"), p);
+}
+function renderGamePane(){
+  const st=S.st, el=document.getElementById("pane-game"), players=st.pieces.filter(p=>TYPES[p.type].kind==="player");
+  el.innerHTML = `
+  <div class="card"><div class="row"><label>Round</label><button class="sm" id="rdn">−</button><b style="font-size:18px">${st.round}</b><button class="sm" id="rup">+</button><b style="margin-left:auto">${st.phase} phase</b></div>
+    <div class="row"><button class="on" id="next-phase" style="flex:1">${st.phase==="Player"?"End player phase → Enemy":"End enemy phase → next round"}</button></div></div>
+  <div class="card"><b>Save progress</b>
+    <div class="row"><input type="text" id="save-name" placeholder="${esc((st.stage||"Game")+" · round "+st.round)}" style="flex:1"><button class="sm on" id="save-slot">Save</button></div>
+    <p class="muted" id="save-msg">Saves stay on this device. Pick them up later from ☰ Menu.</p></div>
+  <div class="card"><b>Guard Order deck</b>
+    <div class="row"><label>Blue left</label><button class="sm" data-deck="blue,-1">−</button><b>${st.blue}</b><button class="sm" data-deck="blue,1">+</button></div>
+    <div class="row"><label>Red left</label><button class="sm" data-deck="red,-1">−</button><b class="${st.blue===0?"bad":""}">${st.red}</b><button class="sm" data-deck="red,1">+</button></div>
+    <div class="row"><button id="draw">Draw a card</button><button class="sm" id="burn">Burn a card</button></div>
+    <p class="muted">Counters only. The real deck stays on your table; a red card might be Game Over.</p></div>
+  <div class="card"><div class="row"><label>Cameras</label><button id="cam" style="flex:1;${st.cam==="orange"?"background:#7a3d10;border-color:#e07b2a":"background:#1f5a34;border-color:#3fbf63"}">${st.cam==="green"?"Green side up":"Orange side up"} · tap to flip</button></div></div>
+  <div class="card"><b>Line of sight & order</b>
+    <p class="muted">Guards and cameras see every open square in front of them unless a wall, obstacle or locked door is inside the box between them.</p>
+    <div class="row"><button class="sm ${S.losAll?"on":""}" id="los-all">Show all guard & camera sight</button></div>
+    <div class="row"><button class="sm ${S.order?"on":""}" id="order">Show guard activation order</button></div>
+    <div class="row"><label>Priority</label><select id="prio" style="flex:1">${["TL","TR","BL","BR"].map(v=>`<option ${st.priority===v?"selected":""} value="${v}">${{TL:"Top-left",TR:"Top-right",BL:"Bottom-left",BR:"Bottom-right"}[v]} corner</option>`).join("")}</select></div></div>
+  <div class="card"><b>Players</b>${players.length?players.map(p=>{ const T=TYPES[p.type]; return `<div class="row"><span class="sw" style="background:${T.color}">${T.short}</span><b>${esc(p.label)}</b> ${sq(p.r,p.c)} · HP ${Math.max(0,(p.hp||0)-(p.dmg||0))}/${p.hp} · focus ${p.focus.filter(Boolean).length}/4</div>`; }).join(""):`<p class="muted">No player pieces yet.</p>`}</div>`;
+  const on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; };
+  on("rdn",()=>commit(s=>{ s.round=Math.max(1,s.round-1); }));
+  on("rup",()=>commit(s=>{ s.round++; }));
+  on("next-phase",()=>commit(s=>{ if(s.phase==="Player") s.phase="Enemy"; else { s.phase="Player"; s.round++; } }, st.phase==="Player"?`— Enemy phase, round ${st.round} —`:`— Round ${st.round+1} begins —`));
+  el.querySelectorAll("[data-deck]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.deck.split(","); commit(s=>{ s[k]=Math.max(0,s[k]+(+d)); }); });
+  on("draw",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, st.blue>0?`Guard Order card drawn (blue left: ${st.blue-1})`:`RED Guard Order card drawn (red left: ${Math.max(0,st.red-1)}) — check for Game Over`));
+  on("burn",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `Guard Order card burned to the bottom — if it was Game Over, the stage fails`));
+  on("cam",()=>commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flipped to ${st.cam==="green"?"orange":"green"}`));
+  on("los-all",()=>{ S.losAll=!S.losAll; syncEye(); refresh(); });
+  on("order",()=>{ S.order=!S.order; refresh(); });
+  el.querySelector("#prio").onchange=e=>commit(s=>{ s.priority=e.target.value; });
+  on("save-slot",()=>{ const n=el.querySelector("#save-name").value.trim()||el.querySelector("#save-name").placeholder; saveSlot(n); el.querySelector("#save-msg").textContent=`Saved "${n}".`; });
+}
+function renderLog(){
+  document.getElementById("log").innerHTML = S.st.log.map(l=>`<div><span class="muted">${new Date(l.t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</span> <b>${esc(l.w)}</b> ${esc(l.m)}</div>`).join("") || `<p class="muted">Moves, rolls and changes show up here for both players.</p>`;
+}
+const pending={};
+function confirmTwice(id,el){
+  if(pending[id] && Date.now()-pending[id]<3000){ delete pending[id]; return true; }
+  pending[id]=Date.now(); const b=el.querySelector("#"+id); if(b){ b.textContent="Tap again to confirm"; setTimeout(()=>renderMapPane(),3000); }
+  return false;
+}
+function renderMapPane(){
+  const st=S.st, el=document.getElementById("pane-map"), br=st.bgRect||{x:0,y:0,w:100,h:100};
+  el.innerHTML = `
+  <div class="card"><b>Layouts</b>
+    <p class="muted">Loads an approximate stage layout with starting pieces. It replaces the current board.</p>
+    <div class="row"><select id="preset" style="flex:1">${Object.keys(LAYOUTS).map(k=>`<option value="${k}">${LAYOUTS[k].name}</option>`).join("")}<option value="blank">Blank 16×20</option></select></div>
+    <div class="row"><button class="sm" id="preset-load">Load layout</button></div></div>
+  <div class="card"><b>Grid</b>
+    <div class="row"><label>Columns</label><input type="number" id="m-cols" value="${st.cols}" min="4" max="40" style="width:80px"><label style="min-width:auto">Rows</label><input type="number" id="m-rows" value="${st.rows}" min="4" max="40" style="width:80px"></div>
+    <div class="row"><button class="sm" id="m-apply">Apply size</button><label style="min-width:auto">First row</label><select id="rowstart"><option value="1" ${(st.rowStart??1)===1?"selected":""}>1</option><option value="0" ${st.rowStart===0?"selected":""}>0</option></select></div></div>
+  <div class="card"><b>Background image</b>
+    <p class="muted">Load a screenshot of your map, then stretch and shift it until its squares sit under the grid.</p>
+    <div class="row"><button class="sm" id="bg-load">Load image</button><button class="sm" id="bg-clear">Remove</button></div>
+    <div class="row"><label>Opacity</label><input type="range" id="bg-op" min="0" max="1" step="0.05" value="${st.bgOpacity}" style="flex:1"></div>
+    ${[["x","Shift ↔",-150,150],["y","Shift ↕",-150,150],["w","Stretch ↔",30,400],["h","Stretch ↕",30,400]].map(([k,l,mn,mx])=>`<div class="row"><label>${l}</label><input type="range" data-bgr="${k}" min="${mn}" max="${mx}" step="0.1" value="${br[k]}" style="flex:1"><input type="number" data-bgn="${k}" step="0.1" value="${br[k]}" style="width:78px"></div>`).join("")}
+    <div class="row"><button class="sm" id="bg-reset">Reset alignment</button></div></div>
+  <div class="card"><b>Save / load</b>
+    <div class="row"><button class="sm" id="save">Save to file</button><button class="sm" id="load">Load file</button></div>
+    <div class="row"><button class="sm danger" id="m-clear">Clear map</button><button class="sm danger" id="m-new">New game</button></div>
+    <p class="muted">The board also autosaves on this device.</p></div>`;
+  const on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; };
+  on("preset-load",()=>{ if(confirmTwice("preset-load",el)){ const v=el.querySelector("#preset").value;
+    commit(s=>{ const n=v==="blank"?defaultState():buildPreset(v), keep={log:s.log,bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,keep); S.sel=null; }, v==="blank"?"Loaded a blank board":"Loaded "+LAYOUTS[v].name); fitView(); } });
+  on("m-apply",()=>{ const c=+el.querySelector("#m-cols").value, r=+el.querySelector("#m-rows").value; commit(s=>{ s.cols=Math.max(4,Math.min(40,c)); s.rows=Math.max(4,Math.min(40,r)); }, `Grid set to ${c}×${r}`); fitView(); });
+  el.querySelector("#rowstart").onchange=e=>commit(s=>{ s.rowStart=+e.target.value; });
+  on("bg-load",()=>document.getElementById("bg-file").click());
+  on("bg-clear",()=>setBg(null,true));
+  el.querySelector("#bg-op").oninput=e=>{ S.st.bgOpacity=+e.target.value; render(); };
+  el.querySelector("#bg-op").onchange=()=>{ S.st.ver++; persist(); net.sendState(); };
+  const setR=(k,v)=>{ S.st.bgRect=Object.assign({x:0,y:0,w:100,h:100},S.st.bgRect); S.st.bgRect[k]=+v; el.querySelectorAll(`[data-bgr="${k}"],[data-bgn="${k}"]`).forEach(i=>{ if(document.activeElement!==i) i.value=v; }); render(); };
+  el.querySelectorAll("[data-bgr],[data-bgn]").forEach(i=>{ const k=i.dataset.bgr||i.dataset.bgn; i.oninput=e=>setR(k,e.target.value); i.onchange=()=>{ S.st.ver++; persist(); net.sendState(); }; });
+  on("bg-reset",()=>commit(s=>{ s.bgRect={x:0,y:0,w:100,h:100}; }));
+  on("save",saveFile); on("load",()=>document.getElementById("load-file").click());
+  on("m-clear",()=>{ if(confirmTwice("m-clear",el)) commit(s=>{ s.cells={}; s.walls={}; }, "Map cleared"); });
+  on("m-new",()=>{ if(confirmTwice("m-new",el)) commit(s=>{ const n=defaultState(); Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n); S.sel=null; }, "New game"); });
+}
+document.getElementById("bg-file").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+  rd.onload=()=>{ const img=new Image(); img.onload=()=>{ const max=1800, sc=Math.min(1,max/Math.max(img.width,img.height)), c=document.createElement("canvas");
+      c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc); c.getContext("2d").drawImage(img,0,0,c.width,c.height); setBg(c.toDataURL("image/jpeg",0.82), true); };
+    img.src=rd.result; };
+  rd.readAsDataURL(f); e.target.value="";
+};
+function setBg(data, share){
+  S.bg=data;
+  if(data){ const img=new Image(); img.onload=()=>{ S.bgImg=img; render(); }; img.src=data; } else S.bgImg=null;
+  if(share){ try{ if(data) localStorage.setItem("st-bg",data); else localStorage.removeItem("st-bg"); }catch(e){}
+    S.st.bgVer=(S.st.bgVer||0)+1; S.st.ver++; persist(); net.sendBg(); net.sendState(); refresh(); }
+}
+function saveFile(){
+  const blob=new Blob([JSON.stringify({state:S.st,bg:S.bg})],{type:"application/json"}), a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=`sneaking-table-round${S.st.round}.json`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+document.getElementById("load-file").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+  rd.onload=()=>{ try{ const d=JSON.parse(rd.result); S.undo.push(snapshot()); S.st=Object.assign(defaultState(), d.state||d); S.st.ver++;
+      addLog("Loaded a saved game"); if(d.bg!==undefined) setBg(d.bg,true); afterReplace(); net.sendState(); fitView(); }catch(err){ addLog("Couldn't read that file"); refresh(); } };
+  rd.readAsText(f); e.target.value="";
+};
+
+// ---------- dice ----------
+function setDice(){ document.getElementById("dw-v").textContent=S.dw; document.getElementById("db-v").textContent=S.db; }
+document.querySelectorAll("[data-dn]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.dn.split(","); S[k]=Math.max(0,Math.min(10,S[k]+(+d))); setDice(); });
+document.querySelectorAll("[data-preset]").forEach(b=>b.onclick=()=>{ const [w,bl]=b.dataset.preset.split(",").map(Number); S.dw=w; S.db=bl; setDice(); });
+document.getElementById("roll").onclick=()=>{
+  const w=[...Array(S.dw)].map(()=>{ const v=1+Math.floor(Math.random()*6); return v===1?"!":v; }), b=[...Array(S.db)].map(()=>1+Math.floor(Math.random()*6));
+  const why=document.getElementById("dfor").value.trim();
+  document.getElementById("dice-out").innerHTML=`<div class="card">${w.map(v=>`<span class="chip w ${v==="!"?"bang":""}">${v}</span>`).join("")}${b.map(v=>`<span class="chip b">${v}</span>`).join("")}</div>`;
+  const parts=[]; if(w.length) parts.push("white "+w.join(", ")); if(b.length) parts.push("black "+b.join(", "));
+  commit(()=>{}, `rolled ${parts.join(" · ")||"nothing"}${why?" — "+why:""}`);
+};
+document.getElementById("undo").onclick=undo; document.getElementById("redo").onclick=redo;
+
+// ---------- peer-to-peer (WebRTC with copy-paste codes; no server) ----------
+const net = {
+  pc:null, dc:null, role:null, status:"Offline", myCode:"", chunks:{}, peerName:"",
+  setStatus(s,cls){ this.status=s; document.getElementById("net-dot").className=cls||""; document.getElementById("net-dot").title=s; renderNetPane(); },
+  newPC(){
+    this.close();
+    const pc=new RTCPeerConnection({iceServers:[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]},{urls:"stun:stun.cloudflare.com:3478"}]});
+    pc.onconnectionstatechange=()=>{ const s=pc.connectionState;
+      if(s==="connected") this.setStatus("Connected"+(this.peerName?" to "+this.peerName:""),"ok");
+      else if(s==="failed") this.setStatus("Connection failed — try another network","");
+      else if(s==="disconnected"||s==="closed") this.setStatus("Disconnected",""); };
+    this.pc=pc; return pc;
+  },
+  wire(dc){ this.dc=dc;
+    dc.onopen=()=>{ this.setStatus("Connected","ok"); this.raw({t:"hello",name:S.me}); if(this.role==="host"){ this.sendBg(); this.sendState(); } else this.raw({t:"req"}); };
+    dc.onclose=()=>this.setStatus("Disconnected",""); dc.onmessage=e=>this.recv(e.data); },
+  async host(){ this.role="host"; const pc=this.newPC(); this.wire(pc.createDataChannel("board",{ordered:true}));
+    await pc.setLocalDescription(await pc.createOffer()); await this.gathered(pc);
+    this.myCode=await encode({sdp:pc.localDescription.sdp,n:S.me}); this.setStatus("Hosting — send your code","wait"); },
+  async join(code){ this.role="guest"; const pc=this.newPC(); pc.ondatachannel=e=>this.wire(e.channel);
+    const o=await decode(code); this.peerName=o.n||""; await pc.setRemoteDescription({type:"offer",sdp:o.sdp});
+    await pc.setLocalDescription(await pc.createAnswer()); await this.gathered(pc);
+    this.myCode=await encode({sdp:pc.localDescription.sdp,n:S.me}); this.setStatus("Send your reply code to the host","wait"); },
+  async accept(code){ const a=await decode(code); this.peerName=a.n||""; await this.pc.setRemoteDescription({type:"answer",sdp:a.sdp}); this.setStatus("Connecting…","wait"); },
+  gathered(pc){ return new Promise(res=>{ if(pc.iceGatheringState==="complete") return res();
+    const f=()=>{ if(pc.iceGatheringState==="complete"){ pc.removeEventListener("icegatheringstatechange",f); res(); } };
+    pc.addEventListener("icegatheringstatechange",f); setTimeout(res,5000); }); },
+  close(){ try{ this.dc&&this.dc.close(); }catch(e){} try{ this.pc&&this.pc.close(); }catch(e){} this.dc=null; this.pc=null; },
+  raw(obj){ if(!this.dc||this.dc.readyState!=="open") return;
+    const s=JSON.stringify(obj), N=15000; if(s.length<=N){ this.dc.send(s); return; }
+    const id=Math.random().toString(36).slice(2), n=Math.ceil(s.length/N);
+    for(let i=0;i<n;i++) this.dc.send(JSON.stringify({t:"chunk",id,i,n,d:s.slice(i*N,(i+1)*N)})); },
+  sendState(){ this.raw({t:"state",s:S.st}); },
+  sendBg(){ this.raw({t:"bg",d:S.bg}); },
+  recv(data){ let m; try{ m=JSON.parse(data); }catch(e){ return; }
+    if(m.t==="chunk"){ const b=this.chunks[m.id]||(this.chunks[m.id]=[]); b[m.i]=m.d; if(b.filter(x=>x!==undefined).length===m.n){ delete this.chunks[m.id]; this.recv(b.join("")); } return; }
+    if(m.t==="hello"){ this.peerName=m.name; this.setStatus("Connected to "+m.name,"ok"); }
+    if(m.t==="req"){ this.sendBg(); this.sendState(); }
+    if(m.t==="state"){ const first=!S.gotRemote; S.gotRemote=true; S.st=Object.assign(defaultState(), m.s); afterReplace(); if(first) fitView(); }
+    if(m.t==="bg"){ S.bg=m.d; try{ if(m.d) localStorage.setItem("st-bg",m.d); else localStorage.removeItem("st-bg"); }catch(e){}
+      if(m.d){ const img=new Image(); img.onload=()=>{ S.bgImg=img; render(); }; img.src=m.d; } else { S.bgImg=null; render(); } } }
+};
+async function encode(obj){ const bytes=new TextEncoder().encode(JSON.stringify(obj));
+  try{ const cs=new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw")); return "Z"+b64(new Uint8Array(await new Response(cs).arrayBuffer())); }
+  catch(e){ return "J"+b64(bytes); } }
+async function decode(code){ code=code.trim().replace(/\s+/g,""); const kind=code[0], bytes=unb64(code.slice(1));
+  if(kind==="Z"){ const ds=new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")); return JSON.parse(await new Response(ds).text()); }
+  return JSON.parse(new TextDecoder().decode(bytes)); }
+function b64(u8){ let s=""; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
+function unb64(s){ const b=atob(s), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+function renderNetPane(){
+  const el=document.getElementById("pane-net"); if(!el) return;
+  const connected=net.dc&&net.dc.readyState==="open";
+  el.innerHTML = `
+  <div class="card"><div class="row"><label>Your name</label><input type="text" id="n-name" value="${esc(S.me)}" style="flex:1"></div>
+    <div class="row"><label>Status</label><b>${esc(net.status)}</b></div>
+    ${connected?`<div class="row"><button class="sm" id="n-push">Send my board to them</button><button class="sm danger" id="n-close">Disconnect</button></div>`:""}</div>
+  ${connected?"":`
+  <div class="card"><b>1 · Host (one player)</b>
+    <div class="row"><button id="n-host">Create host code</button></div>
+    ${net.role==="host"&&net.myCode?`<textarea readonly id="n-mycode">${esc(net.myCode)}</textarea><div class="row"><button class="sm" id="n-copy">Copy code</button><span class="muted">Text it to your friend.</span></div>
+    <p class="muted">Then paste the reply code they send back:</p><textarea id="n-reply" placeholder="Paste their reply code"></textarea>
+    <div class="row"><button class="on" id="n-accept">Connect</button></div>`:""}</div>
+  <div class="card"><b>2 · Join (the other player)</b>
+    <textarea id="n-hostcode" placeholder="Paste the host's code"></textarea>
+    <div class="row"><button id="n-join">Make reply code</button></div>
+    ${net.role==="guest"&&net.myCode?`<textarea readonly id="n-mycode2">${esc(net.myCode)}</textarea><div class="row"><button class="sm" id="n-copy2">Copy reply</button><span class="muted">Text it back to the host.</span></div>`:""}</div>
+  <p class="muted">The codes link your two devices directly. No account or server holds your game. The host's board is where you start, then every change shows up on both screens. Keep this page open on both devices while you play. If it won't connect, try Wi-Fi instead of mobile data (or the other way round).</p>`}`;
+  const $=id=>el.querySelector("#"+id);
+  if($("n-name")) $("n-name").onchange=e=>{ S.me=e.target.value.trim()||"Player"; saveLS("st-name",S.me); net.raw({t:"hello",name:S.me}); };
+  if($("n-host")) $("n-host").onclick=async()=>{ net.setStatus("Making code…","wait"); try{ await net.host(); }catch(err){ net.setStatus("Couldn't create a code: "+err.message,""); } };
+  if($("n-accept")) $("n-accept").onclick=async()=>{ const code=$("n-reply").value; try{ await net.accept(code); }catch(err){ net.setStatus("That reply code didn't work",""); } };
+  if($("n-join")) $("n-join").onclick=async()=>{ const code=$("n-hostcode").value; net.setStatus("Making reply…","wait"); try{ await net.join(code); }catch(err){ net.setStatus("That host code didn't work",""); } };
+  const copy=id=>{ const t=$(id); t.select(); try{ navigator.clipboard.writeText(t.value); }catch(e){ document.execCommand("copy"); } };
+  if($("n-copy")) $("n-copy").onclick=()=>copy("n-mycode");
+  if($("n-copy2")) $("n-copy2").onclick=()=>copy("n-mycode2");
+  if($("n-close")) $("n-close").onclick=()=>{ net.close(); net.role=null; net.myCode=""; net.setStatus("Offline",""); };
+  if($("n-push")) $("n-push").onclick=()=>{ net.sendBg(); net.sendState(); };
+}
+
+// ---------- saves, menu, text export ----------
+function getSaves(){ try{ return JSON.parse(loadLS("st-saves")||"[]"); }catch(e){ return []; } }
+function putSaves(a){ try{ localStorage.setItem("st-saves",JSON.stringify(a)); return true; }catch(e){ return false; } }
+function saveSlot(name){ const a=getSaves(); a.unshift({id:Date.now(),name,t:Date.now(),state:S.st}); if(a.length>30) a.length=30; putSaves(a); addLog(`Saved progress: ${name}`); persist(); renderLog(); }
+function openMenu(){ renderMenu(); const m=document.getElementById("menu"); m.classList.add("open"); m.setAttribute("aria-hidden","false"); }
+function closeMenu(){ const m=document.getElementById("menu"); m.classList.remove("open"); m.setAttribute("aria-hidden","true"); }
+function startStage(k){
+  commit(s=>{ const n=k==="blank"?defaultState():buildPreset(k), keep={bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(x=>delete s[x]); Object.assign(s,n,keep); S.sel=null; },
+    `New game: ${k==="blank"?"blank board":LAYOUTS[k].name}`);
+  S.st.log=S.st.log.slice(0,1); persist(); closeMenu(); fitView(); refresh();
+}
+function renderMenu(){
+  document.getElementById("stage-list").innerHTML = Object.keys(LAYOUTS).map(k=>`<button class="stagebtn" data-stage="${k}"><b>${esc(LAYOUTS[k].name)}</b><span class="muted">${esc(LAYOUTS[k].note||"")}</span></button>`).join("")
+    + `<button class="stagebtn" data-stage="blank"><b>Blank board</b><span class="muted">Build any stage or VR mission yourself</span></button>`;
+  const saves=getSaves(), cur=S.st;
+  document.getElementById("save-list").innerHTML =
+    `<div class="card save-row"><div class="meta"><b>Current game · ${esc(cur.stage||"")}</b><span class="muted">Round ${cur.round} · ${cur.phase} phase · autosaved</span></div><button class="sm on" id="menu-resume">Resume</button></div>`
+    + (saves.length ? saves.map(v=>`<div class="card save-row"><div class="meta"><b>${esc(v.name)}</b><span class="muted">${esc(v.state.stage||"")} · round ${v.state.round} · ${new Date(v.t).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span></div><button class="sm" data-load="${v.id}">Load</button><button class="sm danger" data-delsave="${v.id}" aria-label="Delete save">✕</button></div>`).join("")
+       : `<p class="muted">No named saves yet. Use Game → Save progress.</p>`);
+  const m=document.getElementById("menu");
+  m.querySelectorAll("[data-stage]").forEach(b=>b.onclick=()=>startStage(b.dataset.stage));
+  m.querySelector("#menu-resume").onclick=closeMenu;
+  m.querySelectorAll("[data-load]").forEach(b=>b.onclick=()=>{ const v=getSaves().find(x=>String(x.id)===b.dataset.load); if(!v) return;
+    S.undo.push(snapshot()); S.st=Object.assign(defaultState(), JSON.parse(JSON.stringify(v.state))); S.st.ver++; addLog(`Loaded save: ${v.name}`); afterReplace(); net.sendState(); closeMenu(); fitView(); });
+  m.querySelectorAll("[data-delsave]").forEach(b=>b.onclick=()=>{ if(b.dataset.armed){ putSaves(getSaves().filter(x=>String(x.id)!==b.dataset.delsave)); renderMenu(); } else { b.dataset.armed=1; b.textContent="Sure?"; } });
+}
+document.getElementById("menu-btn").onclick=openMenu;
+document.getElementById("menu-x").onclick=closeMenu;
+document.getElementById("menu-loadfile").onclick=()=>{ document.getElementById("load-file").click(); closeMenu(); };
+function boardText(who){
+  const st=S.st, F=["up","right","down","left"], L=[];
+  L.push("METAL GEAR SOLID: THE BOARD GAME · board state from Sneaking Table");
+  if(who && who!=="Just reading") L.push(who.startsWith("Guards")?"You are the referee running the guards this enemy phase.":`You are playing ${who}. Plan ${who}'s turn only (4 actions, plus any Focus tokens).`);
+  L.push(`${st.stage||"Board"} · Round ${st.round} · ${st.phase} phase · cameras ${st.cam} · LOS: sees every open square ahead unless a wall/obstacle is in the box · deck: ${st.blue} blue, ${st.red} red left · priority corner ${st.priority}`);
+  L.push(`Grid: columns A–${colName(st.cols-1)}, rows ${st.rowStart??1}–${st.rows-1+(st.rowStart??1)} (rows count top to bottom)`);
+  const by=t=>st.pieces.filter(p=>p.type===t);
+  st.pieces.filter(p=>TYPES[p.type].kind==="player").forEach(p=>{ const T=TYPES[p.type];
+    L.push(`${p.label} at ${sq(p.r,p.c)} · health ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp} · focus: ${T.focus.map((n,i)=>n+(p.focus&&p.focus[i]?" ready":" spent")).join(", ")}${p.disguised?" · disguised":""}`); });
+  by("guard").forEach(g=>L.push(`Guard ${g.label} at ${sq(g.r,g.c)} facing ${F[g.facing]}${g.dmg?` · ${g.dmg} dmg`:""}${g.kod?` · ${g.kod} KO dmg`:""}`));
+  by("boss").forEach(g=>L.push(`Boss ${g.label} at ${sq(g.r,g.c)} facing ${F[g.facing]} · ${g.dmg||0}/${g.hp} dmg`));
+  by("camera").forEach(c=>L.push(`Camera at ${sq(c.r,c.c)} · green faces ${F[c.fg]}, orange faces ${F[c.fo]} (now ${st.cam})`));
+  by("attn").forEach(t=>L.push(`${t.owner||"Player"}'s attention token at ${sq(t.r,t.c)} · ${t.mode==="alert"?"! ALERTED (red)":"? investigate (blue)"}`));
+  by("ko").forEach(t=>L.push(`KO'd guard token at ${sq(t.r,t.c)} (${t.stars||2} star)`));
+  by("dead").forEach(t=>L.push(`Dead guard token at ${sq(t.r,t.c)}`));
+  by("event").forEach(t=>L.push(`Event ${t.label} at ${sq(t.r,t.c)}`));
+  by("door").forEach(t=>L.push(`Locked door (level ${t.level}) at ${sq(t.r,t.c)}${t.open?" · open":""}`));
+  ["box","terminal","marker"].forEach(k=>by(k).forEach(t=>L.push(`${TYPES[k].name}${t.label?" "+t.label:""} at ${sq(t.r,t.c)}`)));
+  const spots=(S.lastLOS||{spotted:[]}).spotted; if(spots.length) L.push("In line of sight right now: "+spots.map(x=>`${x.pl.label} ← ${x.v.label||"camera"} at ${sq(x.v.r,x.v.c)}`).join("; "));
+  const recent=st.log.slice(0,6).reverse().map(l=>"- "+l.w+": "+l.m); if(recent.length){ L.push("Recent log:"); L.push(...recent); }
+  // map grid
+  const CH={void:"x",obstacle:"#",exit:"E",corner:"+",stairs:"S",stairsv:"V",barracks:"B",elevator:"L"}, rs=st.rowStart??1;
+  L.push("", "MAP (. floor, # obstacle, x no-go, E exit, + corner icon, S stairs (walk up/down), V stairs (walk left/right), B barracks, L elevator; pieces: lowercase first letter of player name, g guard, b boss, c camera, ?/! attention token, k KO, d dead, A/B/C event letter)");
+  const pc={}; st.pieces.forEach(p=>{ const k=key(p.r,p.c); const T=TYPES[p.type];
+    const ch = T.kind==="player" ? (p.label||T.name)[0].toLowerCase() : p.type==="guard"?"g":p.type==="boss"?"b":p.type==="camera"?"c":p.type==="attn"?(p.mode==="alert"?"!":"?"):p.type==="ko"?"k":p.type==="dead"?"d":p.type==="event"?(p.label||"A")[0]:null;
+    if(ch && (!pc[k] || T.kind!=="token")) pc[k]=ch; });
+  L.push("    "+[...Array(st.cols)].map((_,c)=>colName(c).padStart(2)).join(""));
+  for(let r=0;r<st.rows;r++) L.push(String(r+rs).padStart(3)+" "+[...Array(st.cols)].map((_,c)=>" "+(pc[key(r,c)]||CH[st.cells[key(r,c)]]||".")).join(""));
+  const W=Object.keys(st.walls).map(k=>{ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); return t==="h"?`${sq(r,c)}/${sq(r+1,c)}`:`${sq(r,c)}|${sq(r,c+1)}`; });
+  if(W.length) L.push("WALLS (no movement or sight across): "+W.join(", "));
+  L.push("", "HOW TO REPLY: explain your plan if you like, then put each change on its own line in this exact format so the page can apply it. Move one square per line so the path is recorded.");
+  L.push("Commands: move <name> <square> · face <name> up|down|left|right · dmg <name> <n> · kodmg <guard> <n> · token <owner> ?|! <square> · flip <name> · ko <guard> · kill <guard> · remove <name> · place <type> <square>");
+  return L.join("\n");
+}
+function findPiece(name){
+  const n=name.toLowerCase(), ps=S.st.pieces;
+  return ps.find(p=>(p.label||"").toLowerCase()===n) || ps.find(p=>TYPES[p.type].name.toLowerCase()===n) || ps.find(p=>(p.label||"").toLowerCase().startsWith(n));
+}
+function parseSq(t){ const m=/^([A-Za-z]+)(-?\d+)$/.exec(t||""); if(!m) return null; let c=0; for(const ch of m[1].toUpperCase()) c=c*26+(ch.charCodeAt(0)-64); c-=1;
+  const r=parseInt(m[2],10)-(S.st.rowStart??1); return (r>=0&&c>=0&&r<S.st.rows&&c<S.st.cols)?{r,c}:null; }
+function applyMoves(text){
+  const out=[], DIRS={up:0,right:1,down:2,left:3,north:0,east:1,south:2,west:3};
+  const lines=text.split(/\n/).map(l=>l.replace(/^[-*•\d.)\s]+/,"").replace(/[`]/g,"").trim()).filter(Boolean);
+  for(const line of lines){
+    const w=line.split(/\s+/), cmd=(w[0]||"").toLowerCase();
+    try{
+      if(cmd==="move"){ const to=parseSq(w[w.length-1]), p=findPiece(w.slice(1,-1).join(" ")); if(!p||!to) throw "?"; const from=sq(p.r,p.c);
+        commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=to.r; q.c=to.c; }, `${nameOf(p)} ${from} → ${sq(to.r,to.c)} (Claude)`); out.push("✓ "+line); }
+      else if(cmd==="face"){ const d=DIRS[(w[w.length-1]||"").toLowerCase()], p=findPiece(w.slice(1,-1).join(" ")); if(d==null||!p) throw "?"; setFacing(p,d); out.push("✓ "+line); }
+      else if(cmd==="dmg"||cmd==="kodmg"){ const n=parseInt(w[w.length-1],10), p=findPiece(w.slice(1,-1).join(" ")); if(!p||isNaN(n)) throw "?";
+        hurt(p,n,cmd==="kodmg"); out.push("✓ "+line); }
+      else if(cmd==="token"){ const owner=w[1], mode=w[2]==="!"?"alert":"q", to=parseSq(w[3]); if(!to) throw "?";
+        commit(st=>{ let t=st.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===owner.toLowerCase());
+          if(!t){ t={id:st.nextId++,type:"attn",owner}; st.pieces.push(t); } t.r=to.r; t.c=to.c; t.mode=mode; }, `${owner}'s token ${w[2]} at ${w[3]} (Claude)`); out.push("✓ "+line); }
+      else if(cmd==="flip"){ const p=findPiece(w.slice(1).join(" ")); if(!p) throw "?"; flipToken(p); out.push("✓ "+line); }
+      else if(cmd==="ko"||cmd==="kill"){ const p=findPiece(w.slice(1).join(" ")); if(!p) throw "?";
+        commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push(cmd==="ko"?{id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}:{id:st.nextId++,type:"dead",r:p.r,c:p.c}); },
+          `${nameOf(p)} ${cmd==="ko"?"knocked out":"killed"} at ${sq(p.r,p.c)} (Claude)`); out.push("✓ "+line); }
+      else if(cmd==="remove"){ const p=findPiece(w.slice(1).join(" ")); if(!p) throw "?"; removePiece(p); out.push("✓ "+line); }
+      else if(cmd==="place"){ const type=Object.keys(TYPES).find(k=>k===w[1].toLowerCase()||TYPES[k].name.toLowerCase()===w[1].toLowerCase()), to=parseSq(w[2]); if(!type||!to) throw "?"; placePiece(type,to.r,to.c); out.push("✓ "+line); }
+      else out.push("· skipped: "+line);
+    }catch(e){ out.push("✗ couldn't do: "+line); }
+  }
+  return out;
+}
+
+// ---------- play-by-play history ----------
+function actorOf(m){
+  if(/^rolled /.test(m)) return {name:"Dice",color:"#9aa"};
+  const names=new Map();
+  S.st.pieces.forEach(p=>{ const T=TYPES[p.type]; if(p.label) names.set(p.label,T.color); if(p.from) names.set(p.from,TYPES.guard.color); if(T.kind==="player") names.set(T.name,T.color); });
+  ["Snake","Meryl","Otacon","Gray Fox"].forEach(n=>{ const k=Object.keys(TYPES).find(k=>TYPES[k].name===n); if(!names.has(n)) names.set(n,TYPES[k].color); });
+  let best=null; for(const [n,c] of names){ if((m.startsWith(n+" ")||m.startsWith(n+"'s")) && (!best||n.length>best.name.length)) best={name:n,color:c}; }
+  const g=/^(G\d+)\b/.exec(m); if(!best && g) best={name:g[1],color:TYPES.guard.color};
+  return best || {name:"Table",color:"#666"};
+}
+function renderHistory(){
+  const log=[...S.st.log].reverse().filter(l=>!/^—/.test(l.m)), body=document.getElementById("hist-body"), sel=document.getElementById("hist-filter");
+  const actors=[...new Set(log.map(l=>actorOf(l.m).name))];
+  const cur=sel.value||"all";
+  sel.innerHTML=`<option value="all">Everyone</option>`+actors.map(a=>`<option ${cur===a?"selected":""} value="${esc(a)}">${esc(a)}</option>`).join("");
+  // group: round -> phase -> consecutive actor blocks; consecutive moves merge into one path
+  const rounds=[]; let R_=null, PH=null, A=null;
+  for(const l of log){
+    const act=actorOf(l.m); if(cur!=="all" && act.name!==cur) continue;
+    const rk=l.r==null?"earlier":l.r, pk=l.ph||"";
+    if(!R_||R_.k!==rk){ R_={k:rk,phases:[]}; rounds.push(R_); PH=null; }
+    if(!PH||PH.k!==pk){ PH={k:pk,blocks:[]}; R_.phases.push(PH); A=null; }
+    if(!A||A.name!==act.name){ A={name:act.name,color:act.color,items:[]}; PH.blocks.push(A); }
+    const mv=/^(.+?) ([A-Z]+-?\d+) → ([A-Z]+-?\d+)( \(Claude\))?$/.exec(l.m), last=A.items[A.items.length-1];
+    if(mv && last && last.path && last.path[last.path.length-1]===mv[2]) last.path.push(mv[3]);
+    else if(mv) A.items.push({path:[mv[2],mv[3]], by:l.w});
+    else A.items.push({text:l.m.startsWith(act.name)?l.m.slice(act.name.length).replace(/^'s/,"'s").trim():l.m, by:l.w});
+  }
+  if(!rounds.length){ body.innerHTML=`<p class="muted">Nothing yet. Moves, attacks, tokens and rolls show up here round by round.</p>`; return; }
+  body.innerHTML=rounds.reverse().map(r=>`<div class="hround">${r.k==="earlier"?"Earlier":"Round "+r.k}</div>`+
+    r.phases.map(ph=>`${ph.k?`<div class="hphase">${esc(ph.k)} phase</div>`:""}`+ph.blocks.map(b=>`<div class="hactor" style="--c:${b.color}"><b style="color:${b.color}">${esc(b.name)}</b>`+
+      b.items.map(it=>it.path?`<div class="path">moved ${it.path.join(" → ")} <span class="muted">(${it.path.length-1} space${it.path.length>2?"s":""})</span></div>`:`<div>${esc(it.text)}</div>`).join("")+`</div>`).join("")).join("")).join("");
+}
+function openHistory(){ renderHistory(); const h=document.getElementById("hist"); h.classList.add("open"); h.setAttribute("aria-hidden","false"); }
+function closeHistory(){ const h=document.getElementById("hist"); h.classList.remove("open"); h.setAttribute("aria-hidden","true"); }
+document.getElementById("hist-btn").onclick=openHistory;
+document.getElementById("hist-x").onclick=closeHistory;
+document.getElementById("hist-filter").onchange=renderHistory;
+
+// ---------- sight toggle + animation ----------
+function syncEye(){ document.getElementById("eye").textContent = S.losAll ? "👁 All" : "👁 Selected"; }
+document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refresh(); };
+setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
+
+// ---------- boot ----------
+syncEye();
+new ResizeObserver(()=>render()).observe(stage);
+const fresh=!loadLS("st-state");
+fitView(); syncArmed(); refresh(); renderNetPane();
+if(fresh) openMenu();
+</script>
+</body>
+</html>
