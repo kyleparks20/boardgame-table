@@ -45,7 +45,7 @@ header button{min-height:34px;padding:4px 10px;font-size:13px}
 #armed{position:absolute;left:50%;transform:translateX(-50%);top:10px;background:var(--accent2);color:#fff;padding:8px 14px;border-radius:20px;font-size:14px;display:none;z-index:6}
 #armed button{min-height:30px;padding:2px 10px;margin-left:8px;font-size:13px;background:#0005}
 /* quick piece bar */
-#qbar{position:absolute;left:8px;right:8px;bottom:8px;background:#141a18f2;border:1px solid var(--line);border-radius:14px;padding:8px;display:none;gap:6px;align-items:center;z-index:6;overflow-x:auto}
+#qbar{position:fixed;left:8px;right:8px;bottom:calc(var(--tabh) + var(--safe-b) + 8px);z-index:24!important;background:#141a18f2;border:1px solid var(--line);border-radius:14px;padding:8px;display:none;gap:6px;align-items:center;overflow-x:auto}
 #qbar .name{font-weight:700;white-space:nowrap;padding:0 4px}
 #qbar button{flex:none}
 /* tab bar */
@@ -104,6 +104,11 @@ body.tp-open #tp-handle{display:none}
 #dicefx .shadow{position:absolute;width:50px;height:14px;border-radius:50%;background:#0008;filter:blur(4px)}
 #dicefx .hit{outline:3px solid #5fd38a;outline-offset:3px;border-radius:12px}
 .rb-auto{font-size:12.5px;color:var(--muted);margin:2px 0 6px}
+.opt{border-top:1px solid #ffffff12;padding-top:5px;margin-top:5px}.opt-src{font-size:12.5px;color:var(--muted)}.ftok.ab{background:#2e7d4f;color:#fff}
+.rb-avail{font-size:12.5px;margin:4px 0}.rb-avail div{margin:3px 0}
+.rb-focus{border:1px solid var(--accent2);border-radius:10px;padding:6px 8px;margin:6px 0;background:#5fd38a10}
+.tag{font-size:11px;padding:1px 7px;border-radius:9px;border:1px solid var(--line);color:var(--muted);margin-left:4px}.tag.on{border-color:var(--accent);color:var(--accent)}.tag.off{opacity:.6}
+.tp-foc{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}.ftok{font-size:12px;padding:2px 7px;border-radius:7px;background:#eee;color:#111;font-weight:700}.ftok.spent{background:#222;color:#888;text-decoration:line-through;border:1px solid #444}
 .rb-note{margin:6px 0;padding:6px 8px;border-radius:8px;background:#5fd38a18;font-size:13px}
 .rb-dice{display:flex;flex-wrap:wrap;margin:8px 0}
 .rb-dice .chip{min-width:46px;height:46px;font-size:20px;padding:0;border-radius:9px;min-height:46px}
@@ -171,8 +176,8 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
     <button id="zout" aria-label="Zoom out">−</button>
     <button id="zfit" aria-label="Fit board" style="font-size:13px">Fit</button>
   </div>
-  <div id="qbar"></div>
 </div>
+<div id="qbar"></div>
 <div id="rollbox"></div>
 <div id="dicefx"></div>
 
@@ -868,6 +873,7 @@ function hurt(p, n, ko){
   let msg=`${nm} ${n>0?"takes":"heals"} ${Math.abs(n)}${ko&&p.type==="boss"?" (KO counts as normal)":""} damage → ${Math.max(0,hp-dmg)}/${hp} health`;
   if(dmg>=hp) msg += T.kind==="player" ? " — KILLED IN ACTION, stage failed" : " — DEFEATED";
   commit(st=>{ st.pieces.find(x=>x.id===p.id).dmg=dmg; }, msg);
+  if(p.type==="fox"&&n>0&&dmg<hp) setTimeout(()=>corneredFox(P(p.id)),50);
 }
 function convertGuard(p, to){ let x_=""; commit(st=>{ x_=downGuard(st,p,to); S.sel=null; },
   `${nameOf(p)} ${to==="ko"?"knocked out":"killed"} at ${sq(p.r,p.c)}`); addLog(x_?`${nameOf(p)}${x_}`:`${nameOf(p)} → ${to==="ko"?"KO token ★★":"dead guard token"}`); }
@@ -999,7 +1005,9 @@ function renderQbar(){
   const T=TYPES[p.type]; let h=`<span class="sw" style="background:${T.color}">${T.short}</span><span class="name">${esc(nameOf(p))} · ${sq(p.r,p.c)}</span>`;
   let acts=actionsFor(p).filter(a=>a.quick);
   const blockWhy=rulesOn()&&isPlayer(p)?dragBlock(p):null;
-  if(blockWhy) h+=`<span class="muted" style="white-space:nowrap">${esc(blockWhy)}</span>`;
+  const canStart=rulesOn()&&isPlayer(p)&&S.st.phase==="Player"&&!flow().active&&!turnDone(p)&&flow().g!=="review";
+  if(canStart) acts=[{label:`▶ Start ${nameOf(p)}'s turn`,run:()=>{ try{ startTurn(p); refresh(); }catch(e){ toast("✗ "+e); } }}, ...(isPlayer(p)?[{label:"Focus & abilities",run:()=>focusPanel(p)}]:[]), ...acts.filter(a=>!/dmg|token|Seen|attention|Rations|Disguise/i.test(a.label))];
+  else if(blockWhy) h+=`<span class="muted" style="white-space:nowrap">${esc(blockWhy)}</span>`;
   if(isPlayer(p) && S.st.phase==="Player" && S.st.rules!==false && !blockWhy){
     const t=tt(p), act=(label,line)=>({label,run:async()=>{ try{ toast(await runAction(line)); }catch(e){ toast("✗ "+(e.message||e)); } }});
     h+=`<span class="muted" style="white-space:nowrap">${t.done?"turn ended":`⚡${actionsLeft(p)} left${t.noisy?` · 🔊${t.noisy}`:""}`}</span>`;
@@ -1014,7 +1022,7 @@ function renderQbar(){
       ...(has("hack")&&S.st.pieces.some(x=>x.type==="terminal"&&Math.abs(x.r-p.r)+Math.abs(x.c-p.c)<=1)?[act("Hack",`hack ${p.label}`)]:[]),
       ...(eqAct("ration")&&p.dmg?[act("Rations",`ration ${p.label}`)]:[]),
       ...(S.st.shafts&&(onLift(p.r,p.c)||Object.keys(S.st.shafts).some(k=>k!==S.st.lift&&[0,1].some(dr=>[0,1].some(dc=>{ const sh=S.st.shafts[k]; return Math.abs(sh.r+dr-p.r)+Math.abs(sh.c+dc-p.c)===1; }))))?[act(onLift(p.r,p.c)?"Ride elevator":"Call elevator",`elevator ${p.label}`)]:[]),
-      act("Knock",`knock ${p.label}`), act("End turn",`end ${p.label}`), ...acts.filter(a=>!/dmg|token|Seen|attention|Rations|Disguise/i.test(a.label))];
+      {label:`★ Focus & abilities`,run:()=>focusPanel(p)}, act("Knock",`knock ${p.label}`), act("✓ End turn",`end ${p.label}`), ...acts.filter(a=>!/dmg|token|Seen|attention|Rations|Disguise/i.test(a.label))];
   }
   if(p.hp) h+=`<span class="muted" style="white-space:nowrap">${p.type==="guard"?`${p.dmg||0}D ${p.kod||0}KO/${p.hp}`:`HP ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`}</span>`;
   h+=acts.map((a,i)=>`<button class="sm" data-qa="${i}">${esc(a.label)}</button>`).join("");
@@ -1560,6 +1568,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function useAction(p,kind,extra){ const t=tt(p), cost=ACT[kind]||1;
   if(S.st.phase!=="Player") return "it's the guards' phase — players act in the players' phase";
   { const f=flow(); if(f.active&&f.active!==p.id) return `it's ${nameOf(P(f.active))}'s turn — end or undo it first (Turn panel)`;
+    if(!f.active&&!S.scriptRunning) return `start ${nameOf(p)}'s turn first — tap ▶ Start turn`;
   }
   if(t.done) return `${nameOf(p)} already ended this turn`;
   if(actionsLeft(p)<cost) return `${nameOf(p)} has ${actionsLeft(p)} action${actionsLeft(p)===1?"":"s"} left and ${kind} costs ${cost}`;
@@ -1570,7 +1579,8 @@ async function doMove(p,kind,path){
   const err=useAction(p,kind); if(err) throw err;
   if(!path.length) throw "no squares given";
   if(kind==="sneak"&&path.length!==1) throw "Sneak moves exactly 1 square (use dash for 2)";
-  if(kind==="dash"&&path.length>2) throw "Dash moves at most 2 squares — use another action for more";
+  const dashMax=2+((tt(p).dashBonus)||0);
+  if(kind==="dash"&&path.length>dashMax) throw `Dash moves at most ${dashMax} squares — use another action for more`;
   let r=p.r,c=p.c; const leapt=[]; path=path.map(s=>({...s}));
   for(const s of path){ const why=stepProblem(p,r,c,s.r,s.c); if(why) throw `can't ${kind} to ${sq(s.r,s.c)}: ${why}`;
     if(figureAt(s.r,s.c,p.id)){ const L=playerLeap(p,r,c,s.r,s.c); if(typeof L==="string") throw `can't leapfrog at ${sq(s.r,s.c)}: ${L}`; s.r=L.r; s.c=L.c; s.leap=L.over; leapt.push(...L.over); }
@@ -1589,7 +1599,7 @@ async function doMove(p,kind,path){
   const foes=leapt.filter(f=>f.type==="guard"||f.type==="boss");
   if(foes.length){ playerToken(me,"alert"); addLog(`${nameOf(me)} leapfrogged ${foes.map(nameOf).join(", ")} → ! under ${nameOf(me)}`);
     if(me.stealth) addLog("Stealth camouflage: the guards don't attack");
-    else for(const g of foes){ const r_=await rollPrompt({w:0,b:g.type==="boss"&&g.atk?g.atk:2,vs:defOf(me),why:`${nameOf(g)} attacks ${nameOf(me)} for leapfrogging him`});
+    else for(const g of foes){ const r_=await rollPrompt({target:me,kind:"enemy",w:0,b:g.type==="boss"&&g.atk?g.atk:2,vs:defOf(me),why:`${nameOf(g)} attacks ${nameOf(me)} for leapfrogging him`});
       if(r_){ commit(()=>{}, `${nameOf(g)} ATTACKS ${nameOf(me)} (leapfrogged) → ${r_.hits} hit${r_.hits===1?"":"s"}`); if(r_.hits) hurt(P(me.id),r_.hits); } } refresh(); }
   if(seenBy.size){ playerToken(me,"alert"); const names=[...seenBy].map(v=>v.type==="camera"?`camera ${sq(v.r,v.c)}`:nameOf(v)).join(", ");
     addLog(`${nameOf(me)} SEEN by ${names} → ! at ${sq(me.r,me.c)}`); toast(`Spotted by ${names}!`); refresh(); }
@@ -1607,7 +1617,7 @@ async function doAttack(p,kind,g,note){
     spend(p,kind,false); commit(()=>{}, `${nameOf(p)} TAKEDOWN ${nameOf(g)}`); convertGuard(g,"ko"); return `takedown — ${nameOf(g)} replaced with a KO guard token`;
   }
   const dice=kind==="combo"?{w:2,b:1}:{w:1,b:0};
-  const r=await rollPrompt({...dice, vs:defOf(g), why:`${nameOf(p)} ${kind==="combo"?"Combo Attack":"Hand-to-Hand"} on ${nameOf(g)}`, note});
+  const r=await rollPrompt({...dice, by:p, kind:"attack", vs:defOf(g), why:`${nameOf(p)} ${kind==="combo"?"Combo Attack":"Hand-to-Hand"} on ${nameOf(g)}`, note});
   if(!r) throw "attack cancelled";
   spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${kind==="combo"?"COMBO":"HAND-TO-HAND"} ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`);
   S.lastRoll=r;
@@ -1642,7 +1652,7 @@ async function doShoot(p,g,note,wname,extra){
   const e=p.equip[ei], E=EQUIP[e.k]; if(E.charges!=null&&!E.boost&&(e.ch||0)<1) throw `${E.name} is out of ammo`;
   const boost=E.boost?Math.min(+extra||0,e.ch||0):0;
   if(!lineClear(p,g)) throw `no line of sight from ${sq(p.r,p.c)} to ${nameOf(g)}`;
-  const r=await rollPrompt({w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name} (LOUD)`,note:note||(p.type==="snake"&&!playersWithin(p,2).length&&onceRound(p,"alone")?`"I Work Alone": you may +/−1 one die (tap it)`:"")}); if(!r) throw "shot cancelled";
+  const r=await rollPrompt({by:p,kind:"weapon",w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name} (LOUD)`,note}); if(!r) throw "shot cancelled";
   spend(p,"shoot",false);
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id), qe=q.equip[ei]; if(E.charges!=null) qe.ch=Math.max(0,(qe.ch||0)-(E.boost?boost:1)); }, `${nameOf(p)} SHOOT ${nameOf(g)} with ${E.name}${boost?` (+${boost} charge)`:""} → ${r.hits} hit${r.hits===1?"":"s"} (LOUD)`); S.lastRoll=r;
   applyHits(p,g,r,false);
@@ -1656,7 +1666,7 @@ async function doSlash(p,note,extra){
   const tg=S.st.pieces.filter(g=>g.id!==p.id&&(g.type==="guard"||g.type==="boss"||isPlayer(g))&&Math.abs(g.r-p.r)+Math.abs(g.c-p.c)===1&&!wallBetween(p.r,p.c,g.r,g.c));
   if(!tg.length) throw "no adjacent figures to slash";
   spend(p,"slash",false); if(boost) commit(st=>{ st.pieces.find(x=>x.id===p.id).equip[ei].ch--; });
-  const out=[]; for(const g of tg){ const r=await rollPrompt({w:1+boost,b:0,vs:defOf(g),why:`${nameOf(p)} SLASH ${nameOf(g)}`,note}); if(!r) break;
+  const out=[]; for(const g of tg){ const r=await rollPrompt({by:p,kind:"weapon",w:1+boost,b:0,vs:defOf(g),why:`${nameOf(p)} SLASH ${nameOf(g)}`,note}); if(!r) break;
     commit(()=>{}, `${nameOf(p)} SLASH ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`); S.lastRoll=r; applyHits(p,g,r,false); out.push(`${nameOf(g)} ${r.hits}`);
     if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention`); } }
   refresh(); return "slash: "+out.join(", ");
@@ -1668,7 +1678,7 @@ async function doEquipAct(p,kind,arg){
   if(kind==="recharge"){ const ei=findEquip(p,E=>E.recharge); if(ei<0) throw "needs ADV Stealth Camouflage"; if((p.equip[ei].ch||0)>0) throw "Recharge only works when the card has no charge";
     spend(p,kind,false); upd(p,q=>{ q.equip[ei].ch=1; },`${nameOf(p)} RECHARGES the ADV Stealth Camouflage`); return "recharged 1"; }
   if(kind==="hack"||kind==="access"||kind==="search"){
-    if(kind!=="search"){ const r=await rollPrompt({w:0,b:kind==="hack"?4:1,vs:null,why:`${nameOf(p)} ${ACT_NAME[kind]}${arg?" — "+arg:""}`,note:p.type==="otacon"&&kind!=="search"?"Hacker: Otacon may roll up to +2 black — roll them from the Dice tab if you want them":""}); if(!r) throw "cancelled"; S.lastRoll=r; }
+    if(kind!=="search"){ const r=await rollPrompt({by:p,kind,w:0,b:kind==="hack"?4:1,vs:null,why:`${nameOf(p)} ${ACT_NAME[kind]}${arg?" — "+arg:""}`,note:p.type==="otacon"&&kind!=="search"?"Hacker: Otacon may roll up to +2 black — roll them from the Dice tab if you want them":""}); if(!r) throw "cancelled"; S.lastRoll=r; }
     spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${ACT_NAME[kind].toUpperCase()}${arg?" "+arg:""} at ${sq(p.r,p.c)}`);
     return kind==="hack"?"rolled — compare with the terminal's lock, then mark it hacked from the Piece tab":kind==="search"?"draw 1 System card":"rolled — check the System card"; }
 }
@@ -1694,7 +1704,7 @@ function doElevator(p,dest){
   spend(p,"interact",false); placeLift(to,`${nameOf(p)} CALLS THE ELEVATOR to the ${to} shaft`); return `elevator called to ${to}`; }
 async function doInteract(p,arg,note){
   const err=useAction(p,"interact"); if(err) throw err; const C=charOf(p)||{interact:{w:1,b:2}};
-  const r=await rollPrompt({w:C.interact.w,b:C.interact.b,vs:null,why:`${nameOf(p)} Interact${arg?" — "+arg:""}`,note}); if(!r) throw "cancelled";
+  const r=await rollPrompt({by:p,kind:"interact",w:C.interact.w,b:C.interact.b,vs:null,why:`${nameOf(p)} Interact${arg?" — "+arg:""}`,note}); if(!r) throw "cancelled";
   S.lastRoll=r; spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)}`);
   if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" while interacting → draws attention`); refresh(); }
   return "interact rolled — compare with the lock/objective"; }
@@ -1726,7 +1736,7 @@ function doFocus(p,what,mode){
     if(p.focus[i]) throw `${T.focus[i]} is already ready`; if(actionsLeft(p)<cost) throw `refreshing ${T.focus[i]} costs ${cost} action(s)`;
     commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.focus[i]=true; st.tt[p.id].used+=cost; }, `${nameOf(p)} FOCUS refreshes ${T.focus[i]} (${cost} action)`); return `refreshed ${T.focus[i]}`; }
   if(!p.focus[i]) throw `${T.focus[i]} is already spent`;
-  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.focus[i]=false; if(/\+1 action/i.test(T.focus[i])) st.tt[p.id].bonus=(st.tt[p.id].bonus||0)+1; }, `${nameOf(p)} spends focus: ${T.focus[i]}`);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.focus[i]=false; if(/\+1 action/i.test(T.focus[i])) st.tt[p.id].bonus=(st.tt[p.id].bonus||0)+1; if(/dash \+2/i.test(T.focus[i])) st.tt[p.id].dashBonus=2; }, `${nameOf(p)} spends focus: ${T.focus[i]}`);
   if(/move 1/i.test(T.focus[i])) return `spent ${T.focus[i]} — next move: "focusmove ${nameOf(p)} <square>"`;
   return `spent ${T.focus[i]}`;
 }
@@ -1739,7 +1749,7 @@ async function endTurn(p,opts){
   const out=[];
   const guardInZone=S.st.pieces.some(g=>g.type==="guard"&&sameZone(g,P(p.id)));
   if(t.noisy&&!guardInZone){ addLog(`${nameOf(p)} noise check skipped — no guard in this zone`); out.push("no guard in zone — no noise check"); }
-  if(t.noisy&&guardInZone){ const r=await rollPrompt({w:t.noisy,b:0,vs:null,why:`${nameOf(p)} noise check — ${t.noisy} noisy action${t.noisy>1?"s":""}, a "!" draws attention`,note:opts&&opts.note});
+  if(t.noisy&&guardInZone){ const r=await rollPrompt({by:p,kind:"noise",w:t.noisy,b:0,vs:null,why:`${nameOf(p)} noise check — ${t.noisy} noisy action${t.noisy>1?"s":""}, a "!" draws attention`,note:opts&&opts.note});
     if(r){ commit(()=>{}, `${nameOf(p)} noise check → ${r.bang?'"!" rolled':"quiet"}`); if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} made noise → attention drawn at ${sq(p.r,p.c)}`); } out.push(r.bang?"noise: ! — attention drawn":"noise: quiet"); } else out.push("noise check skipped"); }
   const up=(t.hurt||[]).map(id=>P(id)).filter(g=>g&&g.type==="guard"&&((g.dmg||0)||(g.kod||0)));
   if(up.length){ playerToken(P(p.id),"alert"); addLog(`${up.map(nameOf).join(", ")} hurt but still standing → ${nameOf(p)} ALERTED`); out.push("a hurt guard is still up → !"); }
@@ -1754,8 +1764,9 @@ async function autoSpot(by){
     if(tok&&tok.mode==="alert"&&tok.r===pl.r&&tok.c===pl.c) continue;
     any=true; playerToken(pl,"alert"); addLog(`${vs.map(v=>v.type==="camera"?"camera "+sq(v.r,v.c):nameOf(v)).join(", ")} spots ${nameOf(pl)} → ! at ${sq(pl.r,pl.c)}`); toast(`${nameOf(pl)} spotted!`);
     if(S.st.phase==="Enemy" && by && by.type==="guard" && vs.some(v=>v.id===by.id)){
-      const r=await rollPrompt({w:0,b:2,vs:defOf(pl),why:`${nameOf(by)} attacks ${nameOf(pl)} (2 black vs Defense ${defOf(pl)})`});
-      if(r){ commit(()=>{}, `${nameOf(by)} ATTACKS ${nameOf(pl)} → ${r.hits} hit${r.hits===1?"":"s"}`); if(r.hits) hurt(P(pl.id),r.hits); } }
+      const tg=await hurryGetAway(pl);
+      const r=await rollPrompt({target:tg,kind:"enemy",w:0,b:2,vs:defOf(tg),why:`${nameOf(by)} attacks ${nameOf(tg)} (2 black vs Defense ${defOf(tg)})`});
+      if(r){ commit(()=>{}, `${nameOf(by)} ATTACKS ${nameOf(tg)} → ${r.hits} hit${r.hits===1?"":"s"}`); if(r.hits) hurt(P(tg.id),r.hits); } }
   }
   if(any) refresh();
 }
@@ -1870,8 +1881,9 @@ async function guardAttack(g){
   const dist=pl=>{ const p=guardPath(g,pl.r,pl.c); return p?p.length:99; }; const tgt=seen.sort((a,b)=>dist(a)-dist(b))[0];
   const nb=g.type==="boss"&&g.atk?g.atk:2;
   addLog(`${nameOf(g)} sees ${seen.map(nameOf).join(", ")} → ! and attacks ${nameOf(tgt)}`); refresh();
-  const r=await rollPrompt({w:0,b:nb,vs:defOf(tgt),why:`${nameOf(g)} attacks ${nameOf(tgt)} (${nb} black vs Defense ${defOf(tgt)})`});
-  if(r){ commit(()=>{}, `${nameOf(g)} ATTACKS ${nameOf(tgt)} → ${r.hits} hit${r.hits===1?"":"s"}`); if(r.hits) hurt(P(tgt.id),r.hits); } else EN.stop=true;
+  const tg=await hurryGetAway(tgt);
+  const r=await rollPrompt({target:tg,kind:"enemy",w:0,b:nb,vs:defOf(tg),why:`${nameOf(g)} attacks ${nameOf(tg)} (${nb} black vs Defense ${defOf(tg)})`});
+  if(r){ commit(()=>{}, `${nameOf(g)} ATTACKS ${nameOf(tg)} → ${r.hits} hit${r.hits===1?"":"s"}`); if(r.hits) hurt(P(tg.id),r.hits); } else EN.stop=true;
   return true; }
 // find a new path: turn left/right toward an open space (card arrow breaks ties / keeps turning)
 function newPathFacing(g,arrow){ const L=(g.facing+3)%4, Rr=(g.facing+1)%4, ok=d=>!!guardStep(g,g.r,g.c,d);
@@ -1993,11 +2005,12 @@ function rulesOn(){ return S.st.rules!==false; }
 // may this piece be dragged right now? returns null or the reason
 function dragBlock(p){
   if(!rulesOn()) return null; const f=flow();
-  if(f.g==="review") return null;                                   // fixing mistakes after the guards moved
+  if(f.g==="review") return isPlayer(p)?"Players can't move now — confirm the guards' turn first":null;   // fixing guard mistakes only
   if(f.g==="running") return "The guards are moving — wait for them to finish";
   if(S.st.phase==="Enemy") return "Guard phase — use the Turn panel to start the guards' turn";
   if(!isPlayer(p)) return f.active?`Only ${nameOf(P(f.active))} can move right now`:"Only player characters move in the player phase";
   if(f.active&&f.active!==p.id) return `It's ${nameOf(P(f.active))}'s turn — end or undo it first`;
+  if(!f.active&&!turnDone(p)) return `Start ${nameOf(p)}'s turn first (▶ in the Turn panel or the quick bar)`;
   if(turnDone(p)) return `${nameOf(p)} already finished this round`;
   return null; }
 function startTurn(p){ const f=flow(); if(f.active===p.id) return; if(f.active) throw `It's ${nameOf(P(f.active))}'s turn — end or undo it first`; if(turnDone(p)) throw `${nameOf(p)} already finished this round`;
@@ -2040,9 +2053,11 @@ function renderTurnPanel(){
     h+=`<div class="tp-pl ${on?"on":done?"done":""}" style="--c:${T.color}"><div class="row" style="margin:0"><span class="sw" style="background:${T.color}">${T.short}</span><b style="flex:1">${esc(nameOf(p))}</b><span class="muted">${esc(seatOf(p)||"no player")}</span></div>
       <div class="tp-st">${done?"✓ Turn done":on?`Playing now · ${actionsLeft(p)} action${actionsLeft(p)===1?"":"s"} left${t.noisy?` · 🔊 ${t.noisy} noisy`:""}`:st.phase==="Player"?"Waiting":"—"}</div>
       ${on||(!done&&st.phase==="Player")?`<div class="dots">${dots(p)}</div>`:""}
-      ${on?`<div class="tp-hint">Drag ${esc(nameOf(p))} 1 square to <b>Sneak</b> or 2 to <b>Dash</b> (noisy). Tap ${esc(nameOf(p))} for attacks and other actions.</div>
+      ${on?`<div class="tp-foc">${TYPES[p.type].focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}">${esc(n)}${p.focus&&p.focus[i]?"":` · ⟳${fcostOf(p,i)}`}</span>`).join("")}</div>
+        <div class="row" style="margin:4px 0 0"><button class="sm" data-fp="${p.id}" style="flex:1">★ Focus tokens & abilities</button></div>
+        <div class="tp-hint">Drag ${esc(nameOf(p))} 1 square to <b>Sneak</b> or 2 to <b>Dash</b> (noisy). Tap ${esc(nameOf(p))} for attacks and other actions.</div>
         <div class="row" style="margin:6px 0 0"><button class="sm" id="tp-undo">↶ Undo this turn</button><button class="on" id="tp-end" style="flex:1">✓ End turn</button></div>`
-      :(!done&&st.phase==="Player"&&!f.active?`<div class="row" style="margin:6px 0 0"><button class="sm" data-start="${p.id}" style="flex:1">▶ Start ${esc(nameOf(p))}'s turn</button>${seatOf(p)==="AI"?`<button class="sm on" data-ai="${esc(p.label)}">🤖 Ask the AI</button>`:""}</div>`:"")}
+      :(!done&&st.phase==="Player"&&!f.active?`<div class="row" style="margin:6px 0 0"><button class="on" data-start="${p.id}" style="flex:1">▶ Start ${esc(nameOf(p))}'s turn</button>${seatOf(p)==="AI"?`<button class="sm on" data-ai="${esc(p.label)}">🤖 Ask the AI</button>`:""}</div>`:"")}
       ${on&&seatOf(p)==="AI"?`<div class="row" style="margin:6px 0 0"><button class="sm on" data-ai="${esc(p.label)}" style="flex:1">🤖 Copy board / paste AI reply</button></div>`:""}
     </div>`; }
   if(!ps.length) h+=`<p class="muted">No player characters on the board.</p>`;
@@ -2058,6 +2073,7 @@ function renderTurnPanel(){
   const on=(id,fn)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=fn; };
   el.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>{ try{ startTurn(P(+b.dataset.start)); S.sel=+b.dataset.start; refresh(); }catch(e){ toast("✗ "+e); } });
   el.querySelectorAll("[data-ai]").forEach(b=>b.onclick=()=>{ openSheet("ai"); const sel=document.getElementById("ai-who"); sel.value=b.dataset.ai; sel.dataset.picked="1"; });
+  el.querySelectorAll("[data-fp]").forEach(b=>b.onclick=()=>focusPanel(P(+b.dataset.fp)));
   on("tp-undo",revertTurn); on("tp-end",confirmTurn); on("tp-guards",startGuards); on("tp-gundo",revertGuards); on("tp-gok",confirmGuards);
   on("tp-seats",()=>openSeats(false)); on("tp-cards",openDeckBuilder); on("tp-log",()=>{ if(typeof openHistory==="function") openHistory(); else openSheet("log"); });
 }
@@ -2232,41 +2248,117 @@ async function rollDice(dice,vs){
 }
 
 function clearDice(){ const fx=document.getElementById("dicefx"); fx.innerHTML=""; }
-function rollPrompt(o){ // o: {w,b,vs,why,who,preview}
+// ---------- Focus tokens & abilities usable on a roll ----------
+// what a Focus token can do to dice. per: per-die effect; add: adds a die; dieKind: only that colour
+const FOCUS_DICE={"Reroll":{per:"re"},"Reroll black":{per:"re",dieKind:"b"},"+2":{per:[2]},"-2":{per:[-2]},"+/-1":{per:[1,-1]},"+/-2":{per:[2,-2]},
+  "-1 die / Move 1":{per:"rm"},"-1 black":{per:"rm",dieKind:"b"},"+1 white":{add:"w"},"+1 black":{add:"b"}};
+const dist=(a,b)=>Math.abs(a.r-b.r)+Math.abs(a.c-b.c);
+// every ready token that can touch this roll, with who owns it and why it's allowed
+function focusSources(owner,dice){
+  if(!owner||!isPlayer(owner)) return []; const out=[];
+  const add=(pl,why,blackOnly)=>{ const T=TYPES[pl.type]; T.focus.forEach((n,i)=>{ const fx=FOCUS_DICE[n]; if(!fx||!(pl.focus&&pl.focus[i])) return;
+    out.push({pl,i,n,fx,why,blackOnly}); }); };
+  add(owner,"");
+  const mer=S.st.pieces.find(p=>p.type==="meryl"&&p.id!==owner.id); if(mer&&dist(mer,owner)<=2) add(mer,"I Can Still Help (within 2)");
+  const ota=S.st.pieces.find(p=>p.type==="otacon"&&p.id!==owner.id); if(ota&&dist(ota,owner)<=2&&dice.some(d=>d.k==="b")) add(ota,"Codec Call (black dice only)",true);
+  return out; }
+function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player being attacked), kind, note, preview}
   return new Promise(res=>{
-    const box=document.getElementById("rollbox"); let dice=null, pick=null, auto=false, left=0, timer=null;
-    const tick=()=>{ clearTimeout(timer); if(!auto) return; if(left<=0){ const g=box.querySelector("#rb-go"); if(g) g.click(); return; } timer=setTimeout(()=>{ left--; if(!auto) return; const a=box.querySelector("#rb-auto"); if(a) a.textContent=`Applying the result in ${left}s…`; tick(); },1000); };
-    const roll1=k=>{ const v=1+Math.floor(Math.random()*6); return k==="w"&&v===1?"!":v; };
+    const box=document.getElementById("rollbox"); let dice=null, pick=null, rolling=false, hackerAdds=0;
+    const owner=o.by?P(o.by.id):o.target?P(o.target.id):null;
+    const spendTok=(s_)=>commit(st=>{ st.pieces.find(x=>x.id===s_.pl.id).focus[s_.i]=false; }, `${nameOf(s_.pl)} spends Focus "${s_.n}"${s_.why?" ("+s_.why+")":""} on: ${o.why||"a roll"}`);
+    const aloneOK=()=>owner&&owner.type==="snake"&&o.kind==="weapon"&&!playersWithin(owner,2).length&&onceRound(owner,"alone");
+    const hackerOK=()=>owner&&owner.type==="otacon"&&(o.kind==="hack"||o.kind==="access")&&hackerAdds<2;
+    const throwMore=async(list)=>{ rolling=true; box.style.display="none"; await rollDice(list,o.vs); rolling=false; };
     const draw=()=>{
-      const sc=dice?scoreDice(dice,o.vs):null;
-      box.innerHTML=`<div class="rb-title">🎲 ${esc(o.who?o.who+" · ":"")}${esc(o.why||"Roll")}</div>
-        <div class="muted">${[o.w?o.w+" white":"",o.b?o.b+" black":""].filter(Boolean).join(" + ")}${o.vs!=null?` · each ${o.vs}+ is a hit`:""}</div>
+      const sc=dice?scoreDice(dice,o.vs):null, src=dice?focusSources(owner,dice):[];
+      const perOpts=pick!=null?src.filter(s_=>s_.fx.per&&(!s_.fx.dieKind||s_.fx.dieKind===dice[pick].k)&&(!s_.blackOnly||dice[pick].k==="b")&&!(Array.isArray(s_.fx.per)&&dice[pick].v==="!")):[];
+      const addOpts=src.filter(s_=>s_.fx.add&&(!s_.blackOnly||s_.fx.add==="b"));
+      const who=s_=>s_.pl.id===owner.id?"":`${nameOf(s_.pl)}'s `;
+      const lbl=(s_,v)=>v==="re"?`${who(s_)}${s_.n}: reroll`:v==="rm"?`${who(s_)}${s_.n}: remove this die`:`${who(s_)}${s_.n}: ${v>0?"+":"−"}${Math.abs(v)}`;
+      box.innerHTML=`<div class="rb-title">🎲 ${esc(o.why||"Roll")}</div>
+        <div class="muted">${[o.w?o.w+" white":"",o.b?o.b+" black":""].filter(Boolean).join(" + ")||"no dice"}${o.vs!=null?` · each ${o.vs}+ is a hit`:""}${owner?` · ${o.target?"rolled against":"rolled by"} ${esc(nameOf(owner))}`:""}</div>
         ${o.note?`<div class="rb-note">${esc(o.note)}</div>`:""}
         ${dice?`<div class="rb-dice">${dice.map((d,i)=>`<button class="chip ${d.k==="w"?"w":"b"} ${d.v==="!"?"bang":""} ${pick===i?"pk":""}" data-d="${i}">${d.v}</button>`).join("")}</div>
           <div class="rb-score"><b>${o.vs!=null?`${sc.hits} hit${sc.hits===1?"":"s"}`:"Rolled"}</b>${sc.bang?` · <span class="bad">${sc.bang} "!"</span>`:""}</div>
-          ${pick!=null?`<div class="row">${dice[pick].v==="!"?"":`<button class="sm" data-adj="2">+2</button><button class="sm" data-adj="-2">−2</button><button class="sm" data-adj="1">+1</button><button class="sm" data-adj="-1">−1</button>`}<button class="sm" data-adj="re">Reroll</button><button class="sm" data-adj="x">Done</button></div>`
-            :`<div class="muted">Using a Focus token? Tap a die to reroll or change it.</div>`}
-          ${auto?`<div class="rb-auto"><span id="rb-auto">Applying the result in ${left}s…</span> <button class="sm" id="rb-hold" style="min-height:28px;padding:2px 8px">Wait — I'll use Focus</button></div>`:""}`:""}
+          ${pick!=null?`<div class="rb-focus"><b>Change die ${pick+1} (${dice[pick].k==="w"?"white":"black"} ${dice[pick].v}) using:</b>${
+              perOpts.map(s_=>{ const vals=(s_.fx.per==="re"||s_.fx.per==="rm")?[s_.fx.per]:s_.fx.per;
+                return `<div class="opt"><div class="opt-src"><span class="ftok">${esc(s_.n)}</span> ${s_.pl.id===owner.id?`${esc(nameOf(s_.pl))}'s Focus token`:`<b>${esc(nameOf(s_.pl))}'s</b> Focus token — via <i>${esc(s_.why)}</i>`} · spends it</div>
+                  <div class="row" style="margin:3px 0">${vals.map(v=>`<button class="sm" data-use="${src.indexOf(s_)}" data-v="${v}">${v==="re"?"Reroll this die":v==="rm"?"Remove this die":(v>0?"+":"−")+Math.abs(v)+" → "+(dice[pick].v+(+v))}</button>`).join("")}</div></div>`; }).join("")
+              +(aloneOK()&&dice[pick].v!=="!"?`<div class="opt"><div class="opt-src"><span class="ftok ab">I Work Alone</span> Snake's ability — no player within 2 · once per round, no token</div><div class="row" style="margin:3px 0"><button class="sm" data-alone="1">+1 → ${dice[pick].v+1}</button><button class="sm" data-alone="-1">−1 → ${dice[pick].v-1}</button></div></div>`:"")
+              ||`<div class="muted" style="margin:4px 0">Nothing can change this die: ${dice[pick].v==="!"?`a "!" can't be modified (only rerolled), and`:""} no ready Focus token fits it.</div>`}<div class="row" style="margin:4px 0 0"><button class="sm" data-x="1">Close</button></div></div>`
+            :`<div class="muted">${src.length||aloneOK()?`<b>Tap a die</b> to use:</div><div class="rb-avail">${[...new Map(src.map(s_=>[s_.pl.id+":"+s_.i,s_])).values()].map(s_=>`<div><span class="ftok">${esc(s_.n)}</span> ${s_.pl.id===owner.id?"your Focus token":`${esc(nameOf(s_.pl))}'s token (${esc(s_.why)})`} — ${esc(FOCUS_FX[s_.n]||s_.n)}</div>`).join("")}${aloneOK()?`<div><span class="ftok ab">I Work Alone</span> Snake's ability — ±1 to one die</div>`:""}`:owner?`${esc(nameOf(owner))} has no ready Focus tokens or abilities that work on this roll.`:""}</div>`}
+          ${addOpts.length||hackerOK()?`<div class="rb-focus"><b>Add dice to this roll:</b>${addOpts.map(s_=>`<div class="opt"><div class="opt-src"><span class="ftok">${esc(s_.n)}</span> ${s_.pl.id===owner.id?`${esc(nameOf(s_.pl))}'s Focus token`:`<b>${esc(nameOf(s_.pl))}'s</b> Focus token — via <i>${esc(s_.why)}</i>`} · spends it</div><div class="row" style="margin:3px 0"><button class="sm" data-add="${src.indexOf(s_)}">Throw 1 more ${s_.fx.add==="b"?"black":"white"} die</button></div></div>`).join("")}${hackerOK()?`<div class="opt"><div class="opt-src"><span class="ftok ab">Hacker</span> Otacon's ability — up to +2 black when hacking/accessing, no token</div><div class="row" style="margin:3px 0"><button class="sm" data-hacker="1">Throw 1 more black die (${2-hackerAdds} left)</button></div></div>`:""}</div>`:""}`:""}
         ${o.preview&&o.preview.length?`<div class="rb-plan"><span class="muted">Plan after this roll:</span>${o.preview.map(l=>`<div>${esc(l)}</div>`).join("")}</div>`:""}
-        <div class="row">${dice?`<button class="on" id="rb-go" style="flex:1">Continue the turn</button>`:`<button class="on" id="rb-roll" style="flex:1">Roll</button>`}<button class="sm danger" id="rb-stop">Stop here</button></div>`;
+        <div class="row">${dice?`<button class="on" id="rb-go" style="flex:1">✓ OK — apply this result</button>`:`<button class="on" id="rb-roll" style="flex:1">🎲 Roll</button>`}<button class="sm danger" id="rb-stop">${dice?"Cancel":"Skip"}</button></div>`;
       box.style.display="block";
       const q=s_=>box.querySelector(s_);
-      if(q("#rb-roll")) q("#rb-roll").onclick=async()=>{ const ds=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:null})); box.style.display="none"; await rollDice(ds,o.vs); dice=ds; auto=S.autoApply!==false; left=4; draw(); tick(); };
-      box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ auto=false; pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
-      if(q("#rb-hold")) q("#rb-hold").onclick=()=>{ auto=false; draw(); };
-      box.querySelectorAll("[data-adj]").forEach(b=>b.onclick=()=>{ const a=b.dataset.adj, d=dice[pick];
-        if(a==="re"){ const one=[{k:d.k,v:null}]; box.style.display="none"; rollDice(one,o.vs).then(()=>{ d.v=one[0].v; d.mod=true; pick=null; draw(); }); return; } else if(a!=="x"){ d.v=d.v+(+a); d.mod=true; } pick=null; draw(); });
-      if(q("#rb-go")) q("#rb-go").onclick=()=>{ clearTimeout(timer); auto=false; box.style.display="none"; clearDice(); const sc=scoreDice(dice,o.vs);
+      if(q("#rb-roll")) q("#rb-roll").onclick=async e=>{ if(rolling) return; e.target.disabled=true; const ds=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:null})); await throwMore(ds); dice=ds; draw(); };
+      box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
+      box.querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{ pick=null; draw(); });
+      box.querySelectorAll("[data-use]").forEach(b=>b.onclick=async()=>{ if(rolling) return; const s_=src[+b.dataset.use], v=b.dataset.v, d=dice[pick]; spendTok(s_);
+        if(v==="re"){ const one=[{k:d.k,v:null}]; await throwMore(one); d.v=one[0].v; d.mod=true; }
+        else if(v==="rm"){ dice.splice(pick,1); }
+        else { d.v=d.v+(+v); d.mod=true; }
+        pick=null; draw(); });
+      box.querySelectorAll("[data-alone]").forEach(b=>b.onclick=()=>{ const d=dice[pick]; d.v=d.v+(+b.dataset.alone); d.mod=true; useOnce(owner,"alone"); addLog(`Snake uses "I Work Alone": ${+b.dataset.alone>0?"+1":"−1"} to one die`); pick=null; draw(); });
+      box.querySelectorAll("[data-add]").forEach(b=>b.onclick=async()=>{ if(rolling) return; const s_=src[+b.dataset.add]; spendTok(s_); const one=[{k:s_.fx.add,v:null}]; await throwMore(one); dice.push(one[0]); draw(); });
+      if(q("[data-hacker]")) q("[data-hacker]").onclick=async()=>{ if(rolling) return; hackerAdds++; addLog("Otacon uses Hacker: +1 black die"); const one=[{k:"b",v:null}]; await throwMore(one); dice.push(one[0]); draw(); };
+      if(q("#rb-go")) q("#rb-go").onclick=()=>{ box.style.display="none"; clearDice(); const sc=scoreDice(dice,o.vs);
         const parts=[]; const ws=dice.filter(d=>d.k==="w").map(d=>d.v), bs=dice.filter(d=>d.k==="b").map(d=>d.v);
         if(ws.length) parts.push("white "+ws.join(", ")); if(bs.length) parts.push("black "+bs.join(", "));
-        commit(()=>{}, `rolled ${parts.join(" · ")}${o.why?" — "+o.why:""}${o.vs!=null?` → ${sc.hits} hit${sc.hits===1?"":"s"}`:""}${sc.bang?` · ${sc.bang} "!"`:""}`);
+        commit(()=>{}, `rolled ${parts.join(" · ")||"no dice"}${o.why?" — "+o.why:""}${o.vs!=null?` → ${sc.hits} hit${sc.hits===1?"":"s"}`:""}${sc.bang?` · ${sc.bang} "!"`:""}`);
         res({...sc, dice}); };
-      q("#rb-stop").onclick=()=>{ clearTimeout(timer); auto=false; box.style.display="none"; clearDice(); res(null); };
+      q("#rb-stop").onclick=()=>{ if(rolling) return; box.style.display="none"; clearDice(); res(null); };
     };
     draw();
   });
 }
-async function runScript(text, show){
+// Gray Fox "Hurry, Get Away!": once per round he may take an attack aimed at an adjacent figure
+async function hurryGetAway(tgt){ const fox=S.st.pieces.find(p=>p.type==="fox");
+  if(!fox||fox.id===tgt.id||dist(fox,tgt)!==1||!onceRound(fox,"hurry")) return tgt;
+  const a=await enemyAsk(`"Hurry, Get Away!"`,`Gray Fox is next to ${esc(nameOf(tgt))}. Once per round he can take this attack instead.`,["Gray Fox takes the attack",`No — ${nameOf(tgt)} takes it`]);
+  if(a===0){ useOnce(fox,"hurry"); addLog(`Gray Fox: "Hurry, get away!" — he takes the attack meant for ${nameOf(tgt)}`); return P(fox.id); } return tgt; }
+// Gray Fox "Cornered Fox": each time he takes damage he may add a charge to one equipment card
+async function corneredFox(fox){ const eq=(fox.equip||[]).map((e,i)=>({e,i})).filter(x=>EQUIP[x.e.k].charges!=null); if(!eq.length) return;
+  const a=await enemyAsk(`Cornered Fox`,`Gray Fox took damage. He may place 1 charge on one of his equipment cards.`,[...eq.map(x=>`+1 on ${EQUIP[x.e.k].name} (${x.e.ch??0})`),"Skip"]);
+  if(a<eq.length){ const x=eq[a]; commit(st=>{ const q=st.pieces.find(p=>p.id===fox.id).equip[x.i]; q.ch=(q.ch||0)+1; }, `Cornered Fox: +1 charge on ${EQUIP[x.e.k].name}`); } }
+// pop-up: Focus tokens (spend / refresh) and abilities for a character
+function focusPanel(p){ p=P(p.id); const box=document.getElementById("rollbox"), T=TYPES[p.type], C=charOf(p), act=flow().active===p.id;
+  const ab=abilityStatus(p);
+  box.innerHTML=`<div class="rb-title">${esc(nameOf(p))} · Focus tokens & abilities</div>
+    <div class="muted" style="margin-bottom:6px">Spend a token while rolling: tap a die in the dice box. A <b>spent</b> token comes back with the <b>Focus</b> action — it costs the number of actions shown.${p.type==="fox"?" Gray Fox can't Focus while his ! is in his zone.":""}</div>
+    ${T.focus.map((n,i)=>{ const ready=p.focus&&p.focus[i], cost=fcostOf(p,i), can=act&&!ready&&actionsLeft(p)>=cost;
+      return `<div class="row" style="margin:4px 0"><span class="chip ${ready?"w":"b"}" style="min-width:auto;padding:0 8px;font-size:13px">${ready?"READY":"SPENT"}</span><span style="flex:1"><b>${esc(n)}</b> — ${esc(FOCUS_DICE[n]?(FOCUS_FX[n]||n):FOCUS_FX[n]||n)}</span>
+        ${ready?(["+1 action","Dash +2","-1 die / Move 1"].includes(n)&&act?`<button class="sm" data-spend="${i}">Use now</button>`:""):`<button class="sm ${can?"on":""}" data-ref="${i}" ${can?"":"disabled"}>Refresh · ${cost} action${cost>1?"s":""}</button>`}</div>`; }).join("")}
+    <h3>Abilities</h3>${ab.map(a=>`<div style="margin:5px 0"><b>${esc(a.name)}</b> <span class="tag ${a.cls}">${esc(a.state)}</span><div class="muted">${esc(a.how)}</div></div>`).join("")}
+    <div class="row"><button class="on" id="fp-x" style="flex:1">Close</button></div>`;
+  box.style.display="block";
+  box.querySelector("#fp-x").onclick=()=>{ box.style.display="none"; };
+  box.querySelectorAll("[data-ref]").forEach(b=>b.onclick=async()=>{ try{ toast(await runAction(`focus ${p.label} refresh ${T.focus[+b.dataset.ref]}`)); }catch(e){ toast("✗ "+(e.message||e)); } focusPanel(p); });
+  box.querySelectorAll("[data-spend]").forEach(b=>b.onclick=async()=>{ try{ toast(await runAction(`focus ${p.label} ${T.focus[+b.dataset.spend]}`)); }catch(e){ toast("✗ "+(e.message||e)); } focusPanel(p); });
+}
+function abilityStatus(p){ const used=t=>!onceRound(p,t), r=(name,state,cls,how)=>({name,state,cls,how});
+  if(p.type==="snake") return [
+    r("Silent Takedown","action · 2","",`Stand directly behind an adjacent guard: the button appears in the quick bar. No roll — he becomes a KO token.`),
+    r("Sneak Attack",used("sneakatk")?"used this round":"ready · automatic",used("sneakatk")?"off":"on",`Hit a guard from behind in his row or column and the board adds +1 damage by itself. Once per round.`),
+    r(`"I Work Alone"`,used("alone")?"used this round":playersWithin(p,2).length?"blocked — a player is within 2":"ready",used("alone")||playersWithin(p,2).length?"off":"on",`When you shoot with no players within 2 squares, tap a die in the dice box for +1 or −1. Once per round.`)];
+  if(p.type==="meryl") return [
+    r("Gain Disguise","action · 2",p.disguised?"on":"",`Next to a KO or dead guard with your ! off the map: the Disguise button appears in the quick bar. ${p.disguised?"You are disguised now.":""}`),
+    r(`"I'm No Rookie"`,used("rookie")?"used this round":"ready · automatic",used("rookie")?"off":"on",`Roll a natural 6 when attacking and the board adds +1 damage by itself. Once per round.`),
+    r(`"I Can Still Help"`,"passive","on",`Teammates within 2 squares can use your Focus tokens — they appear in their dice box automatically.`)];
+  if(p.type==="otacon") return [
+    r(`"I'm No Soldier"`,"passive","",`You can't attack or use weapons.`),
+    r("Hacker","in the dice box","on",`When you Hack a terminal or Access a System card, the dice box offers up to +2 black dice.`),
+    r("Codec Call","passive","on",`Teammates within 2 squares can use your Focus tokens on black dice — they appear in their dice box automatically.`)];
+  if(p.type==="fox") return [
+    r(`"I'm Losing Myself"`,"passive","",`No Focus actions while your ! is in your zone.`),
+    r(`"Hurry, Get Away!"`,used("hurry")?"used this round":"ready",used("hurry")?"off":"on",`When a guard attacks a figure next to you, the board asks if you want to take the hit instead. Once per round.`),
+    r("Cornered Fox","automatic prompt","on",`Each time you take damage, the board offers to put a charge on one of your equipment cards.`)];
+  return []; }
+
+async function runScript(text, show){ S.scriptRunning=true; try{ return await runScript_(text,show); } finally { S.scriptRunning=false; } }
+async function runScript_(text, show){
   const lines=cleanLines(text).filter(l=>SCRIPT_CMDS.test(l)); S.lastRoll=null; let note="";
   if(!lines.length){ show("No command lines found in that reply."); return; }
   for(let i=0;i<lines.length;i++){
@@ -2342,7 +2434,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="3.6";
+const APP_VERSION="3.8";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
