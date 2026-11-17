@@ -35,6 +35,8 @@ header button{min-height:34px;padding:4px 10px;font-size:13px}
 #board{display:block;width:100%;height:100%;touch-action:none}
 .zoom{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;z-index:5;transition:bottom .15s}
 #stage.qb .zoom,#stage.qb #eye,#stage.qb #hover{bottom:86px}
+#zonebar{position:absolute;left:50%;transform:translateX(-50%);top:44px;z-index:5;display:flex;gap:6px;max-width:96%;overflow-x:auto}
+#zonebar button{min-height:30px!important;padding:2px 10px!important;font-size:12px;background:#141a18dd;white-space:nowrap}
 #eye{position:absolute;left:8px;bottom:8px;z-index:5;min-height:36px!important;padding:4px 10px!important;font-size:13px;background:#141a18cc;transition:bottom .15s}
 .zoom button{width:40px;height:40px;min-height:40px;padding:0;font-size:18px;background:#141a18cc}
 #hover{position:absolute;left:150px;bottom:14px;background:#000a;padding:3px 8px;border-radius:7px;font-size:12px;color:var(--muted);pointer-events:none;transition:bottom .15s}
@@ -116,6 +118,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
   <span class="info" id="round-hdr"></span>
   <button id="undo" aria-label="Undo">↶</button>
   <button id="redo" aria-label="Redo">↷</button>
+  <button id="ref-btn" aria-label="Reference cards">📖</button>
   <button id="hist-btn" aria-label="Play-by-play history">📜</button>
   <span id="net-dot" title="Connection"></span>
 </header>
@@ -123,8 +126,10 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
 <div id="stage">
   <canvas id="board"></canvas>
   <div id="hover">—</div>
+  <div id="status" style="position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:6;padding:4px 12px;border-radius:16px;font-size:13px;font-weight:700;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;pointer-events:none"></div>
   <div id="armed"><span id="armed-txt"></span><button id="armed-x">Cancel</button></div>
   <button id="eye"></button>
+  <div id="zonebar"></div>
   <div class="zoom">
     <button id="zin" aria-label="Zoom in">+</button>
     <button id="zout" aria-label="Zoom out">−</button>
@@ -154,10 +159,12 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
     <div class="pane" id="pane-log"><div class="log" id="log"></div></div>
     <div class="pane" id="pane-map"></div>
     <div class="pane" id="pane-net"></div>
+    <div class="pane" id="pane-ref"></div>
     <div class="pane" id="pane-ai">
       <div class="card"><b>1 · Send the board to your AI</b>
         <div class="row"><label>It plays</label><select id="ai-who" style="flex:1"></select></div>
-        <div class="row"><button class="on" id="ai-copy" style="flex:1">Copy board for AI</button></div>
+        <div class="row"><button class="on" id="ai-copy" style="flex:1">Copy full board</button><button id="ai-quick" style="flex:1">Copy quick update</button></div>
+        <p class="muted" style="margin:0">Send the full board once per stage (map and walls). After that, quick updates are much shorter.</p>
         <p class="muted">Paste it to Claude, Muse, or any AI. It includes the map, walls, every piece and token, health, the deck, and how to reply.</p>
         <textarea id="ai-text" readonly style="display:none;min-height:160px"></textarea></div>
       <div class="card"><b>2 · Paste the AI's reply</b>
@@ -203,9 +210,9 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
 // ---------- piece catalog ----------
 const TYPES = {
   snake:{name:"Snake",short:"S",kind:"player",color:"#3d8ee6",hp:4,focus:["Reroll","+2","-2","-1 die / Move 1"]},
-  meryl:{name:"Meryl",short:"M",kind:"player",color:"#e05c93",hp:4,focus:["+2","+/-1","+1 action","+1 die"]},
-  otacon:{name:"Otacon",short:"O",kind:"player",color:"#d6b23c",hp:4,focus:["+/-1","Reroll black","+/-2","+1 black"]},
-  fox:{name:"Gray Fox",short:"F",kind:"player",color:"#9fb3c8",hp:4,focus:["+2","+/-2","-1 black","Dash +2"]},
+  meryl:{name:"Meryl",short:"M",kind:"player",color:"#e05c93",hp:4,focus:["+1 white","+1 action","+2","+/-1"]},
+  otacon:{name:"Otacon",short:"O",kind:"player",color:"#d6b23c",hp:4,focus:["Reroll black","+1 black","+/-1","+/-2"]},
+  fox:{name:"Gray Fox",short:"F",kind:"player",color:"#9fb3c8",hp:4,focus:["-1 black","+/-2","Dash +2","+2"]},
   guard:{name:"Guard",short:"G",kind:"guard",color:"#5f8f4c",hp:2},
   boss:{name:"Boss",short:"B",kind:"boss",color:"#c0392b",hp:10},
   camera:{name:"Camera",short:"C",kind:"camera",color:"#e07b2a"},
@@ -218,6 +225,58 @@ const TYPES = {
   terminal:{name:"Terminal",short:"T",kind:"token",color:"#3aa7a0"},
   marker:{name:"Marker",short:"•",kind:"token",color:"#888"}
 };
+// ---------- character dashboards (from the Colonel's photos of the game pieces) ----------
+// fcost = action cost to refresh each Focus token (same order as TYPES.focus). null = not confirmed yet.
+const CHARS = {
+  snake:{def:3,hp:4,slots:3,fcost:[2,1,1,1],interact:{w:1,b:2},
+    actions:["sneak","dash","hth","combo","focus","drag","interact","knock","takedown"],
+    start:[], startNote:"On-site procurement (none)",
+    abilities:[["Silent Takedown (2)","Behind an adjacent guard: replace him with a dead guard token. No roll."],
+      ["Sneak Attack","Once per round, after damaging a target you're behind in the same row/column, deal +1 damage of the same type."],
+      ["\"I Work Alone\"","Once per round, with no players within 2 spaces, +/−1 to one die when using a weapon."]]},
+  meryl:{def:3,hp:4,slots:3,fcost:[2,2,1,1],interact:{w:1,b:2},
+    actions:["sneak","dash","hth","combo","focus","drag","interact","knock","disguise"],
+    start:["rifle","handgun"], startNote:"Light Assault Rifle, Handgun (.50 Cal)",
+    abilities:[["Gain Disguise (2)","Next to a KO/dead token with her ! off the map: swap to Disguised Meryl. Guards and cameras treat her as a guard."],
+      ["Losing the disguise","Her ! is placed, she draws attention in a guard's/camera's LOS, or does anything but Sneak/Dash/Focus in their LOS."],
+      ["\"A female guard?\"","In LOS of an adjacent guard while disguised: roll 2 white; a ! draws attention."],
+      ["\"I'm No Rookie\"","Once per round when attacking, an unmodified 6 lets her deal +1 damage of the same type."],
+      ["\"I Can Still Help\"","Players within 2 spaces may use her Focus tokens, regardless of LOS."]]},
+  otacon:{def:3,hp:4,slots:3,fcost:[1,2,1,2],interact:{w:0,b:4},
+    actions:["sneak","dash","focus","interact","knock","hack","search","access"],
+    start:["advcamo","rations"], startNote:"ADV Stealth Camouflage, Rations",
+    abilities:[["Hack Terminal (1)","4 black dice: hack a terminal on or next to his space."],
+      ["System Search (1)","Draw a System card on/next to a hacked terminal (max 3 cards)."],
+      ["Access Systems (1)","Roll black dice to use an ability on a System card."],
+      ["\"I'm No Soldier\"","Can't use weapons (no attacks)."],
+      ["Hacker","When hacking or accessing, may roll up to +2 black."],
+      ["Codec Call","His Focus tokens can modify or reroll black dice rolled by another player."]]},
+  fox:{def:3,hp:4,slots:3,fcost:[2,2,1,1],interact:{w:1,b:2},
+    actions:["sneak","dash","hth","combo","focus","drag","interact","knock","shoot","slash"],
+    start:["camo","blade","cannon"], startNote:"Arm Cannon, High Frequency Blade, Stealth Camouflage",
+    abilities:[["\"I'm Losing Myself\"","No Focus actions while his ! is in his zone."],
+      ["\"Hurry, Get Away!\"","Once per round, when an adjacent figure is attacked, he may become the target."],
+      ["Cornered Fox","Each time he takes damage, he may add a charge to one equipment card."]]}
+};
+// equipment cards: charges = gear/ammo count on the card (null = unlimited)
+const EQUIP = {
+  handgun:{name:"Handgun (.50 Cal)",charges:null,act:"shoot",w:1,loud:true,text:"Shoot (1): 1 white, target in LOS. LOUD — your ! goes under you."},
+  rifle:{name:"Light Assault Rifle",charges:3,act:"shoot",w:2,loud:true,text:"Shoot (1): spend 1 ammo, 2 white, target in LOS. LOUD."},
+  cannon:{name:"Arm Cannon",charges:3,act:"shoot",w:1,loud:true,boost:true,text:"Shoot (1): 1 white, target in LOS; discard any charges for +1 white each. LOUD."},
+  blade:{name:"High Frequency Blade",charges:3,act:"slash",w:1,text:"Slash (1): 1 white vs every adjacent figure; discard 1 charge for +1 white. When attacked, discard 1 charge: −1 to all their dice."},
+  camo:{name:"Stealth Camouflage",charges:2,act:"stealth",text:"Activate (1): discard 1 charge. Until turn end, LOS doesn't place your !, and guards don't attack when you leapfrog them."},
+  advcamo:{name:"ADV Stealth Camouflage",charges:2,act:"stealth",recharge:true,text:"Activate (1): as Stealth Camo. Recharge (2): if it has no charge, add 1."},
+  rations:{name:"Rations",charges:1,act:"ration",text:"Consume (1): remove up to 2 damage, then discard the card."}
+};
+// bosses: atk = black dice, def = Defense, hp by number of players
+const BOSSES = {
+  ocelot:{name:"Ocelot",atk:1,def:4,hp:{1:12,2:20},notes:["Elusive: moves only along his dotted path, skipping figures; faces the arrow of his space.","Ricochet Shot: doesn't need LOS to attack.","\"That Hurt!\": damaged on a player's turn → reveal a Boss card, resolve its Reaction, card to bottom."]},
+  tank:{name:"The Tank (Vulcan Raven)",atk:2,def:4,hp:{1:20,2:40},notes:["Faces all directions; can't be leapfrogged; only Missiles, Mines and Grenades hurt it.","Moves per → on Boss cards; bounces back off the map edge.","Runover: 1 damage to each player whose space it enters; ends shoved to the nearest empty space.","Grenades: damage by landing square (corners 2, edges 1*, center 3*); * = also deal the next Boss card's Bonus Damage."]},
+  mantis:{name:"Psycho Mantis",atk:1,def:12,hp:{1:15,2:30},notes:["Each attack on him: marker down 1 on the Psychokinesis track, reveal a Boss card, resolve its Reaction.","Levitation: crosses yellow dashed lines and leapfrogs players; turns right until a player is in LOS.","Track: blue = attack only from his column · yellow = once per turn a ! makes you attack the other player (or yourself) · orange = only from his row · red = no Focus."]},
+  gunship:{name:"Helicopter Gunship (Liquid)",atk:2,def:"*",hp:{1:12,2:24,3:30,4:35},threat:["3","4","5","6","6+B"],notes:["Hovers along the roof edge, turning 90° at corners.","Firing Lane: fires down its row/column to a wall; attacks players who move into, through, or act in the lane, and checks after each shift. 3 black at 6+ threat.","Armor: only S.A.M. Launcher missiles hurt it. Evasive: after a missile lands inside the dashed border, resolve a Boss card's Evasion."]},
+  raven:{name:"Vulcan Raven",atk:2,def:4,hp:{1:14,2:28,3:38,4:44},threat:["6","7","8","9","9+B","10","11","12"],notes:["The Hunt: no Boss card; threat +1, then moves spaces equal to threat in his facing.","Rotation: on a turn icon, reveal a Boss card and turn per arrow; turns toward the closest path at walls.","Attacking: any LOS to a player on his turn → attacks all in LOS and ends. 3 black at 9+ threat.","Retribution: turns to face anyone who damages him (if in their LOS); 2+ damage → Boss Reaction. Acting in his LOS gets you attacked."]},
+  wolf:{name:"Sniper Wolf",atk:3,def:4,hp:{1:12,2:24,3:36},threat:["3","3","4","4","5","5","6"],notes:["Wolf tokens are figures; flip one when anything enters/attacks it — her pin reveals her.","Critical Hit: when damaged, add a Boss card's Bonus Damage, then she hides.","Hiding: shuffle Wolf tokens onto numbered spaces above her, remove her figure.","Aiming: threat +1, then that many Boss cards move her reticle toward players; anyone it crosses is attacked.","Overwatch: only Otacon can enter her tile."]}
+};
 const PALETTE = ["snake","meryl","otacon","fox","guard","boss","camera","attn","ko","dead","event","box","door","terminal","marker"];
 const DR=[-1,0,1,0], DC=[0,1,0,-1], DIRN=["up","right","down","left"];
 const CELL = { obstacle:{fill:"#4a2626",line:"#c0392b"}, void:{fill:"#060807"}, exit:{fill:"#3a3410"}, corner:{fill:null}, stairs:{fill:"#262d2a"}, barracks:{fill:"#1f3a28"}, elevator:{fill:"#33403f"}, stairsv:{fill:"#262d2a"} };
@@ -229,21 +288,22 @@ const LAYOUTS = {
     name:"Stage 1 · Cargo Dock", note:"Snake only · reach A, then use the elevator with no red alert",
     rowStart:0, priority:"BL", blue:10, red:7,
     map:[
-      "xxxLLxxxx",
-      "x........",
-      "x.##.##..",
-      "x.##.##..",
-      "x........",
-      "x........",
-      "x........",
-      "....+....",
-      ".#.xxxx#.",
-      "...xxxx..",
-      "...xxxx.."],
-    walls:[ "h:0,3",                                                       // elevator: enter D0 only from E0
-      "h:4,1","h:4,3", "v:5,0","v:6,0","v:5,3","v:6,3", "h:6,1","h:6,2","h:6,3",   // left room, door at C4
-      "h:4,6", "v:5,4","v:6,4","v:5,6","v:6,6", "h:6,5","h:6,6",                   // right room, door at F4
-      "h:9,1" ],                                                            // wall under B9
+      "xxxLLxxx",
+      "x...+...",
+      "x.##.##.",
+      "x.##.##.",
+      "x+..++.+",
+      "x.BB....",
+      "x.BB....",
+      ".++.+.+.",
+      ".#.xxx.#",
+      "+..xxx..",
+      "...xxxxx"],
+    walls:[ "h:0,3",                                                        // elevator: step in from E1 only
+      "h:4,3", "v:5,1","v:6,1","v:5,3","v:6,3", "h:6,2","h:6,3",            // barracks (C5–D6), door at C4→C5
+      "h:4,6", "v:5,4","v:6,4","v:5,6","v:6,6", "h:6,5","h:6,6",            // right room (F5–G6), door at F4→F5
+      "h:9,1","h:9,2" ],                                                    // wall above B10/C10
+    arrows:{"5,2":0,"6,2":0,"6,3":3,"6,5":0}, marks:{"6,2":"radio"}, counts:{"5,3":3},
     pieces:[ {type:"snake",r:9,c:1},
       {type:"guard",r:1,c:2,facing:3},{type:"guard",r:4,c:3,facing:1},{type:"guard",r:3,c:7,facing:2},
       {type:"event",r:1,c:5,label:"A"} ]
@@ -272,6 +332,53 @@ const LAYOUTS = {
       {type:"event",r:4,c:7,label:"A"},{type:"event",r:11,c:0,label:"B",color:"#2f8f4e"} ]
   }
 };
+LAYOUTS.stage3={
+    name:"Stage 3 · Holding Cells / Armory", note:"Snake + Meryl · defeat 12 guards in the Holding Cells, or reach C then the Exit",
+    rowStart:1, priority:"TL", blue:13, red:7,
+    map:[
+      "xx........#.",
+      "xx....+.....",
+      "xx....+.....",
+      "xx..........",
+      "xx....+.....",
+      "xx..........",
+      "LL.+..+.....",
+      "LLx.xxxxxxxx",
+      "xxxBBxxxxxxx",
+      "xxxBBxxxxxxx",
+      "xxxxxxxxxxxx",
+      "xxxxxxLLxxxx",
+      "xxxxxxLLxxxx",
+      "xx...+..+...",
+      "xx....BB....",
+      "xx....BB....",
+      "xx++.+..++.+",
+      "xx....##....",
+      "xx..........",
+      "xx..........",
+      "xx.+.++.++.E"],
+    walls:['h:2,2','h:5,2','h:2,3','h:5,3','h:2,4','h:5,4','v:0,4','v:2,4','v:3,4','v:5,4','h:5,5','h:5,7','v:0,7','v:3,7','v:4,7','v:5,7','v:0,9','v:1,9','h:1,8','h:5,8','h:1,9','h:5,9','h:1,10','h:5,10','v:2,10','v:3,10','v:4,10','v:5,10',
+      'h:13,3','h:13,4','v:14,2','v:14,4','v:15,2','v:15,4','h:15,4','h:13,6','h:13,7','v:14,5','v:14,7','v:15,5','v:15,7','h:15,7','h:13,9','h:13,10','v:14,8','v:14,10','v:15,8','v:15,10','h:15,10',
+      'h:16,3','h:16,4','v:17,2','v:17,4','v:18,2','v:18,4','v:19,2','v:19,4','h:19,4','h:16,9','h:16,10','v:17,8','v:17,10','v:18,8','v:18,10','v:19,8','v:19,10','h:19,10','h:17,6','h:17,7','v:18,5','v:18,7','v:19,5','v:19,7','h:19,7'],
+    arrows:{"0,6":2,"1,2":1,"4,2":1,"1,9":3,"2,10":3, "8,3":0,"9,3":0,"9,4":3, "14,3":2,"14,6":2,"15,6":2,"14,7":3,"14,9":2,"17,3":2,"18,6":2,"17,9":2},
+    marks:{"9,3":"radio","14,6":"radio"}, counts:{"8,4":3,"15,7":3},
+    zones:[{name:"Holding Cells",r0:0,r1:9},{name:"Armory",r0:11,r1:20}],
+    shafts:{"Holding Cells":{r:6,c:0},"Armory":{r:11,c:6}}, lift:"Holding Cells",
+    defeat:{zone:"Holding Cells",goal:12},
+    rules:["Objective: defeat 12 guards in the Holding Cells, OR reach Event C and then the Exit.",
+      "Reinforcements: while the Holding Cells zone is active, resolve 1 extra radio-in there before each Guard Order card.",
+      "Defeat Guards: a guard KO'd or killed in the Holding Cells is removed and counted (no token) — the board does this for you.",
+      "Elevator: Interact on the elevator to ride it, with every figure on it, to the other shaft; Interact next to an empty shaft to call it.",
+      "Working Alone (1 player only): Holding Cells guards have 1 health.",
+      "A zone is active if a player or a player's ! is in it. The elevator, shafts and barracks belong to the zone they're attached to.",
+      "Event A: remove it, read Cutscene 3A. Event B: remove it, read Cutscene 3B. Event C: put it on your dashboard."],
+    pieces:[ {type:"snake",r:2,c:5},{type:"meryl",r:2,c:7},
+      {type:"attn",r:2,c:5,owner:"Snake",mode:"alert"},{type:"attn",r:2,c:7,owner:"Meryl",mode:"alert"},
+      {type:"guard",r:5,c:5,facing:0},{type:"guard",r:5,c:6,facing:0},{type:"guard",r:5,c:7,facing:0},
+      {type:"event",r:6,c:2,label:"B",color:"#2f8f4e"},{type:"event",r:6,c:4,label:"A"},
+      {type:"guard",r:16,c:4,facing:1},{type:"guard",r:17,c:11,facing:0},{type:"guard",r:20,c:7,facing:3},
+      {type:"event",r:17,c:4,label:"C",color:"#3b4fb0"} ]
+};
 const CHAR={"x":"void","#":"obstacle","E":"exit","+":"corner","S":"stairs","B":"barracks","L":"elevator","V":"stairsv"};
 
 // ---------- state ----------
@@ -285,13 +392,16 @@ function buildPreset(name){
   st.rows=L.map.length; st.cols=L.map[0].length; st.rowStart=L.rowStart; st.priority=L.priority; st.blue=L.blue; st.red=L.red;
   L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
   L.walls.forEach(w=>st.walls[w]=1);
-  st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{});
+  st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{}); st.counts=Object.assign({},L.counts||{});
+  ["zones","shafts","lift","rules"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
+  if(L.defeat) st.defeat=Object.assign({count:0},L.defeat);
   L.pieces.forEach(p=>{ const q=Object.assign({id:st.nextId++},p); initPiece(q,st); st.pieces.push(q); });
   return st;
 }
 function initPiece(p,st){
   const T=TYPES[p.type];
-  if(T.kind==="player"){ p.label=p.label||T.name; p.hp=T.hp; p.dmg=0; p.focus=[true,true,true,true]; }
+  if(T.kind==="player"){ const C=CHARS[p.type]; p.label=p.label||T.name; p.hp=C.hp; p.def=C.def; p.dmg=0; p.focus=[true,true,true,true];
+    p.equip=p.equip||C.start.map(k=>({k,ch:EQUIP[k].charges})); }
   if(p.type==="guard"){ p.label="G"+(st.guardNo++); if(p.facing==null) p.facing=2; p.hp=2; p.dmg=0; p.kod=0; }
   if(p.type==="boss"){ p.label=p.label||"Boss"; if(p.facing==null) p.facing=2; p.hp=T.hp; p.dmg=0; }
   if(p.type==="camera"){ if(p.fg==null) p.fg=2; if(p.fo==null) p.fo=3; }
@@ -299,7 +409,17 @@ function initPiece(p,st){
   if(p.type==="ko") p.stars=p.stars||2;
   if(p.type==="event") p.label=p.label||"A";
   if(p.type==="door"){ p.level=p.level||2; p.open=false; }
+  if(p.type==="terminal"){ p.level=p.level||2; }
 }
+// older saves: fill in stats/equipment the first time a piece is touched
+function charOf(p){ return CHARS[p.type]; }
+function fcostOf(p,i){ const c=charOf(p); return (p.fcost&&p.fcost[i])||(c&&c.fcost[i])||1; }
+function ensureChar(q){ const C=charOf(q); if(!C) return; if(q.def==null) q.def=C.def; if(!q.equip) q.equip=C.start.map(k=>({k,ch:EQUIP[k].charges})); }
+function playersWithin(p,n){ return S.st.pieces.filter(o=>isPlayer(o)&&o.id!==p.id&&Math.abs(o.r-p.r)+Math.abs(o.c-p.c)<=n); }
+function setBoss(p,k){ const B=BOSSES[k]; if(!B) return; const n=Math.max(1,S.st.pieces.filter(isPlayer).length);
+  const hps=Object.keys(B.hp).map(Number), use=hps.includes(n)?n:Math.max(...hps.filter(h=>h<=n),hps[0]);
+  upd(p,q=>{ q.boss=k; q.label=B.name.split(" (")[0]; q.hp=B.hp[use]; q.def=B.def; q.atk=B.atk; },`Boss set to ${B.name} — ${B.hp[use]} health for ${use} player${use>1?"s":""}, Defense ${B.def}, attacks with ${B.atk} black`); }
+const LOCKCOL={2:"#d6b23c",3:"#e07b2a",4:"#c0392b",5:"#9b59b6"};
 const S = {
   st: defaultState(), bg:null, bgImg:null, sel:null, tool:"move", addType:null,
   undo:[], redo:[], losAll:true, order:false, drag:null, paintSnap:null, hover:null,
@@ -331,14 +451,18 @@ function commit(fn, msg){
 function undo(){ if(!S.undo.length) return; S.redo.push(snapshot()); S.st=JSON.parse(S.undo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
 function redo(){ if(!S.redo.length) return; S.undo.push(snapshot()); S.st=JSON.parse(S.redo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
 function afterReplace(){ if(S.sel && !P(S.sel)) S.sel=null; persist(); refresh(); }
-function refresh(){ render(); renderSide(); renderQbar(); if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
+function refresh(){ render(); renderSide(); renderQbar(); renderZonebar(); if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
 
 // ---------- rules ----------
 function blocked(r,c){
   const t=S.st.cells[key(r,c)];
   if(t==="obstacle"||t==="void") return true;
+  if(t==="elevator" && S.st.shafts && !onLift(r,c)) return true;
   return S.st.pieces.some(p=>p.type==="door"&&p.r===r&&p.c===c&&!p.open);
 }
+function shaftAt(r,c){ const sh=S.st.shafts||{}; return Object.keys(sh).find(k=>r>=sh[k].r&&r<sh[k].r+2&&c>=sh[k].c&&c<sh[k].c+2); }
+function onLift(r,c){ return !!S.st.shafts && shaftAt(r,c)===S.st.lift; }
+function zoneOf(r){ return (S.st.zones||[]).find(z=>r>=z.r0&&r<=z.r1); }
 function wall(t,r,c){ return !!S.st.walls[t+":"+r+","+c]; } // h = bottom edge of (r,c); v = right edge
 function facingOf(p){ return p.type==="camera" ? (S.st.cam==="green" ? p.fg : p.fo) : p.facing; }
 // Rulebook LOS: a guard/camera sees every square in front of it (the rows or columns it faces) as long as
@@ -385,6 +509,15 @@ function fitView(){
   const z=Math.max(0.2, Math.min((w-pad*2)/boardW(), (h-pad*2)/boardH()));
   S.view={z, x:(w-boardW()*z)/2, y:Math.max(pad,(h-boardH()*z)/2)}; render();
 }
+function fitZone(z){
+  if(!z){ fitView(); return; } const w=stage.clientWidth, h=stage.clientHeight, pad=12, top=84, bot=60, bw=boardW(), y0=M+z.r0*CS, zh=(z.r1-z.r0+1)*CS;
+  const zz=Math.max(0.2, Math.min((w-pad*2)/bw, (h-top-bot)/zh));
+  S.view={z:zz, x:(w-bw*zz)/2, y:top+((h-top-bot)-zh*zz)/2-y0*zz}; S.zoneView=z.name; render(); renderZonebar(); }
+function renderZonebar(){ const el=document.getElementById("zonebar"); if(!el) return; const zs=S.st.zones||[];
+  if(!zs.length){ el.innerHTML=""; return; }
+  const here=n=>S.st.pieces.filter(p=>isPlayer(p)&&zoneOf(p.r)&&zoneOf(p.r).name===n).map(p=>p.label[0]).join("");
+  el.innerHTML=zs.map(z=>`<button data-zone="${esc(z.name)}" class="${S.zoneView===z.name?"on":""}">▣ ${esc(z.name)}${here(z.name)?` · ${here(z.name)}`:""}</button>`).join("")+`<button data-zone="" class="${!S.zoneView?"on":""}">▦ All</button>`;
+  el.querySelectorAll("[data-zone]").forEach(b=>b.onclick=()=>{ const z=zs.find(x=>x.name===b.dataset.zone); S.zoneView=z?z.name:null; if(z) fitZone(z); else { fitView(); renderZonebar(); } }); }
 function zoomAt(f, cx, cy){
   const v=S.view, z=Math.max(0.2, Math.min(5, v.z*f)), k=z/v.z;
   v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.z=z; render();
@@ -427,8 +560,16 @@ function render(){
       if(!isB(r-1,c)){ ctx.moveTo(x+3,y+3); ctx.lineTo(x+CS-3,y+3); } if(!isB(r+1,c)){ ctx.moveTo(x+3,y+CS-3); ctx.lineTo(x+CS-3,y+CS-3); }
       if(!isB(r,c-1)){ ctx.moveTo(x+3,y+3); ctx.lineTo(x+3,y+CS-3); } if(!isB(r,c+1)){ ctx.moveTo(x+CS-3,y+3); ctx.lineTo(x+CS-3,y+CS-3); }
       ctx.stroke(); ctx.setLineDash([]); }
-    if(t==="elevator"){ ctx.strokeStyle="#7f9a96"; ctx.lineWidth=2; ctx.strokeRect(x+3,y+3,CS-6,CS-6); ctx.fillStyle="#b9cfca"; ctx.font="16px system-ui"; ctx.fillText("⇅",x+CS/2,y+CS/2+1); }
+    if(t==="elevator" && st.shafts){ const k=shaftAt(r,c), sh=st.shafts[k], here=k===st.lift;
+      ctx.fillStyle=here?"#2f4a44":"#050606"; ctx.fillRect(x+1,y+1,CS-2,CS-2);
+    }
+    else if(t==="elevator"){ ctx.strokeStyle="#7f9a96"; ctx.lineWidth=2; ctx.strokeRect(x+3,y+3,CS-6,CS-6); ctx.fillStyle="#b9cfca"; ctx.font="16px system-ui"; ctx.fillText("⇅",x+CS/2,y+CS/2+1); }
   }
+  for(const k in (st.shafts||{})){ const sh=st.shafts[k], here=k===st.lift, x=sh.c*CS, y=sh.r*CS;
+    ctx.strokeStyle=here?"#7fd3c3":"#52605d"; ctx.lineWidth=2.5; ctx.setLineDash(here?[]:[5,4]); ctx.strokeRect(x+3,y+3,CS*2-6,CS*2-6); ctx.setLineDash([]);
+    ctx.fillStyle=here?"#000a":"#0008"; rr(x+CS-30,y+CS-9,60,18,5); ctx.fill();
+    ctx.fillStyle=here?"#bfeee5":"#8f9c99"; ctx.font="bold 10px system-ui"; ctx.fillText(here?"⇅ ELEVATOR":"EMPTY SHAFT",x+CS,y+CS+1); }
+  for(const k in (st.counts||{})){ const [r,c]=k.split(",").map(Number); ctx.fillStyle="#9fe0b5"; ctx.font="bold 9px system-ui"; ctx.fillText("COUNT",c*CS+CS/2,r*CS+CS/2-7); ctx.font="bold 15px system-ui"; ctx.fillText(st.counts[k],c*CS+CS/2,r*CS+CS/2+7); }
   ctx.strokeStyle="#ffffff16"; ctx.lineWidth=1/v.z;
   for(let c=0;c<=st.cols;c++){ ctx.beginPath(); ctx.moveTo(c*CS,0); ctx.lineTo(c*CS,bh); ctx.stroke(); }
   for(let r=0;r<=st.rows;r++){ ctx.beginPath(); ctx.moveTo(0,r*CS); ctx.lineTo(bw,r*CS); ctx.stroke(); }
@@ -470,6 +611,11 @@ function render(){
   }
   ctx.restore();
   const h=S.hover; document.getElementById("hover").textContent = h ? sq(h.r,h.c) : "";
+  const si=statusInfo(), sb=document.getElementById("status");
+  if(sb){ const tx=t=>`${t.owner||"?"} ${sq(t.r,t.c)}`;
+    if(si.level==="alert"){ sb.style.background="#b3261e"; sb.style.color="#fff"; sb.textContent=`! ALERT · ${si.al.map(tx).join(", ")}${si.q.length?" · ? "+si.q.map(tx).join(", "):""}`; }
+    else if(si.level==="caution"){ sb.style.background="#1f5fa8"; sb.style.color="#fff"; sb.textContent=`? INVESTIGATING · ${si.q.map(tx).join(", ")}`; }
+    else { sb.style.background="#1f5a34cc"; sb.style.color="#d8ffe4"; sb.textContent="● CLEAR"; } }
   document.getElementById("round-hdr").textContent = `${st.stage||""} · R${st.round} ${st.phase} · cams ${st.cam}`;
 }
 function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
@@ -508,8 +654,12 @@ function drawPiece(p,x,y,spotted,orderNo){
     ctx.fillStyle=p.color||"#b5302a"; rr(x+7,y+4,CS-14,CS-16,5); ctx.fill();
     ctx.fillStyle="#fff"; ctx.font="bold 20px system-ui"; ctx.fillText(p.label||"A",cx,cy);
   } else if(p.type==="door"){
-    ctx.fillStyle=p.open?"#2a3a2a":"#5a1d1d"; rr(x+4,y+10,CS-8,CS-22,4); ctx.fill();
-    ctx.fillStyle="#fff"; ctx.font="bold 10px system-ui"; ctx.fillText(p.open?"OPEN":"LOCK "+(p.level||""),cx,cy+2);
+    ctx.fillStyle=p.open?"#2a3a2a":"#2a1414"; rr(x+4,y+10,CS-8,CS-22,4); ctx.fill(); ctx.strokeStyle=LOCKCOL[p.level]||"#c0392b"; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=p.open?"#9c9":(LOCKCOL[p.level]||"#fff"); ctx.font="bold 10px system-ui"; ctx.fillText(p.open?"OPEN":"🔒"+(p.level||""),cx,cy+2);
+  } else if(p.type==="terminal"){
+    ctx.fillStyle=p.hacked?"#1d3a2a":"#14231f"; rr(x+7,y+6,CS-14,CS-18,4); ctx.fill(); ctx.strokeStyle=p.hacked?"#5fd38a":(LOCKCOL[p.level]||T.color); ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=p.hacked?"#5fd38a":(LOCKCOL[p.level]||"#fff"); ctx.font="bold 11px system-ui"; ctx.fillText(p.hacked?"✓":"💻"+(p.level||""),cx,cy);
+    nameTag(p.hacked?"HACKED":"TERM "+(p.level||""),x,y);
   } else if(T.kind==="token"){
     ctx.fillStyle=T.color; ctx.beginPath(); ctx.arc(cx,cy,11,0,7); ctx.fill();
     ctx.fillStyle="#fff"; ctx.font="bold 11px system-ui"; ctx.fillText(p.hacked?"✓":(p.label||T.short),cx,cy+1);
@@ -584,7 +734,13 @@ function endPtr(ev){
   if(S.drag){
     const d=S.drag; S.drag=null; const p=P(d.id);
     if(p && d.moved && h.ok && (h.r!==p.r||h.c!==p.c)){ const from=sq(p.r,p.c);
-      commit(st=>{ const q=st.pieces.find(x=>x.id===d.id); q.r=h.r; q.c=h.c; }, `${nameOf(p)} ${from} → ${sq(h.r,h.c)}`); }
+      if(isPlayer(p) && S.st.phase==="Player" && S.st.rules!==false){
+        const dist=Math.abs(h.r-p.r)+Math.abs(h.c-p.c);
+        (async()=>{ try{ const msg=await runAction(`${dist===1?"sneak":"dash"} ${p.label} ${sq(h.r,h.c)}`); toast(msg); }catch(e){ toast("✗ "+(e.message||e)); render(); } })();
+      } else {
+        commit(st=>{ const q=st.pieces.find(x=>x.id===d.id); q.r=h.r; q.c=h.c; }, `${nameOf(p)} ${from} → ${sq(h.r,h.c)}`);
+        if(p.type==="guard"||p.type==="boss") autoSpot(P(p.id));
+      } }
     else render();
     tapStart=null; return;
   }
@@ -640,7 +796,7 @@ document.addEventListener("keydown",ev=>{
 function step(p,d){ const r=p.r+DR[d], c=p.c+DC[d]; if(r<0||c<0||r>=S.st.rows||c>=S.st.cols) return; const from=sq(p.r,p.c);
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=r; q.c=c; }, `${nameOf(p)} ${from} → ${sq(r,c)}`); }
 const hasFacing=p=>["guard","boss","camera"].includes(p.type);
-function setFacing(p,d){ commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); if(q.type==="camera"){ if(st.cam==="green") q.fg=d; else q.fo=d; } else q.facing=d; }, `${nameOf(p)} faces ${DIRN[d]}`); }
+function setFacing(p,d){ setTimeout(()=>autoSpot(P(p.id)),0); commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); if(q.type==="camera"){ if(st.cam==="green") q.fg=d; else q.fo=d; } else q.facing=d; }, `${nameOf(p)} faces ${DIRN[d]}`); }
 function removePiece(p){ S.sel=null; commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); }, `Removed ${nameOf(p)} from ${sq(p.r,p.c)}`); }
 function flipToken(p){
   if(p.type==="attn") commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.mode=q.mode==="alert"?"q":"alert"; }, `${p.owner||""} token now ${p.mode==="alert"?"?":"! (alert)"}`);
@@ -648,12 +804,17 @@ function flipToken(p){
 }
 
 // ---------- piece actions (shared by the quick bar and the Piece panel) ----------
+// Stage rule: guards defeated in a counted zone leave no token and add to the objective counter
+function downGuard(st,p,type){ st.pieces=st.pieces.filter(x=>x.id!==p.id);
+  const d=st.defeat, z=(st.zones||[]).find(z=>p.r>=z.r0&&p.r<=z.r1);
+  if(d && z && z.name===d.zone){ d.count=(d.count||0)+1; return ` — counted as defeated (${d.count}/${d.goal})`; }
+  st.pieces.push(type==="ko"?{id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}:{id:st.nextId++,type:"dead",r:p.r,c:p.c,from:p.label}); return ""; }
 function hurt(p, n, ko){
   const T=TYPES[p.type], nm=nameOf(p);
   if(p.type==="guard"){
     const dmg=ko?(p.dmg||0):Math.max(0,(p.dmg||0)+n), kod=ko?Math.max(0,(p.kod||0)+n):(p.kod||0), hp=p.hp||2;
-    if(dmg>=hp){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push({id:st.nextId++,type:"dead",r:p.r,c:p.c,from:p.label}); S.sel=null; }, `${nm} takes ${n} damage and is killed at ${sq(p.r,p.c)} → dead guard token`); return; }
-    if(kod>=hp){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push({id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}); S.sel=null; }, `${nm} takes ${n} KO damage and is knocked out at ${sq(p.r,p.c)} → KO token ★★`); return; }
+    if(dmg>=hp){ let x_=""; commit(st=>{ x_=downGuard(st,p,"dead"); S.sel=null; }, `${nm} takes ${n} damage and is killed at ${sq(p.r,p.c)}`); addLog(x_?`${nm}${x_}`:`${nm} → dead guard token`); return; }
+    if(kod>=hp){ let x_=""; commit(st=>{ x_=downGuard(st,p,"ko"); S.sel=null; }, `${nm} takes ${n} KO damage and is knocked out at ${sq(p.r,p.c)}`); addLog(x_?`${nm}${x_}`:`${nm} → KO token ★★`); return; }
     commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.dmg=dmg; q.kod=kod; }, `${nm} ${n>0?"takes":"loses"} ${Math.abs(n)} ${ko?"KO ":""}damage (${dmg} dmg, ${kod} KO of ${hp})${n>0?" — if he isn't down by the end of the turn, the zone is alerted":""}`); return;
   }
   const dmg=Math.max(0,(p.dmg||0)+n), hp=p.hp||4; // bosses treat KO damage as normal damage
@@ -661,8 +822,8 @@ function hurt(p, n, ko){
   if(dmg>=hp) msg += T.kind==="player" ? " — KILLED IN ACTION, stage failed" : " — DEFEATED";
   commit(st=>{ st.pieces.find(x=>x.id===p.id).dmg=dmg; }, msg);
 }
-function convertGuard(p, to){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push(to==="ko"?{id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}:{id:st.nextId++,type:"dead",r:p.r,c:p.c,from:p.label}); S.sel=null; },
-  `${nameOf(p)} ${to==="ko"?"knocked out → KO token ★★":"killed → dead guard token"} at ${sq(p.r,p.c)}`); }
+function convertGuard(p, to){ let x_=""; commit(st=>{ x_=downGuard(st,p,to); S.sel=null; },
+  `${nameOf(p)} ${to==="ko"?"knocked out":"killed"} at ${sq(p.r,p.c)}`); addLog(x_?`${nameOf(p)}${x_}`:`${nameOf(p)} → ${to==="ko"?"KO token ★★":"dead guard token"}`); }
 function wakeGuard(k){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==k.id); const g={id:st.nextId++,type:"guard",r:k.r,c:k.c,label:k.from||("G"+st.guardNo++),facing:2,hp:2,dmg:0,kod:0}; st.pieces.push(g); S.sel=g.id; },
   `${k.from||"KO'd guard"} wakes up at ${sq(k.r,k.c)} — players pick his facing (not into a wall)`); }
 function playerToken(p, mode){ // mode: "q" draw attention, "alert", "remove"
@@ -671,7 +832,7 @@ function playerToken(p, mode){ // mode: "q" draw attention, "alert", "remove"
     if(mode==="remove"){ if(t) st.pieces=st.pieces.filter(x=>x.id!==t.id); return; }
     if(!t){ t={id:st.nextId++,type:"attn",owner,mode:mode==="alert"?"alert":"q"}; st.pieces.push(t); }
     else if(mode==="alert") t.mode="alert";               // drawing attention moves it without flipping
-    t.r=p.r; t.c=p.c; },
+    t.r=p.r; t.c=p.c; const me=st.pieces.find(x=>x.id===p.id); if(me&&me.disguised&&(mode==="alert"||S.st.pieces.filter(isViewer).some(v=>los(v,p.r,p.c)))) me.disguised=false; },
     mode==="remove"?`${owner}'s attention token removed`: mode==="alert"?`${owner} is SEEN — ! token under ${owner} at ${sq(p.r,p.c)}`:`${owner} draws attention at ${sq(p.r,p.c)}`);
 }
 // two-tap delete so pieces aren't removed by accident
@@ -689,18 +850,19 @@ function actionsFor(p){
   if(hasFacing(p)){ add("ccw","⟲",()=>setFacing(p,((facingOf(p)??0)+3)%4),1); add("cw","⟳",()=>setFacing(p,((facingOf(p)??0)+1)%4),1); }
   if(T.kind==="player"){
     add("hit","+1 dmg",()=>hurt(p,1),1); add("heal","−1 dmg",()=>hurt(p,-1));
-    add("ration","Rations (heal 2)",()=>hurt(p,-2));
+    add("ration","Heal 2 (manual)",()=>hurt(p,-2));
     add("noise","? Draw attention",()=>playerToken(p,"q"),1); add("seen","! Seen",()=>playerToken(p,"alert"),1);
     add("untoken","Remove my token",()=>playerToken(p,"remove"));
     add("refocus","Refresh all focus",()=>upd(p,q=>{ q.focus=[true,true,true,true]; },`${nm} refreshes all focus tokens`));
-    if(p.type==="meryl") add("disg",p.disguised?"Drop disguise":"Disguise",()=>upd(p,q=>{ q.disguised=!q.disguised; },`Meryl ${p.disguised?"loses":"gains"} her disguise`),1);
+    if(p.type==="meryl") add("disg",p.disguised?"Drop disguise":"Set disguise",()=>upd(p,q=>{ q.disguised=!q.disguised; },`Meryl ${p.disguised?"loses":"gains"} her disguise`),1);
   }
   if(p.type==="guard"){
     add("hit","+1 dmg",()=>hurt(p,1),1); add("kohit","+1 KO",()=>hurt(p,1,true),1);
     add("unhit","−1 dmg",()=>hurt(p,-1)); add("unko","−1 KO",()=>hurt(p,-1,true));
     add("to-ko","Knock out",()=>convertGuard(p,"ko"),1); add("to-dead","Kill",()=>convertGuard(p,"dead"),1);
   }
-  if(p.type==="boss"){ add("hit","+1 dmg",()=>hurt(p,1),1); add("heal","−1 dmg",()=>hurt(p,-1)); }
+  if(p.type==="boss"){ add("hit","+1 dmg",()=>hurt(p,1),1); add("heal","−1 dmg",()=>hurt(p,-1));
+    if(BOSSES[p.boss]&&BOSSES[p.boss].threat) add("thr","Threat +1",()=>upd(p,q=>{ q.threat=Math.min(BOSSES[p.boss].threat.length-1,(q.threat||0)+1); },`${nm} threat → ${BOSSES[p.boss].threat[Math.min(BOSSES[p.boss].threat.length-1,(p.threat||0)+1)]}`),1); }
   if(p.type==="camera") add("camflip",`Flip all cameras (now ${S.st.cam})`,()=>commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; },`Cameras flipped to ${S.st.cam==="green"?"orange":"green"}`),1);
   if(p.type==="attn") add("flip",p.mode==="alert"?"Flip to ?":"Flip to !",()=>flipToken(p),1);
   if(p.type==="ko"){ add("flip",p.stars===1?"Back to ★★":"Stir → ★",()=>flipToken(p),1); add("wake","Wake up → guard",()=>wakeGuard(p),1); }
@@ -712,7 +874,7 @@ function actionsFor(p){
 }
 
 // ---------- sheet / tabs ----------
-const TITLES={ai:"Play with an AI",build:"Build",piece:"Selected piece",game:"Game",dice:"Dice",log:"Log",map:"Map",net:"Connect with a friend"};
+const TITLES={ref:"Reference cards",ai:"Play with an AI",build:"Build",piece:"Selected piece",game:"Game",dice:"Dice",log:"Log",map:"Map",net:"Connect with a friend"};
 const sheet=document.getElementById("sheet");
 function openSheet(n){
   S.pane=n; sheet.classList.add("open"); sheet.setAttribute("aria-hidden","false");
@@ -724,6 +886,7 @@ function openSheet(n){
 function closeSheet(){ S.pane=null; sheet.classList.remove("open"); sheet.setAttribute("aria-hidden","true"); document.querySelectorAll("#tabs button").forEach(b=>b.classList.remove("on")); renderQbar(); }
 document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; if(S.pane===b.dataset.pane) closeSheet(); else openSheet(b.dataset.pane); });
 document.getElementById("sheet-x").onclick=closeSheet;
+document.getElementById("ref-btn").onclick=()=>{ if(S.pane==="ref") closeSheet(); else openSheet("ref"); };
 function syncArmed(){
   const a=document.getElementById("armed");
   const txt = S.addType ? `Tap a square to place ${TYPES[S.addType].name}` : (S.tool!=="move" ? (S.tool==="wall"?"Wall mode: tap near a square edge":S.tool==="arrow"?"Arrow: tap a square to cycle ↑ → ↓ ← none":S.tool==="radio"?"Tap a square to mark where guards spawn":`Paint: ${S.tool} (drag to paint)`) : "");
@@ -733,7 +896,19 @@ function syncArmed(){
 document.getElementById("armed-x").onclick=()=>{ S.addType=null; S.tool="move"; syncArmed(); };
 
 const esc=s=>String(s??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
-function renderSide(){ renderBuildPane(); renderPiecePane(); renderGamePane(); renderLog(); renderMapPane(); renderAiPane(); }
+function renderRefPane(){
+  const el=document.getElementById("pane-ref"); if(!el) return;
+  const ch=Object.keys(CHARS).map(k=>{ const C=CHARS[k], T=TYPES[k];
+    return `<details class="card"><summary><span class="sw" style="background:${T.color}">${T.short}</span><b>${T.name}</b> <span class="muted">· Def ${C.def} · HP ${C.hp} · Interact ${C.interact.w?C.interact.w+"W ":""}${C.interact.b}B</span></summary>
+      <div><b>Focus</b> (refresh cost): ${T.focus.map((n,i)=>`${esc(n)} <b>${C.fcost[i]??"?"}</b>`).join(" · ")}</div>
+      <div><b>Actions</b>: ${C.actions.map(a=>`${ACT_NAME[a]||a[0].toUpperCase()+a.slice(1)} (${a==="focus"?"X":ACT[a]})`).join(", ")}</div>
+      <div><b>Starts with</b>: ${esc(C.startNote)}</div>${C.abilities.map(([n,t])=>`<div>• <b>${esc(n)}</b> — ${esc(t)}</div>`).join("")}</details>`; }).join("");
+  const eq=Object.values(EQUIP).map(E=>`<div class="row" style="display:block"><b>${esc(E.name)}</b>${E.charges!=null?` <span class="muted">· ${E.charges} ${E.act==="shoot"&&!E.boost?"ammo":"charges"}</span>`:""}<div class="muted">${esc(E.text)}</div></div>`).join("");
+  const bs=Object.values(BOSSES).map(B=>`<details class="card"><summary><b>${esc(B.name)}</b> <span class="muted">· Atk ${B.atk}B · Def ${B.def} · HP ${Object.entries(B.hp).map(([n,v])=>n+"P "+v).join("/")}</span></summary>${B.threat?`<div><b>Threat</b>: ${B.threat.join(" → ")}</div>`:""}${B.notes.map(n=>`<div>• ${esc(n)}</div>`).join("")}</details>`).join("");
+  el.innerHTML=`<h3>Characters</h3>${ch}<h3>Equipment</h3><div class="card">${eq}</div><h3>Bosses</h3>${bs}
+    <h3>Locks</h3><div class="card">Doors and terminals have lock levels 2 (yellow), 3 (orange), 4 (red), 5 (purple). Set a lock level on the piece; unlocking is marked by hand after the roll.</div>`;
+}
+function renderSide(){ renderRefPane(); renderBuildPane(); renderPiecePane(); renderGamePane(); renderLog(); renderMapPane(); renderAiPane(); }
 function renderAiPane(){
   const sel=document.getElementById("ai-who"); if(!sel) return; const cur=sel.dataset.picked?sel.value:"";
   const players=S.st.pieces.filter(p=>TYPES[p.type].kind==="player").map(p=>p.label);
@@ -741,11 +916,12 @@ function renderAiPane(){
   sel.innerHTML=opts.map(o=>`<option ${o===cur?"selected":""}>${esc(o)}</option>`).join("");
 }
 document.getElementById("ai-who").onchange=e=>{ e.target.dataset.picked="1"; };
-document.getElementById("ai-copy").onclick=()=>{ const who=document.getElementById("ai-who").value, t=boardText(who), ta=document.getElementById("ai-text");
-  ta.value=t; ta.style.display="block"; ta.select(); const b=document.getElementById("ai-copy");
-  const done=()=>{ b.textContent="Copied ✓ — paste it to your AI"; setTimeout(()=>b.textContent="Copy board for AI",2500); };
+const aiCopy=(quick)=>{ const who=document.getElementById("ai-who").value, t=boardText(who,quick), ta=document.getElementById("ai-text");
+  ta.value=t; ta.style.display="block"; ta.select(); const b=document.getElementById(quick?"ai-quick":"ai-copy");
+  const done=()=>{ b.textContent="Copied ✓ — paste it to your AI"; setTimeout(()=>b.textContent=quick?"Copy quick update":"Copy full board",2500); };
   const fallback=()=>{ try{ ta.select(); if(document.execCommand("copy")) done(); else b.textContent="Select the text below and copy it"; }catch(_){ b.textContent="Select the text below and copy it"; } };
   try{ navigator.clipboard.writeText(t).then(done, fallback); }catch(e){ fallback(); } };
+document.getElementById("ai-copy").onclick=()=>aiCopy(false); document.getElementById("ai-quick").onclick=()=>aiCopy(true);
 document.getElementById("ai-apply").onclick=async()=>{ const btn=document.getElementById("ai-apply"), out=document.getElementById("ai-out"), txt=document.getElementById("ai-in").value;
   if(btn.disabled) return; btn.disabled=true; btn.textContent="Running…"; out.innerHTML="";
   if(innerWidth<900) closeSheet();
@@ -769,7 +945,23 @@ function renderQbar(){
   const show = p && !(S.pane && innerWidth<900); stage.classList.toggle("qb", !!show);
   if(!show){ q.style.display="none"; return; }
   const T=TYPES[p.type]; let h=`<span class="sw" style="background:${T.color}">${T.short}</span><span class="name">${esc(nameOf(p))} · ${sq(p.r,p.c)}</span>`;
-  const acts=actionsFor(p).filter(a=>a.quick);
+  let acts=actionsFor(p).filter(a=>a.quick);
+  if(isPlayer(p) && S.st.phase==="Player" && S.st.rules!==false){
+    const t=tt(p), act=(label,line)=>({label,run:async()=>{ try{ toast(await runAction(line)); }catch(e){ toast("✗ "+(e.message||e)); } }});
+    h+=`<span class="muted" style="white-space:nowrap">${t.done?"turn ended":`⚡${actionsLeft(p)} left${t.noisy?` · 🔊${t.noisy}`:""}`}</span>`;
+    const adj=S.st.pieces.filter(g=>adjacentGuard(p,g));
+    const C=charOf(p)||{actions:[]}, has=k=>C.actions.includes(k); ensureChar(p);
+    const eqAct=k=>findEquip(p,E=>E.act===k)>=0;
+    const body=S.st.pieces.some(x=>(x.type==="ko"||x.type==="dead")&&Math.abs(x.r-p.r)+Math.abs(x.c-p.c)<=1);
+    acts=[...(has("hth")?adj.flatMap(g=>[act(`👊 ${g.label}`,`hth ${p.label} ${g.label}`),act(`Combo ${g.label}`,`combo ${p.label} ${g.label}`),...(has("takedown")&&g.type==="guard"?[act(`Takedown ${g.label}`,`takedown ${p.label} ${g.label}`)]:[])]):[]),
+      ...(has("slash")&&eqAct("slash")&&adj.length?[act("Slash",`slash ${p.label}`)]:[]),
+      ...(eqAct("stealth")&&!p.stealth?[act("Stealth",`stealth ${p.label}`)]:[]),
+      ...(has("disguise")&&!p.disguised&&body?[act("Disguise",`disguise ${p.label}`)]:[]),
+      ...(has("hack")&&S.st.pieces.some(x=>x.type==="terminal"&&Math.abs(x.r-p.r)+Math.abs(x.c-p.c)<=1)?[act("Hack",`hack ${p.label}`)]:[]),
+      ...(eqAct("ration")&&p.dmg?[act("Rations",`ration ${p.label}`)]:[]),
+      ...(S.st.shafts&&(onLift(p.r,p.c)||Object.keys(S.st.shafts).some(k=>k!==S.st.lift&&[0,1].some(dr=>[0,1].some(dc=>{ const sh=S.st.shafts[k]; return Math.abs(sh.r+dr-p.r)+Math.abs(sh.c+dc-p.c)===1; }))))?[act(onLift(p.r,p.c)?"Ride elevator":"Call elevator",`elevator ${p.label}`)]:[]),
+      act("Knock",`knock ${p.label}`), act("End turn",`end ${p.label}`), ...acts.filter(a=>!/dmg|token|Seen|attention|Rations|Disguise/i.test(a.label))];
+  }
   if(p.hp) h+=`<span class="muted" style="white-space:nowrap">${p.type==="guard"?`${p.dmg||0}D ${p.kod||0}KO/${p.hp}`:`HP ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`}</span>`;
   h+=acts.map((a,i)=>`<button class="sm" data-qa="${i}">${esc(a.label)}</button>`).join("");
   h+=`<button class="sm" data-q="more">More…</button><button class="sm danger" data-q="del" aria-label="Delete">✕</button>`;
@@ -782,7 +974,7 @@ function renderPiecePane(){
   const el=document.getElementById("pane-piece"), p=P(S.sel), L=S.lastLOS||{spotted:[]};
   const warn = L.spotted.length ? `<div class="card bad"><b>In line of sight:</b><br>${L.spotted.map(s=>`${esc(s.pl.label)} at ${sq(s.pl.r,s.pl.c)} ← ${esc(s.v.label||"Camera")} at ${sq(s.v.r,s.v.c)}`).join("<br>")}</div>` : "";
   if(!p){ el.innerHTML = warn + `<p class="muted">Tap a piece on the board to select it. Drag it with one finger to move it. Use two fingers to move and zoom the board.</p>`; return; }
-  const T=TYPES[p.type], nm=nameOf(p);
+  const T=TYPES[p.type], nm=nameOf(p); if(isPlayer(p)&&(!p.equip||p.def==null)) ensureChar(p);
   let h = warn + `<div class="card"><div class="row"><span class="sw" style="background:${T.color}">${T.short}</span><b>${esc(T.name)}</b><span class="muted">at ${sq(p.r,p.c)}</span></div>`;
   if(T.kind!=="token"||p.type==="event") h+=`<div class="row"><label>Name</label><input type="text" id="pl-label" value="${esc(p.label||"")}" style="flex:1"></div>`;
   h+=`<div class="row"><label>Step</label>${["↑","→","↓","←"].map((a,i)=>`<button class="sm" data-step="${i}">${a}</button>`).join("")}</div>`;
@@ -796,13 +988,24 @@ function renderPiecePane(){
   if(p.type==="guard") h+=`<p class="muted">Damage that reaches his health turns him into a dead guard token; KO damage that reaches it turns him into a KO token.</p>`;
   const acts=actionsFor(p);
   if(acts.length) h+=`<div class="row" style="gap:6px">${acts.map((a,i)=>`<button class="sm" data-act="${i}">${esc(a.label)}</button>`).join("")}</div>`;
-  if(T.kind==="player"){
-    h+=`<div class="row focus"><label>Focus</label>${T.focus.map((n,i)=>`<button class="sm ${p.focus&&p.focus[i]?"":"spent"}" data-focus="${i}">${esc(n)}</button>`).join("")}</div>`;
+  if(T.kind==="player"){ const C=charOf(p);
+    h+=`<div class="row focus"><label>Focus</label>${T.focus.map((n,i)=>`<button class="sm ${p.focus&&p.focus[i]?"":"spent"}" data-focus="${i}">${esc(n)} <span class="muted">· ${C.fcost[i]==null?"?":C.fcost[i]}</span></button>`).join("")}</div>
+      <p class="muted" style="margin-top:0">The number after each token is its refresh cost in actions${C.fcost.includes(null)?" (? = not confirmed yet, counted as 1)":""}.</p>
+      <div class="row"><label>Stats</label><span>Defense <b>${p.def??C.def}</b> · Health <b>${p.hp}</b> · Interact ${C.interact.w?C.interact.w+"W ":""}${C.interact.b}B · ${C.slots} equipment slots</span></div>`;
+    const eq=p.equip||[];
+    h+=`<div class="card" style="margin:6px 0"><b>Equipment</b>${eq.length?eq.map((e,i)=>{ const E=EQUIP[e.k]; return `<div class="row"><b style="flex:1">${esc(E.name)}</b>${E.charges!=null?`<button class="sm" data-ch="${i},-1">−</button><b>${e.ch??0}</b><button class="sm" data-ch="${i},1">+</button>`:""}<button class="sm danger" data-unequip="${i}">✕</button></div><div class="muted" style="margin:-4px 0 6px">${esc(E.text)}</div>`; }).join(""):`<p class="muted">${esc(C.startNote)}</p>`}
+      <div class="row"><select id="eq-add" style="flex:1"><option value="">Add equipment…</option>${Object.keys(EQUIP).map(k=>`<option value="${k}">${esc(EQUIP[k].name)}</option>`).join("")}</select></div></div>
+      <details><summary class="muted">Abilities</summary>${C.abilities.map(([n,t])=>`<div><b>${esc(n)}</b> — ${esc(t)}</div>`).join("")}</details>`;
   }
+  if(p.type==="boss"){ const B=BOSSES[p.boss];
+    h+=`<div class="row"><label>Which boss</label><select id="boss-k" style="flex:1"><option value="">Pick…</option>${Object.keys(BOSSES).map(k=>`<option value="${k}" ${p.boss===k?"selected":""}>${esc(BOSSES[k].name)}</option>`).join("")}</select></div>`;
+    if(B){ h+=`<div class="row"><label>Card</label><span>Attack ${B.atk} black · Defense ${B.def} · Health ${Object.entries(B.hp).map(([n,v])=>n+"P "+v).join(" / ")}</span></div>`;
+      if(B.threat) h+=`<div class="row"><label>Threat</label>${B.threat.map((t,i)=>`<button class="sm ${(p.threat||0)===i?"on":""}" data-threat="${i}">${t}</button>`).join("")}</div>`;
+      h+=`<details><summary class="muted">Boss rules</summary>${B.notes.map(n=>`<div>• ${esc(n)}</div>`).join("")}</details>`; } }
   if(p.type==="attn") h+=`<div class="row"><label>Side</label><button class="sm ${p.mode!=="alert"?"on":""}" data-mode="q">? Investigate</button><button class="sm ${p.mode==="alert"?"on":""}" data-mode="alert">! Alerted</button></div>
      <div class="row"><label>Whose</label><input type="text" id="pl-owner" value="${esc(p.owner||"")}" style="flex:1"></div>`;
   if(p.type==="ko") h+=`<p class="muted">${p.from?esc(p.from)+" · ":""}${p.stars===1?"★ — wakes on the next Waken Guard.":"★★ — the next Waken Guard turns this to ★."}</p>`;
-  if(p.type==="door") h+=`<div class="row"><label>Level</label><input type="number" id="door-lv" value="${p.level||2}" min="2" max="5" style="width:70px"></div>`;
+  if(p.type==="door"||p.type==="terminal") h+=`<div class="row"><label>Lock level</label>${[2,3,4,5].map(l=>`<button class="sm ${p.level===l?"on":""}" data-lv="${l}" style="border-color:${LOCKCOL[l]}">${l}</button>`).join("")}</div><p class="muted">2 yellow · 3 orange · 4 red · 5 purple, matching the lock icon.</p>`;
   h+=`<div class="row"><button class="sm" id="dup">Duplicate</button><button class="sm danger" id="del">Delete</button></div></div>`;
   el.innerHTML=h;
   const q=()=>S.st.pieces.find(x=>x.id===p.id), on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; }, ch=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onchange=f; };
@@ -815,7 +1018,13 @@ function renderPiecePane(){
   ch("pl-label",e=>commit(()=>{ q().label=e.target.value; }));
   ch("pl-owner",e=>commit(()=>{ q().owner=e.target.value; }));
   ch("pl-hp",e=>commit(()=>{ q().hp=+e.target.value; }));
-  ch("door-lv",e=>commit(()=>{ q().level=+e.target.value; }));
+  el.querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>{ const [i,d]=b.dataset.ch.split(",").map(Number); commit(()=>{ const e=q().equip[i]; e.ch=Math.max(0,(e.ch||0)+d); }, `${nm}: ${EQUIP[p.equip[i].k].name} ${d>0?"+1":"−1"} charge`); });
+  el.querySelectorAll("[data-unequip]").forEach(b=>b.onclick=()=>{ const i=+b.dataset.unequip, n_=EQUIP[p.equip[i].k].name; commit(()=>{ q().equip.splice(i,1); }, `${nm} discards ${n_}`); });
+  ch("eq-add",e=>{ const k=e.target.value; if(!k) return; const C=charOf(p); if((p.equip||[]).length>=C.slots){ toast(`${nm} has ${C.slots} equipment slots — discard something first`); renderPiecePane(); return; }
+    commit(()=>{ const qq=q(); (qq.equip=qq.equip||[]).push({k,ch:EQUIP[k].charges}); }, `${nm} picks up ${EQUIP[k].name}`); });
+  ch("boss-k",e=>{ if(e.target.value) setBoss(p,e.target.value); });
+  el.querySelectorAll("[data-threat]").forEach(b=>b.onclick=()=>commit(()=>{ q().threat=+b.dataset.threat; }, `${nm} threat → ${BOSSES[p.boss].threat[+b.dataset.threat]}`));
+  el.querySelectorAll("[data-lv]").forEach(b=>b.onclick=()=>commit(()=>{ q().level=+b.dataset.lv; },`${T.name} at ${sq(p.r,p.c)} set to lock level ${b.dataset.lv}`));
 
   on("dup",()=>commit(st=>{ const c=JSON.parse(JSON.stringify(q())); c.id=st.nextId++; if(c.type==="guard") c.label="G"+(st.guardNo++); st.pieces.push(c); S.sel=c.id; }));
   confirmDel(el.querySelector("#del"), p);
@@ -824,7 +1033,10 @@ function renderGamePane(){
   const st=S.st, el=document.getElementById("pane-game"), players=st.pieces.filter(p=>TYPES[p.type].kind==="player");
   el.innerHTML = `
   <div class="card"><div class="row"><label>Round</label><button class="sm" id="rdn">−</button><b style="font-size:18px">${st.round}</b><button class="sm" id="rup">+</button><b style="margin-left:auto">${st.phase} phase</b></div>
+    <div class="row"><label>Rules check</label><button class="sm ${st.rules!==false?"on":""}" id="rules-t">${st.rules!==false?"On — actions are checked":"Off — free movement"}</button></div>
     <div class="row"><button class="on" id="next-phase" style="flex:1">${st.phase==="Player"?"End player phase → Enemy":"End enemy phase → next round"}</button></div></div>
+  ${st.defeat?`<div class="card"><div class="row"><label>Defeated (${esc(st.defeat.zone)})</label><button class="sm" data-def="-1">−</button><b style="font-size:18px">${st.defeat.count||0} / ${st.defeat.goal}</b><button class="sm" data-def="1">+</button></div></div>`:""}
+  ${st.rules?`<details class="card"><summary><b>Stage rules</b></summary>${st.rules.map(x=>`<div>• ${esc(x)}</div>`).join("")}</details>`:""}
   <div class="card"><b>Save progress</b>
     <div class="row"><input type="text" id="save-name" placeholder="${esc((st.stage||"Game")+" · round "+st.round)}" style="flex:1"><button class="sm on" id="save-slot">Save</button></div>
     <p class="muted" id="save-msg">Saves stay on this device. Pick them up later from ☰ Menu.</p></div>
@@ -841,13 +1053,17 @@ function renderGamePane(){
     <div class="row"><label>Priority</label><select id="prio" style="flex:1">${["TL","TR","BL","BR"].map(v=>`<option ${st.priority===v?"selected":""} value="${v}">${{TL:"Top-left",TR:"Top-right",BL:"Bottom-left",BR:"Bottom-right"}[v]} corner</option>`).join("")}</select></div></div>
   <div class="card"><b>Players</b>${players.length?players.map(p=>{ const T=TYPES[p.type]; return `<div class="row"><span class="sw" style="background:${T.color}">${T.short}</span><b>${esc(p.label)}</b> ${sq(p.r,p.c)} · HP ${Math.max(0,(p.hp||0)-(p.dmg||0))}/${p.hp} · focus ${p.focus.filter(Boolean).length}/4</div>`; }).join(""):`<p class="muted">No player pieces yet.</p>`}</div>`;
   const on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; };
+  on("rules-t",()=>commit(s=>{ s.rules=s.rules===false; }, `Rules check ${st.rules===false?"on":"off"}`));
   on("rdn",()=>commit(s=>{ s.round=Math.max(1,s.round-1); }));
+  el.querySelectorAll("[data-def]").forEach(b=>b.onclick=()=>commit(s=>{ s.defeat.count=Math.max(0,(s.defeat.count||0)+(+b.dataset.def)); },`Defeated guards → ${Math.max(0,(st.defeat.count||0)+(+b.dataset.def))}/${st.defeat.goal}`));
   on("rup",()=>commit(s=>{ s.round++; }));
-  on("next-phase",()=>commit(s=>{ if(s.phase==="Player") s.phase="Enemy"; else { s.phase="Player"; s.round++; } }, st.phase==="Player"?`— Enemy phase, round ${st.round} —`:`— Round ${st.round+1} begins —`));
+  on("next-phase",()=>{ const open=st.pieces.filter(p=>isPlayer(p)&&!(st.tt&&st.tt[p.id]&&st.tt[p.id].done));
+    if(st.phase==="Player"&&open.length&&!el.querySelector("#next-phase").dataset.armed){ el.querySelector("#next-phase").dataset.armed=1; el.querySelector("#next-phase").textContent=`${open.map(nameOf).join(", ")} hasn't ended their turn (noise check!) — tap again to skip`; return; }
+    commit(s=>{ if(s.phase==="Player") s.phase="Enemy"; else { s.phase="Player"; s.round++; s.tt={}; } }, st.phase==="Player"?`— Enemy phase, round ${st.round} —`:`— Round ${st.round+1} begins —`); });
   el.querySelectorAll("[data-deck]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.deck.split(","); commit(s=>{ s[k]=Math.max(0,s[k]+(+d)); }); });
   on("draw",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, st.blue>0?`Guard Order card drawn (blue left: ${st.blue-1})`:`RED Guard Order card drawn (red left: ${Math.max(0,st.red-1)}) — check for Game Over`));
   on("burn",()=>commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `Guard Order card burned to the bottom — if it was Game Over, the stage fails`));
-  on("cam",()=>commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flipped to ${st.cam==="green"?"orange":"green"}`));
+  on("cam",()=>{ commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flipped to ${st.cam==="green"?"orange":"green"}`); autoSpot(); });
   on("los-all",()=>{ S.losAll=!S.losAll; syncEye(); refresh(); });
   on("order",()=>{ S.order=!S.order; refresh(); });
   el.querySelector("#prio").onchange=e=>commit(s=>{ s.priority=e.target.value; });
@@ -884,7 +1100,7 @@ function renderMapPane(){
     <p class="muted">The board also autosaves on this device.</p></div>`;
   const on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; };
   on("preset-load",()=>{ if(confirmTwice("preset-load",el)){ const v=el.querySelector("#preset").value;
-    commit(s=>{ const n=v==="blank"?defaultState():buildPreset(v), keep={log:s.log,bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,keep); S.sel=null; }, v==="blank"?"Loaded a blank board":"Loaded "+LAYOUTS[v].name); fitView(); } });
+    commit(s=>{ const n=v==="blank"?defaultState():buildPreset(v), keep={log:s.log,bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,keep); S.sel=null; }, v==="blank"?"Loaded a blank board":"Loaded "+LAYOUTS[v].name); stageBg(); S.zoneView=null; fitView(); } });
   on("m-apply",()=>{ const c=+el.querySelector("#m-cols").value, r=+el.querySelector("#m-rows").value; commit(s=>{ s.cols=Math.max(4,Math.min(40,c)); s.rows=Math.max(4,Math.min(40,r)); }, `Grid set to ${c}×${r}`); fitView(); });
   el.querySelector("#rowstart").onchange=e=>commit(s=>{ s.rowStart=+e.target.value; });
   on("bg-load",()=>document.getElementById("bg-file").click());
@@ -908,7 +1124,7 @@ document.getElementById("bg-file").onchange=e=>{
 function setBg(data, share){
   S.bg=data;
   if(data){ const img=new Image(); img.onload=()=>{ S.bgImg=img; render(); }; img.src=data; } else S.bgImg=null;
-  if(share){ try{ if(data) localStorage.setItem("st-bg",data); else localStorage.removeItem("st-bg"); }catch(e){}
+  if(share){ try{ if(data) localStorage.setItem("st-bg",data); else localStorage.removeItem("st-bg"); const sk="st-bg:"+(S.st.stage||""); if(data) localStorage.setItem(sk,data); else localStorage.removeItem(sk); }catch(e){}
     S.st.bgVer=(S.st.bgVer||0)+1; S.st.ver++; persist(); net.sendBg(); net.sendState(); refresh(); }
 }
 function saveFile(){
@@ -1085,8 +1301,10 @@ function closeMenu(){ const m=document.getElementById("menu"); m.classList.remov
 function startStage(k){
   commit(s=>{ const n=k==="blank"?defaultState():buildPreset(k), keep={bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(x=>delete s[x]); Object.assign(s,n,keep); S.sel=null; },
     `New game: ${k==="blank"?"blank board":LAYOUTS[k].name}`);
-  S.st.log=S.st.log.slice(0,1); persist(); closeMenu(); fitView(); refresh();
+  S.st.log=S.st.log.slice(0,1); persist(); closeMenu(); stageBg(); S.zoneView=null; fitView(); refresh();
 }
+// each stage remembers its own backdrop picture on this device
+function stageBg(){ const d=loadLS("st-bg:"+(S.st.stage||"")); S.st.bgRect={x:0,y:0,w:100,h:100}; if(d){ if(S.st.bgOpacity<0.7) S.st.bgOpacity=0.85; setBg(d,true); } else if(S.bg) setBg(null,true); }
 function renderMenu(){
   document.getElementById("stage-list").innerHTML = Object.keys(LAYOUTS).map(k=>`<button class="stagebtn" data-stage="${k}"><b>${esc(LAYOUTS[k].name)}</b><span class="muted">${esc(LAYOUTS[k].note||"")}</span></button>`).join("")
     + `<button class="stagebtn" data-stage="blank"><b>Blank board</b><span class="muted">Build any stage or VR mission yourself</span></button>`;
@@ -1105,26 +1323,35 @@ function renderMenu(){
 document.getElementById("menu-btn").onclick=openMenu;
 document.getElementById("menu-x").onclick=closeMenu;
 document.getElementById("menu-loadfile").onclick=()=>{ document.getElementById("load-file").click(); closeMenu(); };
-function boardText(who){
+function boardText(who, quick){
   const st=S.st, F=["up","right","down","left"], L=[];
   L.push("METAL GEAR SOLID: THE BOARD GAME · board state from Sneaking Table");
   if(who && who!=="Just reading") L.push(who.startsWith("Guards")?"You are the referee running the guards this enemy phase.":`You are playing ${who}. Plan ${who}'s turn only (4 actions, plus any Focus tokens).`);
   L.push(`${st.stage||"Board"} · Round ${st.round} · ${st.phase} phase · cameras ${st.cam} · LOS: sees every open square ahead unless a wall/obstacle is in the box · deck: ${st.blue} blue, ${st.red} red left · priority corner ${st.priority}`);
-  L.push(`Grid: columns A–${colName(st.cols-1)}, rows ${st.rowStart??1}–${st.rows-1+(st.rowStart??1)} (rows count top to bottom)`);
+  if(quick) L.push("QUICK UPDATE — the map and walls are unchanged from the full board you already have.");
+  else L.push(`Grid: columns A–${colName(st.cols-1)}, rows ${st.rowStart??1}–${st.rows-1+(st.rowStart??1)} (rows count top to bottom)`);
+  { const si=statusInfo(), tx=t=>`${t.owner}'s ${t.mode==="alert"?"!":"?"} at ${sq(t.r,t.c)}`;
+    L.push(`STATUS: ${si.level==="alert"?"ALERT (red ! on the map)":si.level==="caution"?"INVESTIGATING (? on the map)":"CLEAR (no attention tokens)"}${si.al.length||si.q.length?" — "+[...si.al,...si.q].map(tx).join(", "):""}`); }
   const by=t=>st.pieces.filter(p=>p.type===t);
+  if(st.zones) L.push("ZONES: "+st.zones.map(z=>`${z.name} = rows ${z.r0+(st.rowStart??1)}–${z.r1+(st.rowStart??1)}`).join(" · ")+(st.shafts?` · ELEVATOR is at the ${st.lift} shaft (${Object.entries(st.shafts).map(([k,v])=>`${k} shaft ${sq(v.r,v.c)}–${sq(v.r+1,v.c+1)}`).join(", ")}; an empty shaft can't be entered)`:""));
+  if(st.defeat) L.push(`OBJECTIVE COUNTER: ${st.defeat.count||0}/${st.defeat.goal} guards defeated in the ${st.defeat.zone}`);
+  if(st.rules&&!quick){ L.push("STAGE RULES:"); st.rules.forEach(x=>L.push("  - "+x)); }
   st.pieces.filter(p=>TYPES[p.type].kind==="player").forEach(p=>{ const T=TYPES[p.type];
-    L.push(`${p.label} at ${sq(p.r,p.c)} · health ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp} · focus: ${T.focus.map((n,i)=>n+(p.focus&&p.focus[i]?" ready":" spent")).join(", ")}${p.disguised?" · disguised":""}`); });
+    const t=(st.tt||{})[p.id]||{used:0,noisy:0,bonus:0};
+    L.push(`${p.label} at ${sq(p.r,p.c)} · health ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp} · this turn: ${t.done?"ENDED":`${4+(t.bonus||0)-(t.used||0)} of ${4+(t.bonus||0)} actions left, ${t.noisy||0} noisy`} · defense ${p.def??3} · focus: ${T.focus.map((n,i)=>n+(p.focus&&p.focus[i]?" ready":" spent")+" (refresh "+fcostOf(p,i)+")").join(", ")}${p.equip&&p.equip.length?" · equipment: "+p.equip.map(e=>EQUIP[e.k].name+(e.ch!=null?` [${e.ch}]`:"")).join(", "):" · no equipment"}${p.disguised?" · DISGUISED":""}${p.stealth?" · STEALTH ON":""}${p.carry&&p.carry.length?" · carrying "+p.carry.join(", "):""}`); });
   by("guard").forEach(g=>L.push(`Guard ${g.label} at ${sq(g.r,g.c)} facing ${F[g.facing]}${g.dmg?` · ${g.dmg} dmg`:""}${g.kod?` · ${g.kod} KO dmg`:""}`));
-  by("boss").forEach(g=>L.push(`Boss ${g.label} at ${sq(g.r,g.c)} facing ${F[g.facing]} · ${g.dmg||0}/${g.hp} dmg`));
+  by("boss").forEach(g=>{ const B=BOSSES[g.boss]; L.push(`Boss ${g.label} at ${sq(g.r,g.c)} facing ${F[g.facing]} · ${g.dmg||0}/${g.hp} dmg${B?` · Defense ${B.def}, attacks ${B.atk} black${B.threat?`, threat ${B.threat[g.threat||0]}`:""}`:""}`); if(B&&!quick) B.notes.forEach(n=>L.push("    - "+n)); });
   by("camera").forEach(c=>L.push(`Camera at ${sq(c.r,c.c)} · green faces ${F[c.fg]}, orange faces ${F[c.fo]} (now ${st.cam})`));
   by("attn").forEach(t=>L.push(`${t.owner||"Player"}'s attention token at ${sq(t.r,t.c)} · ${t.mode==="alert"?"! ALERTED (red)":"? investigate (blue)"}`));
   by("ko").forEach(t=>L.push(`KO'd guard token at ${sq(t.r,t.c)} (${t.stars||2} star)`));
   by("dead").forEach(t=>L.push(`Dead guard token at ${sq(t.r,t.c)}`));
   by("event").forEach(t=>L.push(`Event ${t.label} at ${sq(t.r,t.c)}`));
   by("door").forEach(t=>L.push(`Locked door (level ${t.level}) at ${sq(t.r,t.c)}${t.open?" · open":""}`));
-  ["box","terminal","marker"].forEach(k=>by(k).forEach(t=>L.push(`${TYPES[k].name}${t.label?" "+t.label:""} at ${sq(t.r,t.c)}`)));
+  by("terminal").forEach(t=>L.push(`Terminal (level ${t.level||2}) at ${sq(t.r,t.c)}${t.hacked?" · HACKED":""}`));
+  ["box","marker"].forEach(k=>by(k).forEach(t=>L.push(`${TYPES[k].name}${t.label?" "+t.label:""} at ${sq(t.r,t.c)}`)));
   const spots=(S.lastLOS||{spotted:[]}).spotted; if(spots.length) L.push("In line of sight right now: "+spots.map(x=>`${x.pl.label} ← ${x.v.label||"camera"} at ${sq(x.v.r,x.v.c)}`).join("; "));
   const recent=st.log.slice(0,6).reverse().map(l=>"- "+l.w+": "+l.m); if(recent.length){ L.push("Recent log:"); L.push(...recent); }
+  if(quick){ L.push("", "Reply with action lines (same commands as before): sneak / dash / hth / combo / takedown / knock / interact / drag / shoot / ration / focus / end, plus roll + if lines for plans."); return L.join("\n"); }
   // map grid
   const CH={void:"x",obstacle:"#",exit:"E",corner:"+",stairs:"S",stairsv:"V",barracks:"K",elevator:"L"}, rs=st.rowStart??1, AR=["^",">","v","<"];
   L.push("", "MAP (. floor, # obstacle, x no-go, E exit, + corner icon (guard ending a move here turns left/right per the card), ^ > v < forced-direction arrow (a patrolling guard entering it turns that way at once), S stairs (walk up/down), V stairs (walk left/right), K barracks, @ guard spawn (radio), L elevator; pieces: lowercase first letter of player name, g guard, b boss, c camera, ?/! attention token, k KO, d dead, A/B/C event letter)");
@@ -1136,6 +1363,19 @@ function boardText(who){
   const W=Object.keys(st.walls).map(k=>{ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); return t==="h"?`${sq(r,c)}/${sq(r+1,c)}`:`${sq(r,c)}|${sq(r,c+1)}`; });
   if(W.length) L.push("WALLS (no movement or sight across): "+W.join(", "));
   L.push("", "HOW TO REPLY: explain your plan if you like, then put each change on its own line in this exact format so the page can apply it. Move one square per line so the path is recorded.");
+  L.push("PLAYER ACTIONS (the page checks every rule and rejects illegal ones with the reason; 4 actions per turn):");
+  L.push("  sneak Snake H18            1 action, 1 square");
+  L.push("  dash Snake H17 H16         1 action, up to 2 squares (list each square), NOISY");
+  L.push("  hth Snake G4 / combo Snake G4   hand-to-hand (1 action, 1 white) / combo (2 actions, 2 white + 1 black) on an adjacent guard; dice pop up, KO damage applied");
+  L.push("  takedown Snake G4          2 actions, Snake only, must be directly behind the guard; guard becomes a DEAD guard token (no roll)");
+  L.push("  knock Snake · interact Snake <thing> (rolls that character's Interact dice) · drag Snake <body square> <move-to square> (noisy) · ration Otacon (needs the Rations card)");
+  L.push("  shoot Meryl G2 rifle  ·  shoot Fox G2 cannon 2 (spend 2 charges for +2 white)  ·  slash Fox [+1] (HF Blade, every adjacent figure)  ·  stealth Otacon (camo, no ! from LOS this turn)  ·  recharge Otacon");
+  L.push("  elevator Snake [Armory]   1 action (Interact): ride the elevator with everyone on it, or call it while standing next to an empty shaft");
+  L.push("  disguise Meryl (2 actions, next to a KO/dead token, her ! off the map)  ·  hack Otacon <terminal> · search Otacon · access Otacon <card>");
+  L.push("  Each character can only use the actions on their own dashboard (Otacon has no attacks or weapons). Attacks are rolled against the target's Defense. Snake's Sneak Attack and Meryl's I'm No Rookie bonuses are added automatically.");
+  L.push("  focus Snake Reroll (spend a token) · focus Snake refresh Reroll (costs actions) · focusmove Snake H15 (after spending a Move 1 token)");
+  L.push("  end Snake                  ends the turn: noise check for noisy actions, alert if a guard you hurt is still standing");
+  L.push("  Line of sight is automatic: any move that starts in or passes through a guard's/camera's sight puts a red ! under the player at the end of that move. Walking onto an event collects it.");
   L.push("DICE: write the WHOLE turn now, including what happens after each roll. The page stops at every roll, the player rolls (and applies any Focus tokens by hand), then it runs your matching 'if' lines and continues.");
   L.push("  roll 2W 1B vs 3 for Combo on G4   ← W = white dice, B = black dice, vs = the target's Defense");
   L.push("  if hits>=2: ko G4      if hits=1: roll 1W vs 3 for Hand-to-Hand on G4      if hits=0: stop");
@@ -1147,7 +1387,7 @@ function boardText(who){
 }
 function findPiece(name){
   const n=name.toLowerCase(), ps=S.st.pieces;
-  return ps.find(p=>(p.label||"").toLowerCase()===n) || ps.find(p=>TYPES[p.type].name.toLowerCase()===n) || ps.find(p=>(p.label||"").toLowerCase().startsWith(n));
+  return ps.find(p=>(p.label||"").toLowerCase()===n) || ps.find(p=>TYPES[p.type].name.toLowerCase()===n) || ps.find(p=>(p.label||"").toLowerCase().startsWith(n)) || ps.find(p=>(p.label||TYPES[p.type].name).toLowerCase().split(/\s+/).includes(n)) || ps.find(p=>p.type===n);
 }
 function parseSq(t){ const m=/^([A-Za-z]+)(-?\d+)$/.exec(t||""); if(!m) return null; let c=0; for(const ch of m[1].toUpperCase()) c=c*26+(ch.charCodeAt(0)-64); c-=1;
   const r=parseInt(m[2],10)-(S.st.rowStart??1); return (r>=0&&c>=0&&r<S.st.rows&&c<S.st.cols)?{r,c}:null; }
@@ -1169,7 +1409,7 @@ function execCmd(line){
           if(!t){ t={id:st.nextId++,type:"attn",owner}; st.pieces.push(t); } t.r=to.r; t.c=to.c; t.mode=mode; }, `${owner}'s token ${w[2]} at ${w[3]} (Claude)`); out.push("✓ "+line); }
       else if(cmd==="flip"){ const p=findPiece(w.slice(1).join(" ")); if(!p) throw "?"; flipToken(p); out.push("✓ "+line); }
       else if(cmd==="ko"||cmd==="kill"){ const p=findPiece(w.slice(1).join(" ")); if(!p) throw "?";
-        commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.pieces.push(cmd==="ko"?{id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}:{id:st.nextId++,type:"dead",r:p.r,c:p.c}); },
+        commit(st=>{ downGuard(st,p,cmd==="ko"?"ko":"dead"); },
           `${nameOf(p)} ${cmd==="ko"?"knocked out":"killed"} at ${sq(p.r,p.c)} (Claude)`); out.push("✓ "+line); }
       else if(cmd==="remove"){ const p=findPiece(w.slice(1).join(" ")); if(!p) throw "?"; removePiece(p); out.push("✓ "+line); }
       else if(cmd==="place"){ const type=Object.keys(TYPES).find(k=>k===w[1].toLowerCase()||TYPES[k].name.toLowerCase()===w[1].toLowerCase()), to=parseSq(w[2]); if(!type||!to) throw "?"; placePiece(type,to.r,to.c); out.push("✓ "+line); }
@@ -1179,8 +1419,254 @@ function execCmd(line){
   return out[0];
 }
 
+// ---------- rules engine: player actions, validation, automatic alerts ----------
+const ACT={sneak:1,dash:1,hth:1,combo:2,takedown:2,knock:1,interact:1,drag:1,shoot:1,ration:1,slash:1,stealth:1,recharge:2,hack:1,search:1,access:1,disguise:2};
+const ACT_NAME={hth:"Hand-to-Hand",combo:"Combo Attack",takedown:"Silent Takedown",disguise:"Gain Disguise",hack:"Hack Terminal",search:"System Search",access:"Access Systems",slash:"Slash",stealth:"Activate Stealth",recharge:"Recharge"};
+const isPlayer=p=>p&&TYPES[p.type].kind==="player";
+const blocksFig=p=>{ const k=TYPES[p.type].kind; return k!=="token"; };
+function tt(p){ S.st.tt=S.st.tt||{}; return S.st.tt[p.id]||(S.st.tt[p.id]={used:0,noisy:0,bonus:0,done:false,hurt:[]}); }
+function actionsLeft(p){ const t=tt(p); return 4+(t.bonus||0)-(t.used||0); }
+function wallBetween(r,c,r2,c2){ if(r2===r-1) return wall("h",r2,c); if(r2===r+1) return wall("h",r,c); if(c2===c-1) return wall("v",r,c2); if(c2===c+1) return wall("v",r,c); return true; }
+function figureAt(r,c,except){ return S.st.pieces.find(p=>p.r===r&&p.c===c&&p.id!==except&&blocksFig(p)); }
+function stepProblem(p,r,c,r2,c2){
+  if(r2<0||c2<0||r2>=S.st.rows||c2>=S.st.cols) return "off the board";
+  if(Math.abs(r2-r)+Math.abs(c2-c)!==1) return "not next to it (moves are one square up, down, left or right)";
+  if(wallBetween(r,c,r2,c2)) return `a wall between ${sq(r,c)} and ${sq(r2,c2)}`;
+  if(blocked(r2,c2)) return `${sq(r2,c2)} is an obstacle or no-go square`;
+  const f=figureAt(r2,c2,p.id); if(f) return `${sq(r2,c2)} is occupied by ${nameOf(f)}`;
+  return null;
+}
+function viewersSeeing(r,c,pl){ if(pl&&(pl.disguised||pl.stealth)) return []; return S.st.pieces.filter(isViewer).filter(v=>los(v,r,c)); }
+function statusInfo(){
+  const toks=S.st.pieces.filter(p=>p.type==="attn");
+  const al=toks.filter(t=>t.mode==="alert"), q=toks.filter(t=>t.mode!=="alert");
+  return {level: al.length?"alert":q.length?"caution":"clear", al, q};
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function useAction(p,kind,extra){ const t=tt(p), cost=ACT[kind]||1;
+  if(S.st.phase!=="Player") return "it's the Enemy phase — players act in the Player phase";
+  if(t.done) return `${nameOf(p)} already ended this turn`;
+  if(actionsLeft(p)<cost) return `${nameOf(p)} has ${actionsLeft(p)} action${actionsLeft(p)===1?"":"s"} left and ${kind} costs ${cost}`;
+  return null; }
+function spend(p,kind,noisy){ commit(st=>{ const t=st.tt[p.id]; t.used+=ACT[kind]||1; if(noisy) t.noisy++; }); }
+// one move action (sneak = 1 square, dash = 1–2 squares); path = list of {r,c}
+async function doMove(p,kind,path){
+  const err=useAction(p,kind); if(err) throw err;
+  if(!path.length) throw "no squares given";
+  if(kind==="sneak"&&path.length!==1) throw "Sneak moves exactly 1 square (use dash for 2)";
+  if(kind==="dash"&&path.length>2) throw "Dash moves at most 2 squares — use another action for more";
+  let r=p.r,c=p.c; for(const s of path){ const why=stepProblem(p,r,c,s.r,s.c); if(why) throw `can't ${kind} to ${sq(s.r,s.c)}: ${why}`; r=s.r; c=s.c; }
+  // seen at the start or anywhere along the way?
+  const seenBy=new Set(); [{r:p.r,c:p.c},...path].forEach(s=>viewersSeeing(s.r,s.c,p).forEach(v=>seenBy.add(v)));
+  const from=sq(p.r,p.c); spend(p,kind,kind==="dash");
+  for(let i=0;i<path.length;i++){ const s=path[i], a=i===0?from:sq(path[i-1].r,path[i-1].c);
+    commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=s.r; q.c=s.c; }, `${nameOf(p)} ${a} ${kind.toUpperCase()} ${sq(s.r,s.c)}`);
+    // walking onto an objective/event collects it
+    const ev=S.st.pieces.find(x=>x.type==="event"&&x.r===s.r&&x.c===s.c);
+    if(ev){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==ev.id); const q=st.pieces.find(x=>x.id===p.id); (q.carry=q.carry||[]).push(ev.label||"?"); }, `${nameOf(p)} collects Event ${ev.label} at ${sq(s.r,s.c)} — resolve it in the campaign book`); toast(`${nameOf(p)} collected ${ev.label} — check the campaign book`); }
+    if(i<path.length-1) await sleep(320);
+  }
+  const me=P(p.id);
+  if(seenBy.size){ playerToken(me,"alert"); const names=[...seenBy].map(v=>v.type==="camera"?`camera ${sq(v.r,v.c)}`:nameOf(v)).join(", ");
+    addLog(`${nameOf(me)} SEEN by ${names} → ! at ${sq(me.r,me.c)}`); toast(`Spotted by ${names}!`); refresh(); }
+  return `${kind} ${from} → ${path.map(s=>sq(s.r,s.c)).join(" → ")}${seenBy.size?" · SEEN → !":""} · ${actionsLeft(me)} action(s) left`;
+}
+function adjacentGuard(p,g){ return g && (g.type==="guard"||g.type==="boss") && Math.abs(g.r-p.r)+Math.abs(g.c-p.c)===1 && !wallBetween(p.r,p.c,g.r,g.c); }
+async function doAttack(p,kind,g,note){
+  const err=useAction(p,kind); if(err) throw err;
+  if(!adjacentGuard(p,g)) throw `${g?nameOf(g):"that target"} isn't next to ${nameOf(p)} (or a wall is between them)`;
+  if(kind==="takedown"){
+    if(!charOf(p).actions.includes("takedown")) throw "only Snake can Silent Takedown";
+    if(g.type!=="guard") throw "Silent Takedown only works on guards";
+    const behind={r:g.r-DR[g.facing],c:g.c-DC[g.facing]};
+    if(p.r!==behind.r||p.c!==behind.c) throw `Snake must be directly behind ${nameOf(g)} (at ${sq(behind.r,behind.c)})`;
+    spend(p,kind,false); commit(()=>{}, `${nameOf(p)} TAKEDOWN ${nameOf(g)}`); convertGuard(g,"dead"); return `takedown — ${nameOf(g)} replaced with a dead guard token`;
+  }
+  const dice=kind==="combo"?{w:2,b:1}:{w:1,b:0};
+  const r=await rollPrompt({...dice, vs:defOf(g), why:`${nameOf(p)} ${kind==="combo"?"Combo Attack":"Hand-to-Hand"} on ${nameOf(g)}`, note});
+  if(!r) throw "attack cancelled";
+  spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${kind==="combo"?"COMBO":"HAND-TO-HAND"} ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`);
+  S.lastRoll=r;
+  applyHits(p,g,r,g.type==="guard");
+  if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention`); refresh(); }
+  return `${kind}: ${r.hits} hit(s)${P(g.id)?` — ${nameOf(g)} still standing`:` — ${nameOf(g)} is down`}`;
+}
+function defOf(g){ return typeof g.def==="number"?g.def:3; }
+function onceRound(p,tag){ const st=S.st; st.once=st.once||{}; const k=p.id+":"+tag; if(st.once[k]===st.round) return false; return true; }
+function useOnce(p,tag){ commit(st=>{ st.once=st.once||{}; st.once[p.id+":"+tag]=st.round; }); }
+// attacker behind the target in the same row/column (target facing away)
+function behindLine(p,g){ const d=facingOf(g); if(d==null) return false;
+  if(DR[d]!==0) return p.c===g.c && (p.r-g.r)*DR[d]<0; return p.r===g.r && (p.c-g.c)*DC[d]<0; }
+function applyHits(p,g,r,ko){
+  let n=r.hits||0;
+  if(n && p.type==="snake" && g.type!=="player" && behindLine(p,g) && onceRound(p,"sneakatk")){ n++; useOnce(p,"sneakatk"); addLog(`Sneak Attack: Snake is behind ${nameOf(g)} → +1 ${ko?"KO ":""}damage`); }
+  if(n && p.type==="meryl" && (r.dice||[]).some(d=>d.v===6&&!d.mod) && onceRound(p,"rookie")){ n++; useOnce(p,"rookie"); addLog(`"I'm No Rookie": unmodified 6 → +1 ${ko?"KO ":""}damage`); }
+  if(n){ hurt(P(g.id),n,ko&&g.type==="guard"); if(P(g.id)&&g.type==="guard") commit(st=>{ const t=st.tt[p.id]; if(!t.hurt.includes(g.id)) t.hurt.push(g.id); }); }
+  if(r.bang){ /* handled by caller */ }
+  return n;
+}
+function lineClear(p,g){ const r0=Math.min(p.r,g.r),r1=Math.max(p.r,g.r),c0=Math.min(p.c,g.c),c1=Math.max(p.c,g.c);
+  for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){ if((r===p.r&&c===p.c)||(r===g.r&&c===g.c)) continue; if(blocked(r,c)) return false; }
+  for(let r=r0;r<r1;r++)for(let c=c0;c<=c1;c++) if(wall("h",r,c)) return false; for(let r=r0;r<=r1;r++)for(let c=c0;c<c1;c++) if(wall("v",r,c)) return false; return true; }
+function findEquip(p,pred){ ensureChar(p); return (p.equip||[]).findIndex(e=>EQUIP[e.k]&&pred(EQUIP[e.k],e)); }
+async function doShoot(p,g,note,wname,extra){
+  const err=useAction(p,"shoot"); if(err) throw err; if(!g) throw "no target";
+  if(p.type==="otacon") throw `"I'm No Soldier" — Otacon can't use weapons`;
+  const wq=(wname||"").toLowerCase();
+  let ei=findEquip(p,(E,e)=>E.act==="shoot"&&(!wq||E.name.toLowerCase().includes(wq)||e.k===wq));
+  if(ei<0) throw `${nameOf(p)} has no ${wq?`"${wname}" `:""}weapon to shoot with${p.type==="snake"?" (Snake starts with none — add equipment from the Piece tab when he finds it)":""}`;
+  const e=p.equip[ei], E=EQUIP[e.k]; if(E.charges!=null&&!E.boost&&(e.ch||0)<1) throw `${E.name} is out of ammo`;
+  const boost=E.boost?Math.min(+extra||0,e.ch||0):0;
+  if(!lineClear(p,g)) throw `no line of sight from ${sq(p.r,p.c)} to ${nameOf(g)}`;
+  const r=await rollPrompt({w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name} (LOUD)`,note:note||(p.type==="snake"&&!playersWithin(p,2).length&&onceRound(p,"alone")?`"I Work Alone": you may +/−1 one die (tap it)`:"")}); if(!r) throw "shot cancelled";
+  spend(p,"shoot",false);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id), qe=q.equip[ei]; if(E.charges!=null) qe.ch=Math.max(0,(qe.ch||0)-(E.boost?boost:1)); }, `${nameOf(p)} SHOOT ${nameOf(g)} with ${E.name}${boost?` (+${boost} charge)`:""} → ${r.hits} hit${r.hits===1?"":"s"} (LOUD)`); S.lastRoll=r;
+  applyHits(p,g,r,false);
+  playerToken(P(p.id),"alert"); addLog(`${nameOf(p)}'s shot is LOUD → ! at ${sq(p.r,p.c)}`); refresh();
+  return `shoot: ${r.hits} hit(s), ! placed (loud)`;
+}
+async function doSlash(p,note,extra){
+  const err=useAction(p,"slash"); if(err) throw err;
+  const ei=findEquip(p,E=>E.act==="slash"); if(ei<0) throw `${nameOf(p)} has no blade`;
+  const e=p.equip[ei], boost=Math.min(+extra?1:0,e.ch||0);
+  const tg=S.st.pieces.filter(g=>g.id!==p.id&&(g.type==="guard"||g.type==="boss"||isPlayer(g))&&Math.abs(g.r-p.r)+Math.abs(g.c-p.c)===1&&!wallBetween(p.r,p.c,g.r,g.c));
+  if(!tg.length) throw "no adjacent figures to slash";
+  spend(p,"slash",false); if(boost) commit(st=>{ st.pieces.find(x=>x.id===p.id).equip[ei].ch--; });
+  const out=[]; for(const g of tg){ const r=await rollPrompt({w:1+boost,b:0,vs:defOf(g),why:`${nameOf(p)} SLASH ${nameOf(g)}`,note}); if(!r) break;
+    commit(()=>{}, `${nameOf(p)} SLASH ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`); S.lastRoll=r; applyHits(p,g,r,false); out.push(`${nameOf(g)} ${r.hits}`);
+    if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention`); } }
+  refresh(); return "slash: "+out.join(", ");
+}
+async function doEquipAct(p,kind,arg){
+  const err=useAction(p,kind); if(err) throw err;
+  if(kind==="stealth"){ const ei=findEquip(p,E=>E.act==="stealth"); if(ei<0) throw `${nameOf(p)} has no stealth camouflage`; if((p.equip[ei].ch||0)<1) throw "no charge left on the camouflage";
+    spend(p,kind,false); upd(p,q=>{ q.equip[ei].ch--; q.stealth=true; },`${nameOf(p)} ACTIVATES STEALTH — no ! from line of sight until the end of the turn`); return "stealth on"; }
+  if(kind==="recharge"){ const ei=findEquip(p,E=>E.recharge); if(ei<0) throw "needs ADV Stealth Camouflage"; if((p.equip[ei].ch||0)>0) throw "Recharge only works when the card has no charge";
+    spend(p,kind,false); upd(p,q=>{ q.equip[ei].ch=1; },`${nameOf(p)} RECHARGES the ADV Stealth Camouflage`); return "recharged 1"; }
+  if(kind==="hack"||kind==="access"||kind==="search"){
+    if(kind!=="search"){ const r=await rollPrompt({w:0,b:kind==="hack"?4:1,vs:null,why:`${nameOf(p)} ${ACT_NAME[kind]}${arg?" — "+arg:""}`,note:p.type==="otacon"&&kind!=="search"?"Hacker: Otacon may roll up to +2 black — roll them from the Dice tab if you want them":""}); if(!r) throw "cancelled"; S.lastRoll=r; }
+    spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${ACT_NAME[kind].toUpperCase()}${arg?" "+arg:""} at ${sq(p.r,p.c)}`);
+    return kind==="hack"?"rolled — compare with the terminal's lock, then mark it hacked from the Piece tab":kind==="search"?"draw 1 System card":"rolled — check the System card"; }
+}
+function doElevator(p,dest){
+  const st=S.st; if(!st.shafts) throw "this stage has no elevator";
+  const err=useAction(p,"interact"); if(err) throw err;
+  const on=onLift(p.r,p.c), keys=Object.keys(st.shafts);
+  let to;
+  if(on){ to=dest?keys.find(k=>k.toLowerCase().startsWith(dest.toLowerCase())):keys.find(k=>k!==st.lift); if(!to||to===st.lift) throw "pick another shaft"; }
+  else { to=keys.find(k=>{ const sh=st.shafts[k]; for(let r=sh.r;r<sh.r+2;r++)for(let c=sh.c;c<sh.c+2;c++) if(Math.abs(r-p.r)+Math.abs(c-p.c)===1&&!wallBetween(p.r,p.c,r,c)) return true; return false; });
+    if(!to) throw `${nameOf(p)} must be on the elevator, or next to an empty shaft to call it`; if(to===st.lift) throw "the elevator is already here — step on and Interact to ride it"; }
+  const from=st.shafts[st.lift], dst=st.shafts[to], fromName=st.lift;
+  spend(p,"interact",false);
+  commit(s=>{ s.pieces.forEach(q=>{ if(q.r>=from.r&&q.r<from.r+2&&q.c>=from.c&&q.c<from.c+2){ q.r+=dst.r-from.r; q.c+=dst.c-from.c; } }); s.lift=to; },
+    on?`${nameOf(p)} RIDES THE ELEVATOR ${fromName} → ${to}`:`${nameOf(p)} CALLS THE ELEVATOR to ${to}`);
+  return on?`elevator → ${to}`:`elevator called to ${to}`; }
+async function doInteract(p,arg,note){
+  const err=useAction(p,"interact"); if(err) throw err; const C=charOf(p)||{interact:{w:1,b:2}};
+  const r=await rollPrompt({w:C.interact.w,b:C.interact.b,vs:null,why:`${nameOf(p)} Interact${arg?" — "+arg:""}`,note}); if(!r) throw "cancelled";
+  S.lastRoll=r; spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)}`);
+  if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" while interacting → draws attention`); refresh(); }
+  return "interact rolled — compare with the lock/objective"; }
+function doSimple(p,kind,arg){
+  const err=useAction(p,kind); if(err) throw err;
+  if(kind==="knock"){ spend(p,"knock",false); playerToken(P(p.id),"q"); addLog(`${nameOf(p)} KNOCK at ${sq(p.r,p.c)} → draws attention`); refresh(); return "knock — attention drawn here"; }
+  if(kind==="ration"){ const ei=findEquip(p,E=>E.act==="ration"); if(ei<0) throw `${nameOf(p)} has no Rations card`;
+    spend(p,"ration",false); commit(st=>{ st.pieces.find(x=>x.id===p.id).equip.splice(ei,1); }, `${nameOf(p)} CONSUMES RATIONS (card discarded)`); hurt(P(p.id),-2); return "rations — healed up to 2"; }
+  if(kind==="interact"){ spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)}`); return "interact"; }
+  if(kind==="drag"){ throw "use: drag <player> <body square> <square to move to>"; }
+}
+async function doDrag(p,bodySq,toSq){
+  const err=useAction(p,"drag"); if(err) throw err;
+  const b=parseSq(bodySq), to=parseSq(toSq); if(!b||!to) throw "drag needs the body's square and the square to move to";
+  const body=S.st.pieces.find(x=>(x.type==="ko"||x.type==="dead")&&x.r===b.r&&x.c===b.c); if(!body) throw `no KO or dead guard token at ${bodySq}`;
+  if(Math.abs(b.r-p.r)+Math.abs(b.c-p.c)>1) throw "the body must be on or next to the player's square";
+  const why=stepProblem(p,p.r,p.c,to.r,to.c); if(why) throw `can't move to ${toSq}: ${why}`;
+  const seen=[{r:p.r,c:p.c},to].some(s=>viewersSeeing(s.r,s.c,p).length);
+  const from=sq(p.r,p.c); spend(p,"drag",true);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=to.r; q.c=to.c; const bb=st.pieces.find(x=>x.id===body.id); bb.r=from? p.r:p.r; bb.c=p.c; }, `${nameOf(p)} ${from} DRAG ${toSq} (pulls the body to ${from})`);
+  if(seen){ playerToken(P(p.id),"alert"); addLog(`${nameOf(p)} SEEN while dragging → !`); refresh(); }
+  return `drag — body now at ${from}`;
+}
+function doFocus(p,what,mode){
+  const T=TYPES[p.type]; const i=T.focus.findIndex(n=>n.toLowerCase().replace(/\s/g,"").startsWith(what.toLowerCase().replace(/\s/g,"")));
+  if(i<0) throw `${nameOf(p)} has no focus token "${what}" (has: ${T.focus.join(", ")})`;
+  if(mode==="refresh"){ const cost=fcostOf(p,i); const err=useAction(p,"focus"); if(err) throw err;
+    if(p.type==="fox"&&S.st.pieces.some(x=>x.type==="attn"&&x.mode==="alert"&&(x.owner||"").toLowerCase()===(p.label||"").toLowerCase())) throw `"I'm Losing Myself" — Gray Fox can't Focus while his ! is in his zone`;
+    if(p.focus[i]) throw `${T.focus[i]} is already ready`; if(actionsLeft(p)<cost) throw `refreshing ${T.focus[i]} costs ${cost} action(s)`;
+    commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.focus[i]=true; st.tt[p.id].used+=cost; }, `${nameOf(p)} FOCUS refreshes ${T.focus[i]} (${cost} action)`); return `refreshed ${T.focus[i]}`; }
+  if(!p.focus[i]) throw `${T.focus[i]} is already spent`;
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.focus[i]=false; if(/\+1 action/i.test(T.focus[i])) st.tt[p.id].bonus=(st.tt[p.id].bonus||0)+1; }, `${nameOf(p)} spends focus: ${T.focus[i]}`);
+  if(/move 1/i.test(T.focus[i])) return `spent ${T.focus[i]} — next move: "focusmove ${nameOf(p)} <square>"`;
+  return `spent ${T.focus[i]}`;
+}
+async function focusMove(p,to){ const s=parseSq(to); if(!s) throw "bad square"; const why=stepProblem(p,p.r,p.c,s.r,s.c); if(why) throw why;
+  const seen=[{r:p.r,c:p.c},s].some(x=>viewersSeeing(x.r,x.c,p).length); const from=sq(p.r,p.c);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=s.r; q.c=s.c; }, `${nameOf(p)} ${from} FOCUS-MOVE ${to}`);
+  if(seen){ playerToken(P(p.id),"alert"); addLog(`${nameOf(p)} SEEN → !`); refresh(); } return "focus move"; }
+async function endTurn(p,opts){
+  const t=tt(p); if(t.done) throw `${nameOf(p)} already ended this turn`;
+  const out=[];
+  if(t.noisy){ const r=await rollPrompt({w:t.noisy,b:0,vs:null,why:`${nameOf(p)} noise check (${t.noisy} noisy action${t.noisy>1?"s":""}) — skip with Stop if no guard is in this zone`,note:opts&&opts.note});
+    if(r){ commit(()=>{}, `${nameOf(p)} noise check → ${r.bang?'"!" rolled':"quiet"}`); if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} made noise → attention drawn at ${sq(p.r,p.c)}`); } out.push(r.bang?"noise: ! — attention drawn":"noise: quiet"); } else out.push("noise check skipped"); }
+  const up=(t.hurt||[]).map(id=>P(id)).filter(g=>g&&g.type==="guard"&&((g.dmg||0)||(g.kod||0)));
+  if(up.length){ playerToken(P(p.id),"alert"); addLog(`${up.map(nameOf).join(", ")} hurt but still standing → ${nameOf(p)} ALERTED`); out.push("a hurt guard is still up → !"); }
+  commit(st=>{ st.tt[p.id].done=true; const q=st.pieces.find(x=>x.id===p.id); if(q) delete q.stealth; }, `${nameOf(p)} ends turn (${t.used} action${t.used===1?"":"s"} used)`);
+  return out.join(" · ")||"turn ended";
+}
+// guards/cameras: anyone who can now see a player puts a ! under them (enemy phase, camera flips)
+async function autoSpot(by){
+  const players=S.st.pieces.filter(p=>isPlayer(p)&&!p.disguised); let any=false;
+  for(const pl of players){ const vs=viewersSeeing(pl.r,pl.c,pl); if(!vs.length) continue;
+    const tok=S.st.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===(pl.label||"").toLowerCase());
+    if(tok&&tok.mode==="alert"&&tok.r===pl.r&&tok.c===pl.c) continue;
+    any=true; playerToken(pl,"alert"); addLog(`${vs.map(v=>v.type==="camera"?"camera "+sq(v.r,v.c):nameOf(v)).join(", ")} spots ${nameOf(pl)} → ! at ${sq(pl.r,pl.c)}`); toast(`${nameOf(pl)} spotted!`);
+    if(S.st.phase==="Enemy" && by && by.type==="guard" && vs.some(v=>v.id===by.id)){
+      const r=await rollPrompt({w:0,b:2,vs:defOf(pl),why:`${nameOf(by)} attacks ${nameOf(pl)} (2 black vs Defense ${defOf(pl)})`});
+      if(r){ commit(()=>{}, `${nameOf(by)} ATTACKS ${nameOf(pl)} → ${r.hits} hit${r.hits===1?"":"s"}`); if(r.hits) hurt(P(pl.id),r.hits); } }
+  }
+  if(any) refresh();
+}
+// parse and run one player action line; returns a message or throws a reason
+async function runAction(line,note){
+  const w=line.split(/\s+/), cmd=w[0].toLowerCase(), p=findPiece(w[1]||"");
+  if(!p) throw `no piece called "${w[1]||""}"`;
+  if(!isPlayer(p)) throw `${nameOf(p)} isn't a player`;
+  ensureChar(p);
+  { const C=charOf(p), base=cmd==="focusmove"?"focus":cmd;
+    if(C && ACT[base]!=null && base!=="elevator" && !["shoot","ration","stealth","recharge"].includes(base) && !C.actions.includes(base)) throw `${nameOf(p)} doesn't have ${ACT_NAME[base]||base} on their dashboard`;
+    if(C && base==="slash" && findEquip(p,E=>E.act==="slash")<0) throw `${nameOf(p)} has no blade`; }
+  const sqs=w.slice(2).map(parseSq);
+  if(cmd==="sneak"||cmd==="dash"){ if(sqs.some(x=>!x)||!sqs.length) throw `${cmd} needs square(s), e.g. "${cmd} ${nameOf(p)} H18"`;
+    let path=sqs; if(cmd==="dash"&&sqs.length===1){ const t=sqs[0], d=Math.abs(t.r-p.r)+Math.abs(t.c-p.c);
+      if(d===2){ const opts=[{r:p.r,c:t.c},{r:t.r,c:p.c},{r:(p.r+t.r)/2,c:(p.c+t.c)/2}].filter(m=>Number.isInteger(m.r)&&Number.isInteger(m.c)&&Math.abs(m.r-p.r)+Math.abs(m.c-p.c)===1);
+        const ok=opts.find(m=>!stepProblem(p,p.r,p.c,m.r,m.c)&&!stepProblem(p,m.r,m.c,t.r,t.c)); if(!ok) throw `no legal 2-square path from ${sq(p.r,p.c)} to ${w[2]}`; path=[ok,t]; } }
+    return await doMove(p,cmd,path); }
+  if(cmd==="hth"||cmd==="combo"||cmd==="takedown"){ const g=findPiece(w[2]||""); return await afterAct(p,cmd,await doAttack(p,cmd,g,note)); }
+  if(cmd==="shoot"){ const rest=w.slice(3), n=rest.find(x=>/^\+?\d+$/.test(x)); return await afterAct(p,cmd,await doShoot(p,findPiece(w[2]||""),note,rest.filter(x=>x!==n).join(" "),n&&n.replace("+",""))); }
+  if(cmd==="slash") return await afterAct(p,cmd,await doSlash(p,note,w.slice(2).some(x=>/^\+1|charge$/i.test(x))));
+  if(cmd==="stealth"||cmd==="recharge"||cmd==="hack"||cmd==="search"||cmd==="access") return await afterAct(p,cmd,await doEquipAct(p,cmd,w.slice(2).join(" ")));
+  if(cmd==="elevator") return await afterAct(p,"interact",doElevator(p,w[2]));
+  if(cmd==="interact") return await afterAct(p,cmd,await doInteract(p,w.slice(2).join(" "),note));
+  if(cmd==="knock"||cmd==="ration") return await afterAct(p,cmd,doSimple(p,cmd,w.slice(2).join(" ")));
+  if(cmd==="drag") return await doDrag(p,w[2],w[3]);
+  if(cmd==="focus"){ const mode=(w[2]||"").toLowerCase()==="refresh"?"refresh":"spend"; const name=w.slice(mode==="refresh"||(w[2]||"").toLowerCase()==="spend"?3:2).join(" "); return doFocus(p,name,mode); }
+  if(cmd==="focusmove") return await focusMove(p,w[2]);
+  if(cmd==="disguise"){ if(p.type!=="meryl") throw "only Meryl can disguise"; const err=useAction(p,"disguise"); if(err) throw err;
+    const near=S.st.pieces.some(x=>(x.type==="ko"||x.type==="dead")&&Math.abs(x.r-p.r)+Math.abs(x.c-p.c)<=1); if(!near) throw "Meryl must be next to a KO or dead guard token";
+    if(S.st.pieces.some(x=>x.type==="attn"&&(x.owner||"").toLowerCase()==="meryl")) throw "Meryl can't disguise while her attention token is on the map";
+    spend(p,"disguise",false); upd(p,q=>{ q.disguised=true; },`Meryl GAINS DISGUISE`); return "disguised"; }
+  if(cmd==="end") return await endTurn(p,{note});
+  throw `unknown action "${cmd}"`;
+}
+// Disguised Meryl loses the disguise when she does anything but Sneak/Dash/Focus in a guard's or camera's LOS
+async function afterAct(p,kind,msg){ const q=P(p.id);
+  if(q&&q.disguised&&!["sneak","dash","focus","focusmove"].includes(kind)){ const vs=S.st.pieces.filter(isViewer).filter(v=>los(v,q.r,q.c));
+    if(vs.length){ upd(q,x=>{ x.disguised=false; },`Meryl's disguise is blown — ${ACT_NAME[kind]||kind} in LOS of ${vs.map(v=>v.type==="camera"?"camera "+sq(v.r,v.c):nameOf(v)).join(", ")}`); msg+=" · disguise lost"; } }
+  return msg; }
+const ACTION_CMDS=/^(elevator|sneak|dash|hth|combo|takedown|shoot|slash|stealth|recharge|hack|search|access|knock|ration|interact|drag|focus|focusmove|disguise|end)\b/i;
+
 // ---------- turn scripts with dice rolls ----------
-const SCRIPT_CMDS=/^(move|face|dmg|kodmg|token|flip|ko|kill|remove|place|roll|noise|attack|if|note|stop|ask)\b/i;
+const SCRIPT_CMDS=/^(elevator|move|face|dmg|kodmg|token|flip|ko|kill|remove|place|roll|noise|attack|if|note|stop|ask|sneak|dash|hth|combo|takedown|shoot|slash|stealth|recharge|hack|search|access|knock|ration|interact|drag|focus|focusmove|disguise|end)\b/i;
 function parseDice(spec){
   const w=/(\d+)\s*(?:w\b|white)/i.exec(spec), b=/(\d+)\s*(?:b\b|black)/i.exec(spec), v=/\bvs\.?\s*(\d+)/i.exec(spec), f=/\bfor\s+(.+)$/i.exec(spec);
   return {w:w?+w[1]:0, b:b?+b[1]:0, vs:v?+v[1]:null, why:f?f[1].trim():""};
@@ -1214,7 +1700,7 @@ function rollPrompt(o){ // o: {w,b,vs,why,who,preview}
       if(q("#rb-roll")) q("#rb-roll").onclick=()=>{ dice=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:roll1(k)})); draw(); };
       box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
       box.querySelectorAll("[data-adj]").forEach(b=>b.onclick=()=>{ const a=b.dataset.adj, d=dice[pick];
-        if(a==="re") d.v=roll1(d.k); else if(a!=="x"){ d.v=d.v+(+a); } if(a!=="re") pick=null; draw(); });
+        if(a==="re") d.v=roll1(d.k); else if(a!=="x"){ d.v=d.v+(+a); d.mod=true; } if(a!=="re") pick=null; draw(); });
       if(q("#rb-go")) q("#rb-go").onclick=()=>{ box.style.display="none"; const sc=scoreDice(dice,o.vs);
         const parts=[]; const ws=dice.filter(d=>d.k==="w").map(d=>d.v), bs=dice.filter(d=>d.k==="b").map(d=>d.v);
         if(ws.length) parts.push("white "+ws.join(", ")); if(bs.length) parts.push("black "+bs.join(", "));
@@ -1241,14 +1727,17 @@ async function runScript(text, show){
       if(cmd==="roll") o=parseDice(line.slice(5));
       if(cmd==="noise"){ const p=findPiece(w[1]||""), n=+(w[2]||1); o={w:n,b:0,vs:null,why:`noise check for ${p?nameOf(p):w[1]}`};
         after=r=>{ if(r.bang&&p){ playerToken(p,"q"); show(`! rolled — ${nameOf(p)}'s ? placed`); } }; }
-      if(cmd==="attack"){ const g=findPiece(w[1]||""), t=findPiece(w[2]||""); o={w:0,b:2,vs:+(w[3]||3),why:`${g?nameOf(g):w[1]} attacks ${t?nameOf(t):w[2]}`};
+      if(cmd==="attack"){ const g=findPiece(w[1]||""), t=findPiece(w[2]||""); const nb=g&&g.type==="boss"&&g.atk?g.atk:2; o={w:0,b:nb,vs:+(w[3]||(t?defOf(t):3)),why:`${g?nameOf(g):w[1]} attacks ${t?nameOf(t):w[2]} (${nb} black)`};
         after=r=>{ if(t&&r.hits) hurt(t,r.hits); }; }
       const preview=[]; for(let j=i+1;j<lines.length && /^if\b/i.test(lines[j]);j++) preview.push(lines[j]);
       const r=await rollPrompt({...o, who:"", note, preview}); note="";
       if(!r){ show("■ stopped at: "+line); return; }
       S.lastRoll=r; show(`🎲 ${line} → ${o.vs!=null?r.hits+" hit(s)":"rolled"}${r.bang?` · ${r.bang} "!"`:""}`); if(after) after(r); continue;
     }
-    show(execCmd(line));
+    if(ACTION_CMDS.test(line)){ try{ show("✓ "+await runAction(line,note)); note=""; }catch(e){ show("✗ REJECTED: "+line+" — "+(e.message||e)); show("■ turn paused — fix that line (or ask the AI) and run the rest"); return; } await sleep(250); continue; }
+    if(cmd==="move"){ const mp=findPiece(w.slice(1,-1).join(" ")); if(isPlayer(mp)&&S.st.phase==="Player"&&S.st.rules!==false){ show(`✗ REJECTED: ${line} — players move with "sneak" or "dash" so actions are counted`); show("■ turn paused"); return; } }
+    show(execCmd(line)); await sleep(200);
+    if(cmd==="move"||cmd==="face"){ const mp=findPiece(w.slice(1,-1).join(" ")); if(mp&&(mp.type==="guard"||mp.type==="boss")) await autoSpot(P(mp.id)); }
   }
   show("✓ turn finished");
 }
@@ -1276,15 +1765,15 @@ function renderHistory(){
     if(!R_||R_.k!==rk){ R_={k:rk,phases:[]}; rounds.push(R_); PH=null; }
     if(!PH||PH.k!==pk){ PH={k:pk,blocks:[]}; R_.phases.push(PH); A=null; }
     if(!A||A.name!==act.name){ A={name:act.name,color:act.color,items:[]}; PH.blocks.push(A); }
-    const mv=/^(.+?) ([A-Z]+-?\d+) → ([A-Z]+-?\d+)( \(Claude\))?$/.exec(l.m), last=A.items[A.items.length-1];
-    if(mv && last && last.path && last.path[last.path.length-1]===mv[2]) last.path.push(mv[3]);
-    else if(mv) A.items.push({path:[mv[2],mv[3]], by:l.w});
+    const mv=/^(.+?) ([A-Z]+-?\d+) (→|SNEAK|DASH|DRAG|FOCUS-MOVE) ([A-Z]+-?\d+)/.exec(l.m), last=A.items[A.items.length-1];
+    if(mv && last && last.path && last.path[last.path.length-1]===mv[2]){ last.path.push(mv[4]); last.acts.push(mv[3]); }
+    else if(mv) A.items.push({path:[mv[2],mv[4]], acts:[mv[3]], by:l.w});
     else A.items.push({text:l.m.startsWith(act.name)?l.m.slice(act.name.length).replace(/^'s/,"'s").trim():l.m, by:l.w});
   }
   if(!rounds.length){ body.innerHTML=`<p class="muted">Nothing yet. Moves, attacks, tokens and rolls show up here round by round.</p>`; return; }
   body.innerHTML=rounds.reverse().map(r=>`<div class="hround">${r.k==="earlier"?"Earlier":"Round "+r.k}</div>`+
     r.phases.map(ph=>`${ph.k?`<div class="hphase">${esc(ph.k)} phase</div>`:""}`+ph.blocks.map(b=>`<div class="hactor" style="--c:${b.color}"><b style="color:${b.color}">${esc(b.name)}</b>`+
-      b.items.map(it=>it.path?`<div class="path">moved ${it.path.join(" → ")} <span class="muted">(${it.path.length-1} space${it.path.length>2?"s":""})</span></div>`:`<div>${esc(it.text)}</div>`).join("")+`</div>`).join("")).join("")).join("");
+      b.items.map(it=>it.path?`<div class="path">${it.path.map((x,i)=>i===0?x:` <span class="muted">${it.acts[i-1]==="→"?"→":it.acts[i-1].toLowerCase()+" →"}</span> ${x}`).join("")} <span class="muted">(${it.path.length-1} sq)</span></div>`:`<div>${esc(it.text)}</div>`).join("")+`</div>`).join("")).join("")).join("");
 }
 function openHistory(){ renderHistory(); const h=document.getElementById("hist"); h.classList.add("open"); h.setAttribute("aria-hidden","false"); }
 function closeHistory(){ const h=document.getElementById("hist"); h.classList.remove("open"); h.setAttribute("aria-hidden","true"); }
@@ -1298,7 +1787,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="1.7";
+const APP_VERSION="2.1";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -1323,7 +1812,9 @@ const room = {
   connected(){ return this.clients.filter(c=>c.connected); },
   serversText(){ return this.clients.map(c=>`${c._name} ${c.connected?"✓":"…"}`).join(" · ")||"none"; },
   async join(code, creating){
-    code=code.trim().toUpperCase().replace(/\s+/g,""); if(!code.startsWith("MGS-") && /^[A-Z0-9]{4}$/.test(code)) code="MGS-"+code;
+    code=String(code).toUpperCase(); const mm=/MGS[-\s]*([A-Z0-9]{4})(?![A-Z0-9])/.exec(code);
+    code = mm ? "MGS-"+mm[1] : code.replace(/[^A-Z0-9-]/g,"").replace(/^ROOMCODE/,"");
+    if(/^[A-Z0-9]{4}$/.test(code)) code="MGS-"+code;
     if(this.clients.length) this.leave(true);
     this.code=code; this.creating=creating; this.lastRev=creating?0:-1; saveLS("st-room",JSON.stringify({code,creating:false})); this.set("Connecting to room…");
     try{ await this.loadLib(); await this.keys(code); }catch(e){ this.set(e.message); return; }
@@ -1352,7 +1843,7 @@ const room = {
       const st=JSON.parse(JSON.stringify(S.st)); st.log=st.log.slice(0,80);
       if(!this.pendingRev || this.pendingRev<=this.lastRev) this.pendingRev=Math.max(this.lastRev,0)+1;
       const rev=this.pendingRev; this.lastRev=rev; this.lastSent=Date.now();
-      this.publishAll(this.topic+"/state",{from:this.me,name:S.me,rev,st},{qos:1,retain:true}); }, now?0:250);
+      this.publishAll(this.topic+"/state",{from:this.me,name:S.me,rev,st},{qos:1,retain:true}); }, now?0:60);
   },
   pull(){ this.lastRev=-1; this.connected().forEach(c=>c.unsubscribe(this.topic+"/state",()=>c.subscribe(this.topic+"/state",{qos:1}))); },
   async recv(topic,payload){
