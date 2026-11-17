@@ -631,7 +631,7 @@ function nameTag(text,x,y,color){
   ctx.fillStyle="#fff"; ctx.fillText(text, x+CS/2, y+CS-6.5, CS-4);
 }
 function wedge(x,y,f,color){ // facing pointer on the square edge
-  const cx=x+CS/2, cy=y+CS/2-3, a=[-Math.PI/2,0,Math.PI/2,Math.PI][f], R=CS*0.5;
+  const cx=x+CS/2, cy=y+CS/2, a=[-Math.PI/2,0,Math.PI/2,Math.PI][f], R=CS*0.5;
   ctx.fillStyle=color; ctx.beginPath();
   ctx.moveTo(cx+Math.cos(a)*R, cy+Math.sin(a)*R);
   ctx.lineTo(cx+Math.cos(a+0.55)*R*0.62, cy+Math.sin(a+0.55)*R*0.62);
@@ -639,16 +639,16 @@ function wedge(x,y,f,color){ // facing pointer on the square edge
   ctx.closePath(); ctx.fill(); ctx.strokeStyle="#000a"; ctx.lineWidth=1; ctx.stroke();
 }
 function drawPiece(p,x,y,spotted,orderNo){
-  const T=TYPES[p.type], cx=x+CS/2, cy=y+CS/2-3;
+  const T=TYPES[p.type], cx=x+CS/2, cy=y+CS/2;
   ctx.textAlign="center"; ctx.textBaseline="middle";
   if(p.type==="camera"){
     const f=facingOf(p), col=S.st.cam==="green"?"#3fbf63":"#e07b2a";
     if(f!=null) wedge(x,y,f,col);
-    ctx.fillStyle="#151515"; rr(x+9,y+7,CS-18,CS-20,5); ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle="#151515"; rr(x+9,y+9,CS-18,CS-18,5); ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
     ctx.fillStyle="#eee"; ctx.font="15px system-ui"; ctx.fillText("◉",cx,cy);
     nameTag("CAM",x,y,"#000d");
   } else if(p.type==="attn"){
-    const alert=p.mode==="alert"; ctx.fillStyle=alert?"#d0281c":"#2f7fd6"; rr(x+7,y+4,CS-14,CS-16,6); ctx.fill();
+    const alert=p.mode==="alert"; ctx.fillStyle=alert?"#d0281c":"#2f7fd6"; rr(x+7,y+7,CS-14,CS-14,6); ctx.fill();
     ctx.fillStyle="#fff"; ctx.font="bold 20px system-ui"; ctx.fillText(alert?"!":"?",cx,cy);
     nameTag(p.owner||"", x,y, alert?"#7a120b":"#173f6b");
   } else if(p.type==="ko"||p.type==="dead"){
@@ -657,13 +657,13 @@ function drawPiece(p,x,y,spotted,orderNo){
     ctx.fillStyle=T.color; ctx.font="bold 12px system-ui"; ctx.fillText(p.type==="ko"?(p.stars===1?"★":"★★"):"☠",cx,cy+1);
     nameTag(p.type==="ko"?"KO":"DEAD",x,y);
   } else if(p.type==="event"){
-    ctx.fillStyle=p.color||"#b5302a"; rr(x+7,y+4,CS-14,CS-16,5); ctx.fill();
+    ctx.fillStyle=p.color||"#b5302a"; rr(x+7,y+7,CS-14,CS-14,5); ctx.fill();
     ctx.fillStyle="#fff"; ctx.font="bold 20px system-ui"; ctx.fillText(p.label||"A",cx,cy);
   } else if(p.type==="door"){
-    ctx.fillStyle=p.open?"#2a3a2a":"#2a1414"; rr(x+4,y+10,CS-8,CS-22,4); ctx.fill(); ctx.strokeStyle=LOCKCOL[p.level]||"#c0392b"; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=p.open?"#2a3a2a":"#2a1414"; rr(x+4,y+11,CS-8,CS-22,4); ctx.fill(); ctx.strokeStyle=LOCKCOL[p.level]||"#c0392b"; ctx.lineWidth=2; ctx.stroke();
     ctx.fillStyle=p.open?"#9c9":(LOCKCOL[p.level]||"#fff"); ctx.font="bold 10px system-ui"; ctx.fillText(p.open?"OPEN":"🔒"+(p.level||""),cx,cy+2);
   } else if(p.type==="terminal"){
-    ctx.fillStyle=p.hacked?"#1d3a2a":"#14231f"; rr(x+7,y+6,CS-14,CS-18,4); ctx.fill(); ctx.strokeStyle=p.hacked?"#5fd38a":(LOCKCOL[p.level]||T.color); ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=p.hacked?"#1d3a2a":"#14231f"; rr(x+7,y+7,CS-14,CS-14,4); ctx.fill(); ctx.strokeStyle=p.hacked?"#5fd38a":(LOCKCOL[p.level]||T.color); ctx.lineWidth=2; ctx.stroke();
     ctx.fillStyle=p.hacked?"#5fd38a":(LOCKCOL[p.level]||"#fff"); ctx.font="bold 11px system-ui"; ctx.fillText(p.hacked?"✓":"💻"+(p.level||""),cx,cy);
     nameTag(p.hacked?"HACKED":"TERM "+(p.level||""),x,y);
   } else if(T.kind==="token"){
@@ -674,21 +674,21 @@ function drawPiece(p,x,y,spotted,orderNo){
     const f=p.facing;
     if((T.kind==="guard"||T.kind==="boss") && f!=null) wedge(x,y,f,"#f5f5f5");
     ctx.lineWidth=2; ctx.strokeStyle="#000b";
-    if(T.kind==="guard"){ ctx.fillStyle=T.color; rr(x+8,y+5,CS-16,CS-18,5); ctx.fill(); ctx.stroke();
+    if(T.kind==="guard"){ ctx.fillStyle=T.color; rr(x+8,y+8,CS-16,CS-16,5); ctx.fill(); ctx.stroke();
       ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText(p.label||"G",cx,cy); }
-    else if(T.kind==="boss"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.moveTo(cx,y+2); ctx.lineTo(x+CS-6,cy); ctx.lineTo(cx,y+CS-12); ctx.lineTo(x+6,cy); ctx.closePath(); ctx.fill(); ctx.stroke();
+    else if(T.kind==="boss"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.moveTo(cx,y+3); ctx.lineTo(x+CS-3,cy); ctx.lineTo(cx,y+CS-3); ctx.lineTo(x+3,cy); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText("B",cx,cy); nameTag(p.label||"Boss",x,y,"#5e130b"); }
     else if(T.kind==="player"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.arc(cx,cy,13,0,7); ctx.fill(); ctx.stroke();
       ctx.fillStyle="#fff"; ctx.font="bold 15px system-ui"; ctx.fillText(T.short,cx,cy+1);
       nameTag((p.label||T.name).split(" ")[0], x,y, T.color); }
-    else { ctx.fillStyle=T.color; rr(x+7,y+5,CS-14,CS-18,3); ctx.fill(); ctx.stroke(); nameTag(T.name,x,y); }
+    else { ctx.fillStyle=T.color; rr(x+7,y+7,CS-14,CS-14,3); ctx.fill(); ctx.stroke(); nameTag(T.name,x,y); }
     if(p.disguised){ ctx.strokeStyle="#7fd39a"; ctx.setLineDash([3,2]); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,16,0,7); ctx.stroke(); ctx.setLineDash([]); }
     const dmg=(p.dmg||0)+(p.kod||0);
     if(dmg){ ctx.fillStyle="#e0533f"; ctx.beginPath(); ctx.arc(x+CS-7,y+7,7,0,7); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="bold 10px system-ui"; ctx.fillText(dmg,x+CS-7,y+7.5); }
   }
   if(orderNo){ ctx.fillStyle="#f2d23a"; ctx.beginPath(); ctx.arc(x+7,y+7,7,0,7); ctx.fill(); ctx.fillStyle="#000"; ctx.font="bold 10px system-ui"; ctx.fillText(orderNo,x+7,y+7.5); }
   if(spotted){ const t=performance.now()/1000, rr_=19+3*Math.sin(t*6);
-    ctx.strokeStyle="#ff3b2f"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy+3,rr_,0,7); ctx.stroke();
+    ctx.strokeStyle="#ff3b2f"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy,rr_,0,7); ctx.stroke();
     ctx.fillStyle="#ff3b2f"; ctx.beginPath(); ctx.moveTo(cx,y-14); ctx.lineTo(cx+9,y+2); ctx.lineTo(cx-9,y+2); ctx.closePath(); ctx.fill();
     ctx.fillStyle="#fff"; ctx.font="bold 12px system-ui"; ctx.fillText("!",cx,y-3); }
   if(S.sel===p.id){ ctx.strokeStyle="#5fd38a"; ctx.lineWidth=2.5; ctx.setLineDash([5,3]); ctx.strokeRect(x+1.5,y+1.5,CS-3,CS-3); ctx.setLineDash([]); }
@@ -1803,7 +1803,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="2.3";
+const APP_VERSION="2.4";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
