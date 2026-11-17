@@ -285,9 +285,10 @@ const CS=40, M=26; // base square size and label margin (board units)
 // ---------- stage layouts (approximate schematics; edit freely) ----------
 const LAYOUTS = {
   stage1: {
-    name:"Stage 1 · Cargo Dock", note:"Snake only · reach A, then use the elevator with no red alert",
-    rowStart:0, priority:"BL", blue:10, red:7,
+    name:"Stage 1 · Cargo Dock", note:"Snake only · collect A, call the elevator (it brings a guard), ride it out with no red alert",
+    rowStart:-1, priority:"BL", blue:10, red:7,
     map:[
+      "xxxLLxxx",
       "xxxLLxxx",
       "x...+...",
       "x.##.##.",
@@ -299,14 +300,18 @@ const LAYOUTS = {
       ".#.xxx.#",
       "+..xxx..",
       "...xxxxx"],
-    walls:[ "h:0,3",                                                        // elevator: step in from E1 only
-      "h:4,3", "v:5,1","v:6,1","v:5,3","v:6,3", "h:6,2","h:6,3",            // barracks (C5–D6), door at C4→C5
-      "h:4,6", "v:5,4","v:6,4","v:5,6","v:6,6", "h:6,5","h:6,6",            // right room (F5–G6), door at F4→F5
-      "h:9,1","h:9,2" ],                                                    // wall above B10/C10
-    arrows:{"5,2":0,"6,2":0,"6,3":3,"6,5":0}, marks:{"6,2":"radio"}, counts:{"5,3":3},
-    pieces:[ {type:"snake",r:9,c:1},
-      {type:"guard",r:1,c:2,facing:3},{type:"guard",r:4,c:3,facing:1},{type:"guard",r:3,c:7,facing:2},
-      {type:"event",r:1,c:5,label:"A"} ]
+    walls:[ "h:1,3",                                                        // shaft: step on/off only at E0↔E1 (the grate)
+      "h:5,3", "v:6,1","v:7,1","v:6,3","v:7,3", "h:7,2","h:7,3",            // barracks (C5–D6), door at C4→C5
+      "h:5,6", "v:6,4","v:7,4","v:6,6","v:7,6", "h:7,5","h:7,6",            // right room (F5–G6), door at F4→F5
+      "h:10,1","h:10,2" ],                                                  // wall above B10/C10
+    arrows:{"6,2":0,"7,2":0,"7,3":3,"7,5":0}, marks:{"7,2":"radio"}, counts:{"6,3":3},
+    shafts:{"Cargo Dock":{r:0,c:3}}, lift:null, liftNeeds:"A", liftGuard:true,
+    rules:["Objective: collect Event A, then Interact next to the elevator shaft to call it down.",
+      "The elevator comes down with a guard on it.",
+      "Snake escapes by Interacting on the elevator — only when there is no red ! on the map."],
+    pieces:[ {type:"snake",r:10,c:1},
+      {type:"guard",r:2,c:2,facing:3},{type:"guard",r:5,c:3,facing:1},{type:"guard",r:4,c:7,facing:2},
+      {type:"event",r:2,c:5,label:"A"} ]
   },
   stage2: {
     name:"Stage 2 · Heliport", note:"Snake only · reach A, then end a turn on an Exit · optional B",
@@ -393,7 +398,7 @@ function buildPreset(name){
   L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
   L.walls.forEach(w=>st.walls[w]=1);
   st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{}); st.counts=Object.assign({},L.counts||{});
-  ["zones","shafts","lift","rules"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
+  ["zones","shafts","lift","rules","liftNeeds","liftGuard"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
   if(L.defeat) st.defeat=Object.assign({count:0},L.defeat);
   L.pieces.forEach(p=>{ const q=Object.assign({id:st.nextId++},p); initPiece(q,st); st.pieces.push(q); });
   return st;
@@ -461,7 +466,7 @@ function blocked(r,c){
   return S.st.pieces.some(p=>p.type==="door"&&p.r===r&&p.c===c&&!p.open);
 }
 function shaftAt(r,c){ const sh=S.st.shafts||{}; return Object.keys(sh).find(k=>r>=sh[k].r&&r<sh[k].r+2&&c>=sh[k].c&&c<sh[k].c+2); }
-function onLift(r,c){ return !!S.st.shafts && shaftAt(r,c)===S.st.lift; }
+function onLift(r,c){ return !!S.st.shafts && !!S.st.lift && shaftAt(r,c)===S.st.lift; }
 function zoneOf(r){ return (S.st.zones||[]).find(z=>r>=z.r0&&r<=z.r1); }
 function wall(t,r,c){ return !!S.st.walls[t+":"+r+","+c]; } // h = bottom edge of (r,c); v = right edge
 function facingOf(p){ return p.type==="camera" ? (S.st.cam==="green" ? p.fg : p.fo) : p.facing; }
@@ -568,7 +573,8 @@ function render(){
   for(const k in (st.shafts||{})){ const sh=st.shafts[k], here=k===st.lift, x=sh.c*CS, y=sh.r*CS;
     ctx.strokeStyle=here?"#7fd3c3":"#52605d"; ctx.lineWidth=2.5; ctx.setLineDash(here?[]:[5,4]); ctx.strokeRect(x+3,y+3,CS*2-6,CS*2-6); ctx.setLineDash([]);
     ctx.fillStyle=here?"#000a":"#0008"; rr(x+CS-30,y+CS-9,60,18,5); ctx.fill();
-    ctx.fillStyle=here?"#bfeee5":"#8f9c99"; ctx.font="bold 10px system-ui"; ctx.fillText(here?"⇅ ELEVATOR":"EMPTY SHAFT",x+CS,y+CS+1); }
+    ctx.fillStyle=here?"#bfeee5":"#8f9c99"; ctx.font="bold 10px system-ui"; ctx.fillText(here?"⇅ ELEVATOR":"EMPTY SHAFT",x+CS,y+CS+1);
+    ctx.fillStyle=here?"#c0392bdd":"#5a2a2a99"; ctx.beginPath(); ctx.arc(x+CS*1.5,y+CS*1.5,10,0,7); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="11px system-ui"; ctx.fillText("☝",x+CS*1.5,y+CS*1.5+1); }
   for(const k in (st.counts||{})){ const [r,c]=k.split(",").map(Number); ctx.fillStyle="#9fe0b5"; ctx.font="bold 9px system-ui"; ctx.fillText("COUNT",c*CS+CS/2,r*CS+CS/2-7); ctx.font="bold 15px system-ui"; ctx.fillText(st.counts[k],c*CS+CS/2,r*CS+CS/2+7); }
   ctx.strokeStyle="#ffffff16"; ctx.lineWidth=1/v.z;
   for(let c=0;c<=st.cols;c++){ ctx.beginPath(); ctx.moveTo(c*CS,0); ctx.lineTo(c*CS,bh); ctx.stroke(); }
@@ -1036,6 +1042,7 @@ function renderGamePane(){
     <div class="row"><label>Rules check</label><button class="sm ${st.rules!==false?"on":""}" id="rules-t">${st.rules!==false?"On — actions are checked":"Off — free movement"}</button></div>
     <div class="row"><button class="on" id="next-phase" style="flex:1">${st.phase==="Player"?"End player phase → Enemy":"End enemy phase → next round"}</button></div></div>
   ${st.defeat?`<div class="card"><div class="row"><label>Defeated (${esc(st.defeat.zone)})</label><button class="sm" data-def="-1">−</button><b style="font-size:18px">${st.defeat.count||0} / ${st.defeat.goal}</b><button class="sm" data-def="1">+</button></div></div>`:""}
+  ${st.shafts?`<div class="card"><div class="row"><label>Elevator</label>${Object.keys(st.shafts).map(k=>`<button class="sm ${st.lift===k?"on":""}" data-lift="${esc(k)}">${esc(k)}</button>`).join("")}<button class="sm ${!st.lift?"on":""}" data-lift="">Not here</button></div><p class="muted">Players move it with Interact; these buttons are for fixing it by hand.</p></div>`:""}
   ${st.rules?`<details class="card"><summary><b>Stage rules</b></summary>${st.rules.map(x=>`<div>• ${esc(x)}</div>`).join("")}</details>`:""}
   <div class="card"><b>Save progress</b>
     <div class="row"><input type="text" id="save-name" placeholder="${esc((st.stage||"Game")+" · round "+st.round)}" style="flex:1"><button class="sm on" id="save-slot">Save</button></div>
@@ -1055,6 +1062,7 @@ function renderGamePane(){
   const on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; };
   on("rules-t",()=>commit(s=>{ s.rules=s.rules===false; }, `Rules check ${st.rules===false?"on":"off"}`));
   on("rdn",()=>commit(s=>{ s.round=Math.max(1,s.round-1); }));
+  el.querySelectorAll("[data-lift]").forEach(b=>b.onclick=()=>{ const k=b.dataset.lift; if(k) placeLift(k,`Elevator placed at the ${k} shaft (by hand)`); else commit(s=>{ s.lift=null; },"Elevator removed from the shaft (by hand)"); });
   el.querySelectorAll("[data-def]").forEach(b=>b.onclick=()=>commit(s=>{ s.defeat.count=Math.max(0,(s.defeat.count||0)+(+b.dataset.def)); },`Defeated guards → ${Math.max(0,(st.defeat.count||0)+(+b.dataset.def))}/${st.defeat.goal}`));
   on("rup",()=>commit(s=>{ s.round++; }));
   on("next-phase",()=>{ const open=st.pieces.filter(p=>isPlayer(p)&&!(st.tt&&st.tt[p.id]&&st.tt[p.id].done));
@@ -1117,7 +1125,7 @@ function renderMapPane(){
 document.getElementById("bg-file").onchange=e=>{
   const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
   rd.onload=()=>{ const img=new Image(); img.onload=()=>{ const max=1800, sc=Math.min(1,max/Math.max(img.width,img.height)), c=document.createElement("canvas");
-      c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc); c.getContext("2d").drawImage(img,0,0,c.width,c.height); setBg(c.toDataURL("image/jpeg",0.82), true); };
+      c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc); c.getContext("2d").drawImage(img,0,0,c.width,c.height); S.st.bgRect={x:0,y:0,w:100,h:100}; if(S.st.bgOpacity<0.7) S.st.bgOpacity=0.85; setBg(c.toDataURL("image/jpeg",0.82), true); };
     img.src=rd.result; };
   rd.readAsDataURL(f); e.target.value="";
 };
@@ -1334,6 +1342,7 @@ function boardText(who, quick){
     L.push(`STATUS: ${si.level==="alert"?"ALERT (red ! on the map)":si.level==="caution"?"INVESTIGATING (? on the map)":"CLEAR (no attention tokens)"}${si.al.length||si.q.length?" — "+[...si.al,...si.q].map(tx).join(", "):""}`); }
   const by=t=>st.pieces.filter(p=>p.type===t);
   if(st.zones) L.push("ZONES: "+st.zones.map(z=>`${z.name} = rows ${z.r0+(st.rowStart??1)}–${z.r1+(st.rowStart??1)}`).join(" · ")+(st.shafts?` · ELEVATOR is at the ${st.lift} shaft (${Object.entries(st.shafts).map(([k,v])=>`${k} shaft ${sq(v.r,v.c)}–${sq(v.r+1,v.c+1)}`).join(", ")}; an empty shaft can't be entered)`:""));
+  if(st.shafts&&!st.zones) L.push(`ELEVATOR: ${st.lift?"down at the shaft "+Object.values(st.shafts).map(v=>sq(v.r,v.c)+"–"+sq(v.r+1,v.c+1)).join(""):"not here yet — the shaft "+Object.values(st.shafts).map(v=>sq(v.r,v.c)+"–"+sq(v.r+1,v.c+1)).join("")+" can't be entered"}${st.liftNeeds&&!liftReady()?` (call it with Interact next to the shaft once Event ${st.liftNeeds} is collected)`:""}`);
   if(st.defeat) L.push(`OBJECTIVE COUNTER: ${st.defeat.count||0}/${st.defeat.goal} guards defeated in the ${st.defeat.zone}`);
   if(st.rules&&!quick){ L.push("STAGE RULES:"); st.rules.forEach(x=>L.push("  - "+x)); }
   st.pieces.filter(p=>TYPES[p.type].kind==="player").forEach(p=>{ const T=TYPES[p.type];
@@ -1548,19 +1557,26 @@ async function doEquipAct(p,kind,arg){
     spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${ACT_NAME[kind].toUpperCase()}${arg?" "+arg:""} at ${sq(p.r,p.c)}`);
     return kind==="hack"?"rolled — compare with the terminal's lock, then mark it hacked from the Piece tab":kind==="search"?"draw 1 System card":"rolled — check the System card"; }
 }
+function adjShaft(p){ const st=S.st; return Object.keys(st.shafts||{}).find(k=>{ const sh=st.shafts[k]; for(let r=sh.r;r<sh.r+2;r++)for(let c=sh.c;c<sh.c+2;c++) if(Math.abs(r-p.r)+Math.abs(c-p.c)===1&&!wallBetween(p.r,p.c,r,c)) return true; return false; }); }
+function liftReady(){ const n=S.st.liftNeeds; return !n || !S.st.pieces.some(e=>e.type==="event"&&(e.label||"")===n); }
+function placeLift(to,why){ const st=S.st, from=st.lift?st.shafts[st.lift]:null, dst=st.shafts[to];
+  commit(s=>{ if(from) s.pieces.forEach(q=>{ if(q.r>=from.r&&q.r<from.r+2&&q.c>=from.c&&q.c<from.c+2){ q.r+=dst.r-from.r; q.c+=dst.c-from.c; } }); s.lift=to;
+    if(!from && s.liftGuard && !s.liftGuardDone){ s.liftGuardDone=true; const g={id:s.nextId++,type:"guard",r:dst.r+1,c:dst.c,facing:2}; initPiece(g,s); s.pieces.push(g); } }, why);
+  if(!from && S.st.liftGuard && S.st.liftGuardDone) addLog(`The elevator arrives with a guard on it — set his square and facing to match the book`); }
 function doElevator(p,dest){
   const st=S.st; if(!st.shafts) throw "this stage has no elevator";
   const err=useAction(p,"interact"); if(err) throw err;
   const on=onLift(p.r,p.c), keys=Object.keys(st.shafts);
-  let to;
-  if(on){ to=dest?keys.find(k=>k.toLowerCase().startsWith(dest.toLowerCase())):keys.find(k=>k!==st.lift); if(!to||to===st.lift) throw "pick another shaft"; }
-  else { to=keys.find(k=>{ const sh=st.shafts[k]; for(let r=sh.r;r<sh.r+2;r++)for(let c=sh.c;c<sh.c+2;c++) if(Math.abs(r-p.r)+Math.abs(c-p.c)===1&&!wallBetween(p.r,p.c,r,c)) return true; return false; });
-    if(!to) throw `${nameOf(p)} must be on the elevator, or next to an empty shaft to call it`; if(to===st.lift) throw "the elevator is already here — step on and Interact to ride it"; }
-  const from=st.shafts[st.lift], dst=st.shafts[to], fromName=st.lift;
-  spend(p,"interact",false);
-  commit(s=>{ s.pieces.forEach(q=>{ if(q.r>=from.r&&q.r<from.r+2&&q.c>=from.c&&q.c<from.c+2){ q.r+=dst.r-from.r; q.c+=dst.c-from.c; } }); s.lift=to; },
-    on?`${nameOf(p)} RIDES THE ELEVATOR ${fromName} → ${to}`:`${nameOf(p)} CALLS THE ELEVATOR to ${to}`);
-  return on?`elevator → ${to}`:`elevator called to ${to}`; }
+  if(on){
+    if(keys.length===1){ if(statusInfo().al.length) throw "the elevator won't take you out while there's a red ! on the map";
+      spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} RIDES THE ELEVATOR OUT — STAGE CLEARED`); toast("Stage cleared!"); return "stage cleared"; }
+    const to=dest?keys.find(k=>k.toLowerCase().startsWith(dest.toLowerCase())):keys.find(k=>k!==st.lift); if(!to||to===st.lift) throw "pick another shaft";
+    spend(p,"interact",false); placeLift(to,`${nameOf(p)} RIDES THE ELEVATOR ${st.lift} → ${to}`); return `elevator → ${to}`; }
+  const to=adjShaft(p);
+  if(!to) throw `${nameOf(p)} must be on the elevator, or next to the shaft to call it`;
+  if(to===st.lift) throw "the elevator is already here — step on and Interact to ride it";
+  if(!liftReady()) throw `the elevator can't be called until Event ${st.liftNeeds} is collected`;
+  spend(p,"interact",false); placeLift(to,`${nameOf(p)} CALLS THE ELEVATOR to the ${to} shaft`); return `elevator called to ${to}`; }
 async function doInteract(p,arg,note){
   const err=useAction(p,"interact"); if(err) throw err; const C=charOf(p)||{interact:{w:1,b:2}};
   const r=await rollPrompt({w:C.interact.w,b:C.interact.b,vs:null,why:`${nameOf(p)} Interact${arg?" — "+arg:""}`,note}); if(!r) throw "cancelled";
@@ -1787,7 +1803,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="2.1";
+const APP_VERSION="2.3";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
