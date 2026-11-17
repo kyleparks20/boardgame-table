@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d1110">
 <title>Sneaking Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   color-scheme: dark;
@@ -149,6 +151,74 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
 .save-row{display:flex;gap:8px;align-items:center;margin:8px 0}
 .save-row .meta{flex:1;min-width:0}
 .save-row .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- polish pass ---- */
+html,body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;letter-spacing:-.005em}
+:root{--panel:#121816;--panel2:#18201d;--line:#26322d;--text:#e3ece6;--muted:#8a9d93;--radius:12px}
+h1,h2,.tp-round,.rb-title,#menu h2,#hist h2,#seats h2{font-family:Rajdhani,Inter,system-ui,sans-serif;letter-spacing:.04em}
+header{height:52px;gap:6px;background:linear-gradient(#0d1311,#0b0f0ef0);box-shadow:0 1px 0 #ffffff08,0 6px 18px #0006}
+header h1{font-size:17px;letter-spacing:.16em}
+header button{min-height:36px;border-radius:10px;background:#18201d;border-color:#2a3732}
+header button.on{background:linear-gradient(#2f8a57,#246b44);border-color:#5fd38a}
+#stage,#turnpanel{top:52px}
+@media (min-width:900px){ #sheet{top:52px} }
+button{transition:background .12s,border-color .12s,opacity .12s}
+button:hover{border-color:#3d5048}
+button.on:hover{filter:brightness(1.08)}
+button:disabled{opacity:.42;cursor:not-allowed;transform:none!important}
+button.sm{border-radius:9px}
+.iconbtn{width:38px;height:38px;min-height:38px!important;padding:0!important;font-size:16px!important;display:inline-flex;align-items:center;justify-content:center;border-radius:50%!important}
+.card{background:linear-gradient(180deg,#1a2320,#161e1b);border-color:#26322d;border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 0 #ffffff06 inset}
+.card > b:first-child{display:block;font-size:14px;margin-bottom:4px}
+h3{font-size:11.5px;letter-spacing:.14em;color:#7fae94;margin:16px 0 8px;font-weight:700}
+.row label{font-size:12.5px;font-weight:600;color:var(--muted)}
+.muted{color:var(--muted);font-size:12.5px;line-height:1.45}
+input[type=number],input[type=text],select,textarea{border-radius:9px;border-color:#2a3732;background:#0e1412}
+input:focus,select:focus,textarea:focus{outline:2px solid #5fd38a55;border-color:#3f8a5f}
+/* sheet */
+#sheet{background:var(--panel);box-shadow:0 -10px 30px #0008}
+#sheet .grab{padding:10px 12px 8px 14px;border-bottom:0}
+#sheet .grab h2{font-size:19px;font-weight:700;color:#eaf4ee}
+#sheet .grab .bar{display:none}
+#sheet-sub{padding:0 14px 8px!important;border-bottom:1px solid var(--line)}
+#sheet .body{padding:12px 14px 22px}
+/* bottom nav */
+nav{background:#0d1210;border-top-color:#1f2a26}
+nav button{font-size:10.5px;font-weight:600;letter-spacing:.02em;gap:3px}
+nav button .ic{font-size:18px;opacity:.9}
+nav button.on{color:var(--accent);background:linear-gradient(#5fd38a1a,transparent);box-shadow:inset 0 2px 0 var(--accent)}
+/* turn panel */
+#turnpanel{background:var(--panel);box-shadow:-10px 0 30px #0007}
+#turnpanel .tp-top{padding:10px 12px}
+#turnpanel .tp-top b{font-family:Rajdhani,Inter,sans-serif;font-size:18px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.tp-round{font-size:21px;margin:4px 0 8px}
+.tp-step{background:#151c19;border-radius:14px;padding:10px 11px}
+.tp-h{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#a9c6b5}
+.tp-pl{border-radius:10px;padding:9px 10px}
+.tp-status{border-radius:10px;font-size:12.5px;letter-spacing:.01em}
+#tp-handle{font-family:Rajdhani,Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;box-shadow:-4px 0 14px #0007}
+/* quick bar & pop-ups */
+#qbar{border-radius:16px;background:#121816f5;border-color:#2b3a33;box-shadow:0 10px 30px #000a;padding:8px 10px;-webkit-mask-image:linear-gradient(90deg,#000 92%,transparent);mask-image:linear-gradient(90deg,#000 92%,transparent)}
+#rollbox{border-radius:18px;background:#121816fa;border-color:#2f6b49;box-shadow:0 18px 50px #000c;padding:14px 16px}
+.rb-title{font-size:19px;color:#eaf4ee}
+.rb-dice .chip{border-radius:11px;box-shadow:0 2px 0 #0006}
+.gcard{border-radius:14px}
+/* overlays */
+#menu,#hist,#seats{background:radial-gradient(ellipse at top,#13201a,#070a09 60%)}
+#menu h2,#hist h2,#seats h2{font-size:26px;letter-spacing:.14em}
+.stagebtn{border-radius:14px;background:linear-gradient(180deg,#1a2420,#151d1a);border-color:#2a3732;padding:15px 16px}
+.stagebtn:hover{border-color:#5fd38a77}
+.stagebtn b{font-family:Rajdhani,Inter,sans-serif;font-size:20px;letter-spacing:.03em}
+.hactor{border-radius:12px}
+details > summary{cursor:pointer;list-style:none}
+details > summary::-webkit-details-marker{display:none}
+details > summary::before{content:"▸ ";color:var(--accent)} details[open] > summary::before{content:"▾ "}
+details.fix{margin:8px 0;padding:8px 10px;border:1px dashed #2f3d37;border-radius:10px}
+details.fix summary{font-size:13px;font-weight:600}
+#status{font-family:Rajdhani,Inter,sans-serif;letter-spacing:.08em;font-size:14px!important;box-shadow:0 4px 14px #0008}
+#zonebar button,#eye,.zoom button{box-shadow:0 3px 10px #0007;border-color:#2a3732}
+.log div{font-size:12.5px;padding:7px 0}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2a3732;border-radius:8px}
 </style>
 </head>
 <body>
@@ -181,11 +251,11 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
 <div id="rollbox"></div>
 <div id="dicefx"></div>
 
-<aside id="turnpanel"><div class="tp-top"><b>Turn</b><button class="sm" id="tp-x">Hide ▸</button></div><div id="tp-body"></div></aside>
+<aside id="turnpanel"><div class="tp-top"><b>Turn</b><button class="sm iconbtn" id="tp-x" aria-label="Hide">▸</button></div><div id="tp-body"></div></aside>
 <button id="tp-handle">Turn</button>
 <div id="seats" class="menuish"></div>
 <div id="sheet" aria-hidden="true">
-  <div class="grab"><span class="bar"></span><h2 id="sheet-title"></h2><button class="sm" id="sheet-x">Close</button></div><p id="sheet-sub" class="muted" style="margin:0;padding:6px 14px 0"></p>
+  <div class="grab"><span class="bar"></span><h2 id="sheet-title"></h2><button class="sm iconbtn" id="sheet-x" aria-label="Close">✕</button></div><p id="sheet-sub" class="muted" style="margin:0;padding:6px 14px 0"></p>
   <div class="body">
     <div class="pane" id="pane-build"></div>
     <div class="pane" id="pane-piece"></div>
@@ -228,7 +298,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted
   <h3>Continue</h3>
   <div id="save-list"></div>
   <div class="row"><button class="sm" id="menu-loadfile">Load a save file</button></div>
-  <p class="muted">Starting layouts are approximate schematics with the starting pieces and facings. Fix anything that doesn't match your table with the Build and Map tabs.</p>
+  <p class="muted">Each stage starts with its map, pieces and facings from the campaign book. If something doesn't match your table, fix it in the Edit tab.</p>
 </div></div>
 
 <div id="hist" class="menuish" aria-hidden="true"><div class="wrap">
@@ -788,7 +858,7 @@ function endPtr(ev){
     if(p && d.moved && h.ok && (h.r!==p.r||h.c!==p.c)){ const from=sq(p.r,p.c);
       if(isPlayer(p) && S.st.phase==="Player" && S.st.rules!==false){
         const dist=Math.abs(h.r-p.r)+Math.abs(h.c-p.c);
-        (async()=>{ try{ const msg=await runAction(`${dist===1?"sneak":"dash"} ${p.label} ${sq(h.r,h.c)}`); toast(msg); }catch(e){ toast("✗ "+(e.message||e)); render(); } })();
+        (async()=>{ S.dropMove=true; try{ const msg=await runAction(`${dist===1?"sneak":"dash"} ${p.label} ${sq(h.r,h.c)}`); toast(msg); }catch(e){ toast("✗ "+(e.message||e)); render(); } finally{ S.dropMove=false; } })();
       } else {
         commit(st=>{ const q=st.pieces.find(x=>x.id===d.id); q.r=h.r; q.c=h.c; }, `${nameOf(p)} ${from} → ${sq(h.r,h.c)}`);
         if(p.type==="guard"||p.type==="boss") autoSpot(P(p.id));
@@ -1049,7 +1119,8 @@ function renderPiecePane(){
         <div class="row"><label>Max health</label><input type="number" id="pl-hp" value="${p.hp??""}" style="width:80px"></div>`;
   if(p.type==="guard") h+=`<p class="muted">Damage that reaches his health turns him into a dead guard token; KO damage that reaches it turns him into a KO token.</p>`;
   const acts=actionsFor(p);
-  if(acts.length) h+=`<div class="row" style="gap:6px">${acts.map((a,i)=>`<button class="sm" data-act="${i}">${esc(a.label)}</button>`).join("")}</div>`;
+  if(acts.length){ const btns=`<div class="row" style="gap:6px">${acts.map((a,i)=>`<button class="sm" data-act="${i}">${esc(a.label)}</button>`).join("")}</div>`;
+    h+=(rulesOn()&&(T.kind==="player"||T.kind==="guard"||T.kind==="boss"))?`<details class="fix"><summary>Adjust by hand <span class="muted">— for fixing mistakes; normal play does this for you</span></summary>${btns}</details>`:btns; }
   if(T.kind==="player"){ const C=charOf(p);
     h+=`<div class="row focus"><label>Focus</label>${T.focus.map((n,i)=>`<button class="sm ${p.focus&&p.focus[i]?"":"spent"}" data-focus="${i}">${esc(n)} <span class="muted">· ${C.fcost[i]==null?"?":C.fcost[i]}</span></button>`).join("")}</div>
       <p class="muted" style="margin-top:0">The number after each token is its refresh cost in actions${C.fcost.includes(null)?" (? = not confirmed yet, counted as 1)":""}.</p>
@@ -1593,7 +1664,7 @@ async function doMove(p,kind,path){
     // walking onto an objective/event collects it
     const ev=S.st.pieces.find(x=>x.type==="event"&&x.r===s.r&&x.c===s.c);
     if(ev){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==ev.id); const q=st.pieces.find(x=>x.id===p.id); (q.carry=q.carry||[]).push(ev.label||"?"); }, `${nameOf(p)} collects Event ${ev.label} at ${sq(s.r,s.c)} — resolve it in the campaign book`); toast(`${nameOf(p)} collected ${ev.label} — check the campaign book`); }
-    if(i<path.length-1) await sleep(320);
+    if(i<path.length-1 && !S.dropMove) await sleep(320);   // AI/script moves step visibly; a drag-and-drop lands straight on the square
   }
   const me=P(p.id);
   const foes=leapt.filter(f=>f.type==="guard"||f.type==="boss");
@@ -2050,7 +2121,7 @@ function renderTurnPanel(){
   if(!rulesOn()) h+=`<div class="tp-note">Rules check is off (Game tab) — every piece moves freely and turns aren't tracked.</div>`;
   h+=`<div class="tp-step ${st.phase==="Player"?"now":"past"}"><div class="tp-h">1 · Players <span class="muted">— in any order, one at a time</span></div>`;
   for(const p of ps){ const T=TYPES[p.type], t=tt(p), done=turnDone(p), on=f.active===p.id;
-    h+=`<div class="tp-pl ${on?"on":done?"done":""}" style="--c:${T.color}"><div class="row" style="margin:0"><span class="sw" style="background:${T.color}">${T.short}</span><b style="flex:1">${esc(nameOf(p))}</b><span class="muted">${esc(seatOf(p)||"no player")}</span></div>
+    h+=`<div class="tp-pl ${on?"on":done?"done":""}" style="--c:${T.color}"><div class="row" style="margin:0"><span class="sw" style="background:${T.color}">${T.short}</span><b style="flex:1">${esc(nameOf(p))}</b><span class="muted">${esc(seatOf(p)||"unassigned")}</span></div>
       <div class="tp-st">${done?"✓ Turn done":on?`Playing now · ${actionsLeft(p)} action${actionsLeft(p)===1?"":"s"} left${t.noisy?` · 🔊 ${t.noisy} noisy`:""}`:st.phase==="Player"?"Waiting":"—"}</div>
       ${on||(!done&&st.phase==="Player")?`<div class="dots">${dots(p)}</div>`:""}
       ${on?`<div class="tp-foc">${TYPES[p.type].focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}">${esc(n)}${p.focus&&p.focus[i]?"":` · ⟳${fcostOf(p,i)}`}</span>`).join("")}</div>
@@ -2434,7 +2505,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="3.8";
+const APP_VERSION="4.0";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
