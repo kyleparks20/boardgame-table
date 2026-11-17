@@ -264,6 +264,8 @@ const LAYOUTS = {
       "v:10,2","v:11,2","v:13,2",                              // B room right wall, doorway C12|D12
       ...[0,1,2,4,5].map(c=>"h:13,"+c),
       "v:17,0","v:18,0","v:19,0","v:17,3","v:18,3","v:19,3","h:16,1","h:16,3" ],   // bottom-left booths: walled, open only at C16→C17                      // bottom of the rooms, opening D13/D14 to the row-14 corridor
+    arrows:{"1,1":1,"1,2":1,"2,1":0,"7,0":1,"12,0":1},   // 0 up, 1 right, 2 down, 3 left
+    marks:{"1,1":"radio"},
     pieces:[ {type:"snake",r:19,c:6},
       {type:"guard",r:1,c:9,facing:1},{type:"guard",r:4,c:6,facing:2},{type:"guard",r:5,c:15,facing:2},{type:"guard",r:9,c:2,facing:1},
       {type:"camera",r:3,c:12,fg:2,fo:3},{type:"camera",r:10,c:2,fg:2,fo:3},{type:"camera",r:2,c:6,fg:1,fo:2},
@@ -276,13 +278,14 @@ const CHAR={"x":"void","#":"obstacle","E":"exit","+":"corner","S":"stairs","B":"
 function defaultState(){
   return {ver:0, cols:16, rows:20, cells:{}, walls:{}, pieces:[], nextId:1, guardNo:1, rowStart:1,
     round:1, phase:"Player", blue:13, red:7, cam:"green", priority:"TL", losMode:"line", log:[],
-    bgOpacity:0.55, bgVer:0, bgRect:{x:0,y:0,w:100,h:100}, stage:"Custom board"};
+    bgOpacity:0.55, bgVer:0, bgRect:{x:0,y:0,w:100,h:100}, stage:"Custom board", arrows:{}, marks:{}};
 }
 function buildPreset(name){
   const L=LAYOUTS[name], st=defaultState(); st.stage=L.name;
   st.rows=L.map.length; st.cols=L.map[0].length; st.rowStart=L.rowStart; st.priority=L.priority; st.blue=L.blue; st.red=L.red;
   L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
   L.walls.forEach(w=>st.walls[w]=1);
+  st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{});
   L.pieces.forEach(p=>{ const q=Object.assign({id:st.nextId++},p); initPiece(q,st); st.pieces.push(q); });
   return st;
 }
@@ -420,7 +423,10 @@ function render(){
     if(t==="corner"){ ctx.fillStyle="#cfd8d3aa"; ctx.font="20px system-ui"; ctx.fillText("⇄",x+CS/2,y+CS/2+1); }
     if(t==="stairsv"){ ctx.strokeStyle="#55615b"; ctx.lineWidth=1; for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(x+i*CS/5,y+3); ctx.lineTo(x+i*CS/5,y+CS-3); ctx.stroke(); } }
     if(t==="stairs"){ ctx.strokeStyle="#55615b"; ctx.lineWidth=1; for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(x+3,y+i*CS/5); ctx.lineTo(x+CS-3,y+i*CS/5); ctx.stroke(); } }
-    if(t==="barracks"){ ctx.fillStyle="#7fd39a"; ctx.font="bold 13px system-ui"; ctx.fillText("B",x+CS/2,y+CS/2); }
+    if(t==="barracks"){ const isB=(rr,cc)=>st.cells[key(rr,cc)]==="barracks"; ctx.strokeStyle="#7fd39a99"; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.beginPath();
+      if(!isB(r-1,c)){ ctx.moveTo(x+3,y+3); ctx.lineTo(x+CS-3,y+3); } if(!isB(r+1,c)){ ctx.moveTo(x+3,y+CS-3); ctx.lineTo(x+CS-3,y+CS-3); }
+      if(!isB(r,c-1)){ ctx.moveTo(x+3,y+3); ctx.lineTo(x+3,y+CS-3); } if(!isB(r,c+1)){ ctx.moveTo(x+CS-3,y+3); ctx.lineTo(x+CS-3,y+CS-3); }
+      ctx.stroke(); ctx.setLineDash([]); }
     if(t==="elevator"){ ctx.strokeStyle="#7f9a96"; ctx.lineWidth=2; ctx.strokeRect(x+3,y+3,CS-6,CS-6); ctx.fillStyle="#b9cfca"; ctx.font="16px system-ui"; ctx.fillText("⇅",x+CS/2,y+CS/2+1); }
   }
   ctx.strokeStyle="#ffffff16"; ctx.lineWidth=1/v.z;
@@ -448,6 +454,11 @@ function render(){
       if(isVoid(r-1,c)){ ctx.moveTo(x,y); ctx.lineTo(x+CS,y); } if(isVoid(r+1,c)){ ctx.moveTo(x,y+CS); ctx.lineTo(x+CS,y+CS); }
       if(isVoid(r,c-1)){ ctx.moveTo(x,y); ctx.lineTo(x,y+CS); } if(isVoid(r,c+1)){ ctx.moveTo(x+CS,y); ctx.lineTo(x+CS,y+CS); } }
     ctx.stroke(); }
+  for(const k in (st.arrows||{})){ const [r,c]=k.split(",").map(Number), d=st.arrows[k], cx=c*CS+CS/2, cy=r*CS+CS/2-2, a=[-Math.PI/2,0,Math.PI/2,Math.PI][d];
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(a); ctx.strokeStyle="#e8efe9"; ctx.lineWidth=3.5; ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.beginPath(); ctx.moveTo(-5,-9); ctx.lineTo(5,0); ctx.lineTo(-5,9); ctx.stroke(); ctx.restore(); }
+  for(const k in (st.marks||{})){ if(st.marks[k]!=="radio") continue; const [r,c]=k.split(",").map(Number), x=c*CS, y=r*CS;
+    ctx.fillStyle="#3fbf63"; ctx.fillRect(x+4,y+6,8,12); ctx.fillRect(x+7,y+2,2,5); ctx.fillStyle="#0b0f0e"; ctx.fillRect(x+5.5,y+8,5,3); }
   for(const k in st.walls){ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); ctx.beginPath();
     if(t==="h"){ ctx.moveTo(c*CS,(r+1)*CS); ctx.lineTo((c+1)*CS,(r+1)*CS); } else { ctx.moveTo((c+1)*CS,r*CS); ctx.lineTo((c+1)*CS,(r+1)*CS); } ctx.stroke(); }
   const order=S.order?activationOrder():{}, spottedIds=new Set(L.spotted.map(s=>s.pl.id));
@@ -547,7 +558,7 @@ cv.addEventListener("pointerdown",ev=>{
   if(!h.ok) return;
   if(S.addType) return; // place on release (so a pinch can cancel)
   if(S.tool==="move"){ const p=topPieceAt(h.r,h.c); if(p){ S.sel=p.id; S.drag={id:p.id,r:h.r,c:h.c,x:h.x,y:h.y,moved:false}; refresh(); } return; }
-  if(S.tool!=="wall"){ S.paintSnap=snapshot(); paint(h); render(); }
+  if(S.tool!=="wall"&&S.tool!=="arrow"&&S.tool!=="radio"){ S.paintSnap=snapshot(); paint(h); render(); }
 });
 cv.addEventListener("pointermove",ev=>{
   if(!ptrs.has(ev.pointerId)){ if(ev.pointerType==="mouse"){ const h=toBoard(ev.clientX,ev.clientY); S.hover=h.ok?h:null; render(); } return; }
@@ -583,6 +594,7 @@ function endPtr(ev){
   if(!h.ok){ if(S.sel){ S.sel=null; refresh(); } return; }
   if(S.addType){ placePiece(S.addType,h.r,h.c); return; }
   if(S.tool==="wall"){ toggleWall(h); return; }
+  if(S.tool==="arrow"||S.tool==="radio"){ tapMark(h); return; }
   if(S.tool==="move"){ if(S.sel){ S.sel=null; refresh(); } }
 }
 cv.addEventListener("pointerup",endPtr); cv.addEventListener("pointercancel",endPtr);
@@ -596,7 +608,12 @@ document.getElementById("zin").onclick=()=>zoomAt(1.25, stage.clientWidth/2, sta
 document.getElementById("zout").onclick=()=>zoomAt(0.8, stage.clientWidth/2, stage.clientHeight/2);
 document.getElementById("zfit").onclick=fitView;
 
-function paint(h){ const k=key(h.r,h.c); if(S.tool==="floor") delete S.st.cells[k]; else S.st.cells[k]=S.tool; }
+function paint(h){ const k=key(h.r,h.c);
+  if(S.tool==="arrow"||S.tool==="radio") return;
+  if(S.tool==="floor"){ delete S.st.cells[k]; if(S.st.arrows) delete S.st.arrows[k]; if(S.st.marks) delete S.st.marks[k]; } else S.st.cells[k]=S.tool; }
+function tapMark(h){ const k=key(h.r,h.c);
+  if(S.tool==="arrow") commit(st=>{ st.arrows=st.arrows||{}; const v=st.arrows[k]; if(v==null) st.arrows[k]=0; else if(v<3) st.arrows[k]=v+1; else delete st.arrows[k]; });
+  if(S.tool==="radio") commit(st=>{ st.marks=st.marks||{}; if(st.marks[k]) delete st.marks[k]; else st.marks[k]="radio"; }); }
 function toggleWall(h){
   const {r,c,fx,fy}=h, d=[fy,1-fx,1-fy,fx], m=d.indexOf(Math.min(...d)); let k=null;
   if(m===0 && r>0) k="h:"+(r-1)+","+c; if(m===2 && r<S.st.rows-1) k="h:"+r+","+c;
@@ -709,7 +726,7 @@ document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.c
 document.getElementById("sheet-x").onclick=closeSheet;
 function syncArmed(){
   const a=document.getElementById("armed");
-  const txt = S.addType ? `Tap a square to place ${TYPES[S.addType].name}` : (S.tool!=="move" ? (S.tool==="wall"?"Wall mode: tap near a square edge":`Paint: ${S.tool} (drag to paint)`) : "");
+  const txt = S.addType ? `Tap a square to place ${TYPES[S.addType].name}` : (S.tool!=="move" ? (S.tool==="wall"?"Wall mode: tap near a square edge":S.tool==="arrow"?"Arrow: tap a square to cycle ↑ → ↓ ← none":S.tool==="radio"?"Tap a square to mark where guards spawn":`Paint: ${S.tool} (drag to paint)`) : "");
   a.style.display = txt ? "block" : "none"; document.getElementById("armed-txt").textContent=txt;
   renderBuildPane();
 }
@@ -742,7 +759,7 @@ function renderBuildPane(){
     <h3>Add a piece</h3><p class="muted" style="margin:0 0 8px">Tap one, then tap a square on the board.</p>
     <div class="grid2">${PALETTE.map(t=>{ const T=TYPES[t]; return `<button class="sm ${S.addType===t?"on":""}" data-add="${t}"><span class="sw" style="background:${T.color}">${T.short}</span>${T.name}</button>`; }).join("")}</div>
     <h3>Mode</h3><div class="grid2">${tool("move","✋ Move / select")}${tool("wall","▏Walls")}</div>
-    <h3>Paint squares</h3><div class="grid2">${tool("obstacle","■ Obstacle")}${tool("void","◼ No-go")}${tool("exit","⚠ Exit")}${tool("corner","⇄ Corner")}${tool("stairs","☰ Stairs ↕")}${tool("stairsv","‖ Stairs ↔")}${tool("barracks","B Barracks")}${tool("elevator","⇅ Elevator")}${tool("floor","◻ Erase")}</div>`;
+    <h3>Paint squares</h3><div class="grid2">${tool("obstacle","■ Obstacle")}${tool("void","◼ No-go")}${tool("exit","⚠ Exit")}${tool("corner","⇄ Corner")}${tool("stairs","☰ Stairs ↕")}${tool("stairsv","‖ Stairs ↔")}${tool("barracks","▦ Barracks")}${tool("arrow","➤ Turn arrow")}${tool("radio","📻 Spawn (radio)")}${tool("elevator","⇅ Elevator")}${tool("floor","◻ Erase")}</div>`;
   el.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{ S.addType=S.addType===b.dataset.add?null:b.dataset.add; S.tool="move"; syncArmed(); if(S.addType && innerWidth<900) closeSheet(); });
   el.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{ S.tool=b.dataset.tool; S.addType=null; syncArmed(); if(S.tool!=="move" && innerWidth<900) closeSheet(); });
 }
@@ -992,6 +1009,7 @@ function renderNetPane(){
     ${room.code?`<div class="row"><label>Room</label><b style="font-size:20px;letter-spacing:.08em">${esc(room.code)}</b><button class="sm" id="r-copy">Copy</button></div>
       <div class="row"><label>Status</label><b>${esc(room.status)}</b></div>
       <div class="row"><label>In the room</label><span>${esc(room.peopleText())}</span></div>
+      <div class="row"><label>Last sync</label><span class="muted">${room.lastGot?`got ${esc(room.lastFrom)}'s board ${Math.round((Date.now()-room.lastGot)/1000)}s ago`:"nothing received yet"}${room.lastSent?` · sent yours ${Math.round((Date.now()-room.lastSent)/1000)}s ago`:""} · update #${Math.max(room.lastRev,0)}</span></div>
       <div class="row"><button class="sm" id="r-sync">Send my board to the room</button><button class="sm" id="r-pull">Get the room's board</button><button class="sm danger" id="r-leave">Leave room</button></div>`
      :`<div class="row"><button class="on" id="r-new">Create a room</button></div>
       <div class="row"><input type="text" id="r-code" placeholder="Room code, e.g. MGS-7Q4K" style="flex:1;text-transform:uppercase"><button class="sm" id="r-join">Join</button></div>
@@ -1106,13 +1124,13 @@ function boardText(who){
   const spots=(S.lastLOS||{spotted:[]}).spotted; if(spots.length) L.push("In line of sight right now: "+spots.map(x=>`${x.pl.label} ← ${x.v.label||"camera"} at ${sq(x.v.r,x.v.c)}`).join("; "));
   const recent=st.log.slice(0,6).reverse().map(l=>"- "+l.w+": "+l.m); if(recent.length){ L.push("Recent log:"); L.push(...recent); }
   // map grid
-  const CH={void:"x",obstacle:"#",exit:"E",corner:"+",stairs:"S",stairsv:"V",barracks:"B",elevator:"L"}, rs=st.rowStart??1;
-  L.push("", "MAP (. floor, # obstacle, x no-go, E exit, + corner icon, S stairs (walk up/down), V stairs (walk left/right), B barracks, L elevator; pieces: lowercase first letter of player name, g guard, b boss, c camera, ?/! attention token, k KO, d dead, A/B/C event letter)");
+  const CH={void:"x",obstacle:"#",exit:"E",corner:"+",stairs:"S",stairsv:"V",barracks:"K",elevator:"L"}, rs=st.rowStart??1, AR=["^",">","v","<"];
+  L.push("", "MAP (. floor, # obstacle, x no-go, E exit, + corner icon (guard ending a move here turns left/right per the card), ^ > v < forced-direction arrow (a patrolling guard entering it turns that way at once), S stairs (walk up/down), V stairs (walk left/right), K barracks, @ guard spawn (radio), L elevator; pieces: lowercase first letter of player name, g guard, b boss, c camera, ?/! attention token, k KO, d dead, A/B/C event letter)");
   const pc={}; st.pieces.forEach(p=>{ const k=key(p.r,p.c); const T=TYPES[p.type];
     const ch = T.kind==="player" ? (p.label||T.name)[0].toLowerCase() : p.type==="guard"?"g":p.type==="boss"?"b":p.type==="camera"?"c":p.type==="attn"?(p.mode==="alert"?"!":"?"):p.type==="ko"?"k":p.type==="dead"?"d":p.type==="event"?(p.label||"A")[0]:null;
     if(ch && (!pc[k] || T.kind!=="token")) pc[k]=ch; });
   L.push("    "+[...Array(st.cols)].map((_,c)=>colName(c).padStart(2)).join(""));
-  for(let r=0;r<st.rows;r++) L.push(String(r+rs).padStart(3)+" "+[...Array(st.cols)].map((_,c)=>" "+(pc[key(r,c)]||CH[st.cells[key(r,c)]]||".")).join(""));
+  for(let r=0;r<st.rows;r++) L.push(String(r+rs).padStart(3)+" "+[...Array(st.cols)].map((_,c)=>" "+(pc[key(r,c)]||((st.marks||{})[key(r,c)]==="radio"?"@":null)||((st.arrows||{})[key(r,c)]!=null?AR[st.arrows[key(r,c)]]:null)||CH[st.cells[key(r,c)]]||".")).join(""));
   const W=Object.keys(st.walls).map(k=>{ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); return t==="h"?`${sq(r,c)}/${sq(r+1,c)}`:`${sq(r,c)}|${sq(r,c+1)}`; });
   if(W.length) L.push("WALLS (no movement or sight across): "+W.join(", "));
   L.push("", "HOW TO REPLY: explain your plan if you like, then put each change on its own line in this exact format so the page can apply it. Move one square per line so the path is recorded.");
@@ -1288,7 +1306,7 @@ const room = {
   async loadLib(){ if(window.mqtt) return; await new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src=MQTT_SRC; sc.onload=res; sc.onerror=()=>rej(new Error("Couldn't load the room tools — check your internet.")); document.head.appendChild(sc); }); },
   async keys(code){
     const enc=new TextEncoder(), h=await crypto.subtle.digest("SHA-256", enc.encode("sneaking-table-topic:"+code));
-    this.topic="sneakingtable/v1/"+[...new Uint8Array(h)].slice(0,16).map(b=>b.toString(16).padStart(2,"0")).join("");
+    this.topic="sneakingtable/v2/"+[...new Uint8Array(h)].slice(0,16).map(b=>b.toString(16).padStart(2,"0")).join("");
     const base=await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveKey"]);
     this.key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:enc.encode("sneaking-table-salt"),iterations:120000,hash:"SHA-256"}, base, {name:"AES-GCM",length:256}, false, ["encrypt","decrypt"]);
   },
@@ -1323,23 +1341,27 @@ const room = {
     if(!this.client || this.applying) return;
     clearTimeout(this.pushTimer);
     this.pushTimer=setTimeout(async()=>{ if(!this.client) return;
-      const st=JSON.parse(JSON.stringify(S.st)); st.log=st.log.slice(0,80); const rev=Date.now(); this.lastRev=rev;
+      const st=JSON.parse(JSON.stringify(S.st)); st.log=st.log.slice(0,80); const rev=Math.max(this.lastRev,0)+1; this.lastRev=rev; this.lastSent=Date.now();
       try{ this.client.publish(this.topic+"/state", await this.seal({from:this.me,name:S.me,rev,st}), {qos:1,retain:true}); }catch(e){} }, now?0:250);
   },
   pull(){ if(!this.client) return; this.lastRev=-1; this.client.unsubscribe(this.topic+"/state",()=>this.client.subscribe(this.topic+"/state",{qos:1})); },
   async recv(topic,payload){
     let m; try{ m=await this.open(new Uint8Array(payload)); }catch(e){ return; }
     if(topic.endsWith("/hi")){ if(m.from!==this.me){ const isNew=!this.people[m.from]||Date.now()-this.people[m.from].t>45000; this.people[m.from]={name:m.name,t:m.t||Date.now()}; if(isNew){ this.hello(); } if(S.pane==="net") renderNetPane(); } return; }
-    if(m.from===this.me && m.rev<=this.lastRev) return;           // our own echo
-    if(m.rev<=this.lastRev && this.lastRev>0) return;             // older than what we have
-    if(this.lastRev===0 && m.from===this.me) return;
-    this.lastRev=m.rev; if(m.name && m.from!==this.me) this.people[m.from]={name:m.name,t:Date.now()};
+    if(m.from===this.me) return;                                   // our own echo
+    if(this.lastRev>=0 && m.rev<this.lastRev) return;             // a stale copy
+    this.lastRev=Math.max(this.lastRev,m.rev); if(m.name) this.people[m.from]={name:m.name,t:Date.now()};
+    this.lastFrom=m.name||"your friend"; this.lastGot=Date.now();
     this.applying=true; const first=!S.gotRemote; S.gotRemote=true;
     S.st=Object.assign(defaultState(), m.st); afterReplace(); if(first) fitView(); this.applying=false;
+    toast(`Board updated by ${m.name||"your friend"}`);
   },
   leave(silent){ try{ this.client&&this.client.end(true); }catch(e){} this.client=null; this.code=null; this.people={}; if(!silent){ try{ localStorage.removeItem("st-room"); }catch(e){} this.set(""); } }
 };
 setInterval(()=>room.hello(), 20000);
+function toast(msg){ let t=document.getElementById("toast"); if(!t){ t=document.createElement("div"); t.id="toast";
+  t.style.cssText="position:fixed;left:50%;top:58px;transform:translateX(-50%);background:#2e7d4f;color:#fff;padding:6px 14px;border-radius:18px;font-size:13px;z-index:60;pointer-events:none;transition:opacity .4s";
+  document.body.appendChild(t); } t.textContent=msg; t.style.opacity="1"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.opacity="0",1800); }
 // come back to the page: reconnect right away and re-check the direct link
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") return;
   if(room.client && !room.client.connected){ room.set("Reconnecting…"); try{ room.client.reconnect(); }catch(e){} }
