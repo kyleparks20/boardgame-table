@@ -924,7 +924,9 @@ const net = {
   setStatus(s,cls){ this.status=s; document.getElementById("net-dot").className=cls||""; document.getElementById("net-dot").title=s; renderNetPane(); },
   newPC(){
     this.close();
-    const pc=new RTCPeerConnection({iceServers:[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]},{urls:"stun:stun.cloudflare.com:3478"}]});
+    const ice=[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]},{urls:"stun:stun.cloudflare.com:3478"}];
+    try{ const t=JSON.parse(loadLS("st-turn")||"null"); if(t&&t.urls) ice.push({urls:t.urls.split(/[\s,]+/).filter(Boolean),username:t.username||undefined,credential:t.credential||undefined}); }catch(e){}
+    const pc=new RTCPeerConnection({iceServers:ice});
     pc.onconnectionstatechange=()=>{ const s=pc.connectionState;
       if(s==="connected") this.setStatus("Connected"+(this.peerName?" to "+this.peerName:""),"ok");
       else if(s==="failed") this.setStatus("Connection failed — try another network","");
@@ -957,10 +959,12 @@ const net = {
     const s=JSON.stringify(obj), N=15000; if(s.length<=N){ this.dc.send(s); return; }
     const id=Math.random().toString(36).slice(2), n=Math.ceil(s.length/N);
     for(let i=0;i<n;i++) this.dc.send(JSON.stringify({t:"chunk",id,i,n,d:s.slice(i*N,(i+1)*N)})); },
-  sendState(){ this.raw({t:"state",s:S.st}); },
+  sendState(){ this.raw({t:"state",s:S.st}); room.push(); },
   sendBg(){ this.raw({t:"bg",d:S.bg}); },
   recv(data){ let m; try{ m=JSON.parse(data); }catch(e){ return; }
     if(m.t==="chunk"){ const b=this.chunks[m.id]||(this.chunks[m.id]=[]); b[m.i]=m.d; if(b.filter(x=>x!==undefined).length===m.n){ delete this.chunks[m.id]; this.recv(b.join("")); } return; }
+    if(m.t==="ping"){ this.raw({t:"pong"}); return; }
+    if(m.t==="pong"){ this.lastPong=Date.now(); return; }
     if(m.t==="hello"){ this.peerName=m.name; this.setStatus("Connected to "+m.name,"ok"); }
     if(m.t==="req"){ this.sendBg(); this.sendState(); }
     if(m.t==="state"){ const first=!S.gotRemote; S.gotRemote=true; S.st=Object.assign(defaultState(), m.s); afterReplace(); if(first) fitView(); }
@@ -983,10 +987,21 @@ function renderNetPane(){
   const el=document.getElementById("pane-net"); if(!el) return;
   const connected=net.dc&&net.dc.readyState==="open";
   el.innerHTML = `
+  <div class="card"><b>★ Play in a room (recommended on phones)</b>
+    <p class="muted">Both of you enter the same short room code. It survives switching apps and reconnects by itself when you come back, even after a refresh.</p>
+    ${room.code?`<div class="row"><label>Room</label><b style="font-size:20px;letter-spacing:.08em">${esc(room.code)}</b><button class="sm" id="r-copy">Copy</button></div>
+      <div class="row"><label>Status</label><b>${esc(room.status)}</b></div>
+      <div class="row"><label>In the room</label><span>${esc(room.peopleText())}</span></div>
+      <div class="row"><button class="sm" id="r-sync">Send my board to the room</button><button class="sm" id="r-pull">Get the room's board</button><button class="sm danger" id="r-leave">Leave room</button></div>`
+     :`<div class="row"><button class="on" id="r-new">Create a room</button></div>
+      <div class="row"><input type="text" id="r-code" placeholder="Room code, e.g. MGS-7Q4K" style="flex:1;text-transform:uppercase"><button class="sm" id="r-join">Join</button></div>
+      <p class="muted">Whoever creates the room shares their current board. The other player joins and gets it.</p>`}
+    <p class="muted" style="font-size:12px">Uses a free public message server (HiveMQ, with EMQX as a backup). Your board is encrypted with the room code before it leaves your phone, so pick a code only you two know.</p></div>
   <div class="card"><div class="row"><label>Your name</label><input type="text" id="n-name" value="${esc(S.me)}" style="flex:1"></div>
     <div class="row"><label>Status</label><b>${esc(net.status)}</b></div>
     ${connected?`<div class="row"><button class="sm" id="n-push">Send my board to them</button><button class="sm danger" id="n-close">Disconnect</button></div>`:""}</div>
   ${connected?"":`
+  <details class="card"><summary><b>Direct link with codes (best on computers)</b></summary>
   <div class="card"><b>1 · Host (one player)</b>
     <div class="row"><button id="n-host">Create host code</button></div>
     ${net.role==="host"&&net.myCode?`<textarea readonly id="n-mycode">${esc(net.myCode)}</textarea><div class="row"><button class="sm" id="n-copy">Copy code</button><span class="muted">Text it to your friend.</span></div>
@@ -996,7 +1011,18 @@ function renderNetPane(){
     <textarea id="n-hostcode" placeholder="Paste the host's code"></textarea>
     <div class="row"><button id="n-join">Make reply code</button></div>
     ${net.role==="guest"&&net.myCode?`<textarea readonly id="n-mycode2">${esc(net.myCode)}</textarea><div class="row"><button class="sm" id="n-copy2">Copy reply</button><span class="muted">Text it back to the host.</span></div>`:""}</div>
-  <p class="muted">The codes link your two devices directly. No account or server holds your game. The host's board is where you start, then every change shows up on both screens. Keep this page open on both devices while you play. If it won't connect, try Wi-Fi instead of mobile data (or the other way round).</p>`}`;
+  </details>
+  <p class="muted">Direct codes link your two devices with no server at all. The host's board is where you start, then every change shows up on both screens. Keep this page open on both devices while you play. If it says "Connection failed", try home Wi-Fi on both devices, or use a board code below.</p>`}
+  <div class="card"><b>No live link? Pass a board code</b>
+    <p class="muted">Works on any network. After your turn, copy the board code and text it; the other player loads it and takes their turn.</p>
+    <div class="row"><button class="sm on" id="bc-copy">Copy board code</button><span class="muted" id="bc-size"></span></div>
+    <textarea id="bc-in" placeholder="Paste a board code from your friend"></textarea>
+    <div class="row"><button class="sm" id="bc-load">Load board code</button><span class="muted" id="bc-msg"></span></div></div>
+  <details class="card"><summary><b>Advanced: relay server (TURN)</b></summary>
+    <p class="muted">Some mobile networks block direct links. A TURN relay passes the connection through a server. Get free TURN details from a provider (for example Metered or Cloudflare), paste them here on BOTH devices, then make new codes.</p>
+    <div class="row"><input type="text" id="turn-url" placeholder="turn:example.com:3478" style="flex:1" value="${esc(turnCfg().urls||"")}"></div>
+    <div class="row"><input type="text" id="turn-user" placeholder="username" style="flex:1" value="${esc(turnCfg().username||"")}"><input type="text" id="turn-pass" placeholder="credential" style="flex:1" value="${esc(turnCfg().credential||"")}"></div>
+    <div class="row"><button class="sm" id="turn-save">Save relay</button><span class="muted" id="turn-msg">${turnCfg().urls?"Relay saved.":""}</span></div></details>`;
   const $=id=>el.querySelector("#"+id);
   if($("n-name")) $("n-name").onchange=e=>{ S.me=e.target.value.trim()||"Player"; saveLS("st-name",S.me); net.raw({t:"hello",name:S.me}); };
   if($("n-host")) $("n-host").onclick=async()=>{ net.setStatus("Making code…","wait"); try{ await net.host(); }catch(err){ net.setStatus("Couldn't create a code: "+err.message,""); } };
@@ -1006,7 +1032,28 @@ function renderNetPane(){
   if($("n-copy")) $("n-copy").onclick=()=>copy("n-mycode");
   if($("n-copy2")) $("n-copy2").onclick=()=>copy("n-mycode2");
   if($("n-close")) $("n-close").onclick=()=>{ net.close(); net.role=null; net.myCode=""; net.setStatus("Offline",""); };
-  if($("n-push")) $("n-push").onclick=()=>{ net.sendBg(); net.sendState(); };
+  if($("n-push")) $("n-push").onclick=()=>{ if(!(net.dc&&net.dc.readyState==="open")){ net.setStatus("Not connected — reconnect first",""); return; } net.sendBg(); net.sendState(); $("n-push").textContent="Sent ✓"; };
+  if($("r-new")) $("r-new").onclick=()=>room.join(room.newCode(), true);
+  if($("r-join")) $("r-join").onclick=()=>{ const c=$("r-code").value.trim().toUpperCase(); if(c.length<4){ $("r-code").focus(); return; } room.join(c, false); };
+  if($("r-leave")) $("r-leave").onclick=()=>room.leave();
+  if($("r-sync")) $("r-sync").onclick=()=>{ room.push(true); $("r-sync").textContent="Sent ✓"; };
+  if($("r-pull")) $("r-pull").onclick=()=>room.pull();
+  if($("r-copy")) $("r-copy").onclick=()=>{ try{ navigator.clipboard.writeText(room.code); $("r-copy").textContent="Copied ✓"; }catch(e){} };
+  $("bc-copy").onclick=async()=>{ const code=await boardCode(); $("bc-size").textContent=code.length+" characters";
+    const ta=$("bc-in"); try{ await navigator.clipboard.writeText(code); $("bc-copy").textContent="Copied ✓ — text it"; }catch(e){ ta.value=code; ta.select(); try{ document.execCommand("copy"); $("bc-copy").textContent="Copied ✓ — text it"; }catch(_){ $("bc-msg").textContent="Copy the text in the box"; } }
+    setTimeout(()=>{ const b=$("bc-copy"); if(b) b.textContent="Copy board code"; },2500); };
+  $("bc-load").onclick=async()=>{ try{ await loadBoardCode($("bc-in").value); $("bc-in").value=""; $("bc-msg").textContent="Loaded ✓"; }catch(e){ $("bc-msg").textContent=e.message; } };
+  $("turn-save").onclick=()=>{ const t={urls:$("turn-url").value.trim(),username:$("turn-user").value.trim(),credential:$("turn-pass").value.trim()};
+    saveLS("st-turn",JSON.stringify(t)); $("turn-msg").textContent=t.urls?"Relay saved. Make new codes.":"Relay cleared."; };
+}
+function turnCfg(){ try{ return JSON.parse(loadLS("st-turn")||"{}")||{}; }catch(e){ return {}; } }
+async function boardCode(){ const st=JSON.parse(JSON.stringify(S.st)); st.log=st.log.slice(0,25); return "B"+(await encode({k:"board",st})); }
+async function loadBoardCode(code){
+  code=(code||"").trim().replace(/[\s"'“”‘’<>]+/g,""); if(!code) throw new Error("Paste a board code first.");
+  if(code[0]!=="B") throw new Error("That's not a board code (connection codes go in the boxes above).");
+  const o=await decode(code.slice(1)); if(o.k!=="board"||!o.st) throw new Error("That's not a board code.");
+  S.undo.push(snapshot()); const keep={bgOpacity:S.st.bgOpacity,bgRect:S.st.bgRect};
+  S.st=Object.assign(defaultState(), o.st, keep); S.st.ver++; addLog("Loaded a board code"); afterReplace(); fitView();
 }
 
 // ---------- saves, menu, text export ----------
@@ -1230,12 +1277,86 @@ function syncEye(){ document.getElementById("eye").textContent = S.losAll ? "�
 document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refresh(); };
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
+// ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
+const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
+const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
+const room = {
+  code:null, status:"", client:null, key:null, topic:null, me:(loadLS("st-id")||(()=>{ const id=Math.random().toString(36).slice(2,10); saveLS("st-id",id); return id; })()), lastRev:0, people:{}, bi:0, pushTimer:null, applying:false,
+  newCode(){ const A="ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let c=""; for(let i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)]; return "MGS-"+c; },
+  set(s){ this.status=s; const d=document.getElementById("net-dot"); if(!(net.dc&&net.dc.readyState==="open")){ d.className=s.startsWith("Live")?"ok":(this.code?"wait":""); d.title=s; } if(S.pane==="net") renderNetPane(); },
+  peopleText(){ const now=Date.now(), ps=Object.values(this.people).filter(p=>now-p.t<45000).map(p=>p.name); return [S.me+" (you)",...ps].join(", "); },
+  async loadLib(){ if(window.mqtt) return; await new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src=MQTT_SRC; sc.onload=res; sc.onerror=()=>rej(new Error("Couldn't load the room tools — check your internet.")); document.head.appendChild(sc); }); },
+  async keys(code){
+    const enc=new TextEncoder(), h=await crypto.subtle.digest("SHA-256", enc.encode("sneaking-table-topic:"+code));
+    this.topic="sneakingtable/v1/"+[...new Uint8Array(h)].slice(0,16).map(b=>b.toString(16).padStart(2,"0")).join("");
+    const base=await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveKey"]);
+    this.key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:enc.encode("sneaking-table-salt"),iterations:120000,hash:"SHA-256"}, base, {name:"AES-GCM",length:256}, false, ["encrypt","decrypt"]);
+  },
+  async seal(obj){ let bytes=new TextEncoder().encode(JSON.stringify(obj));
+    try{ bytes=new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer()); }catch(e){}
+    const iv=crypto.getRandomValues(new Uint8Array(12)), ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv}, this.key, bytes));
+    const out=new Uint8Array(12+ct.length); out.set(iv); out.set(ct,12); return out; },
+  async open(u8){ const iv=u8.slice(0,12), pt=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv}, this.key, u8.slice(12)));
+    try{ return JSON.parse(await new Response(new Blob([pt]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text()); }catch(e){ return JSON.parse(new TextDecoder().decode(pt)); } },
+  async join(code, creating){
+    code=code.trim().toUpperCase(); if(this.client) this.leave(true);
+    this.code=code; this.creating=creating; this.lastRev=creating?0:-1; saveLS("st-room",JSON.stringify({code,creating:false})); this.set("Connecting to room…");
+    try{ await this.loadLib(); await this.keys(code); }catch(e){ this.set(e.message); return; }
+    this.connect();
+  },
+  connect(){
+    const url=BROKERS[this.bi%BROKERS.length];
+    const c=mqtt.connect(url,{clientId:"st_"+this.me+"_"+Math.random().toString(36).slice(2,6), clean:true, keepalive:30, reconnectPeriod:3000, connectTimeout:8000});
+    this.client=c; let ok=false;
+    c.on("connect",()=>{ ok=true; this.set("Live in room "+this.code);
+      c.subscribe([this.topic+"/state",this.topic+"/hi"],{qos:1},()=>{
+        if(this.creating){ this.creating=false; this.push(true); addLog(`Created room ${this.code}`); }
+        this.hello(); }); });
+    c.on("message",(t,payload)=>this.recv(t,payload));
+    c.on("reconnect",()=>this.set("Reconnecting…"));
+    c.on("offline",()=>this.set("Offline — will reconnect when you're back"));
+    c.on("error",()=>{});
+    setTimeout(()=>{ if(!ok && this.client===c){ c.end(true); this.bi++; this.set("Trying backup server…"); this.connect(); } }, 9000);
+  },
+  async hello(){ if(!this.client||!this.client.connected) return; try{ this.client.publish(this.topic+"/hi", await this.seal({from:this.me,name:S.me,t:Date.now()}), {qos:0}); }catch(e){} },
+  push(now){
+    if(!this.client || this.applying) return;
+    clearTimeout(this.pushTimer);
+    this.pushTimer=setTimeout(async()=>{ if(!this.client) return;
+      const st=JSON.parse(JSON.stringify(S.st)); st.log=st.log.slice(0,80); const rev=Date.now(); this.lastRev=rev;
+      try{ this.client.publish(this.topic+"/state", await this.seal({from:this.me,name:S.me,rev,st}), {qos:1,retain:true}); }catch(e){} }, now?0:250);
+  },
+  pull(){ if(!this.client) return; this.lastRev=-1; this.client.unsubscribe(this.topic+"/state",()=>this.client.subscribe(this.topic+"/state",{qos:1})); },
+  async recv(topic,payload){
+    let m; try{ m=await this.open(new Uint8Array(payload)); }catch(e){ return; }
+    if(topic.endsWith("/hi")){ if(m.from!==this.me){ const isNew=!this.people[m.from]||Date.now()-this.people[m.from].t>45000; this.people[m.from]={name:m.name,t:m.t||Date.now()}; if(isNew){ this.hello(); } if(S.pane==="net") renderNetPane(); } return; }
+    if(m.from===this.me && m.rev<=this.lastRev) return;           // our own echo
+    if(m.rev<=this.lastRev && this.lastRev>0) return;             // older than what we have
+    if(this.lastRev===0 && m.from===this.me) return;
+    this.lastRev=m.rev; if(m.name && m.from!==this.me) this.people[m.from]={name:m.name,t:Date.now()};
+    this.applying=true; const first=!S.gotRemote; S.gotRemote=true;
+    S.st=Object.assign(defaultState(), m.st); afterReplace(); if(first) fitView(); this.applying=false;
+  },
+  leave(silent){ try{ this.client&&this.client.end(true); }catch(e){} this.client=null; this.code=null; this.people={}; if(!silent){ try{ localStorage.removeItem("st-room"); }catch(e){} this.set(""); } }
+};
+setInterval(()=>room.hello(), 20000);
+// come back to the page: reconnect right away and re-check the direct link
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") return;
+  if(room.client && !room.client.connected){ room.set("Reconnecting…"); try{ room.client.reconnect(); }catch(e){} }
+  if(room.client && room.client.connected) room.hello();
+  if(net.dc && net.dc.readyState==="open"){ net.raw({t:"ping"}); } });
+// direct link heartbeat: notice when the other phone has gone quiet
+setInterval(()=>{ if(!(net.dc&&net.dc.readyState==="open")) return; net.raw({t:"ping"});
+  if(net.lastPong && Date.now()-net.lastPong>20000 && !net.warned){ net.warned=true; net.setStatus("Your friend's page went quiet (app switched?). If it doesn't come back, use a room or new codes.","wait"); }
+  if(net.lastPong && Date.now()-net.lastPong<6000 && net.warned){ net.warned=false; net.setStatus("Connected"+(net.peerName?" to "+net.peerName:""),"ok"); } }, 5000);
+
 // ---------- boot ----------
 syncEye();
 new ResizeObserver(()=>render()).observe(stage);
 const fresh=!loadLS("st-state");
 fitView(); syncArmed(); refresh(); renderNetPane();
 if(fresh) openMenu();
+try{ const saved=JSON.parse(loadLS("st-room")||"null"); if(saved&&saved.code) room.join(saved.code,false); }catch(e){}
 </script>
 </body>
 </html>
