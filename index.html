@@ -1008,6 +1008,8 @@ function renderNetPane(){
     <p class="muted">Both of you enter the same short room code. It survives switching apps and reconnects by itself when you come back, even after a refresh.</p>
     ${room.code?`<div class="row"><label>Room</label><b style="font-size:20px;letter-spacing:.08em">${esc(room.code)}</b><button class="sm" id="r-copy">Copy</button></div>
       <div class="row"><label>Status</label><b>${esc(room.status)}</b></div>
+      <div class="row"><label>Servers</label><span class="muted">${esc(room.serversText())}</span></div>
+      <div class="row"><label>Version</label><span class="muted">${APP_VERSION}${room.otherVersion?` · <b class="bad">your friend has ${esc(room.otherVersion)} — both reload</b>`:""}</span></div>
       <div class="row"><label>In the room</label><span>${esc(room.peopleText())}</span></div>
       <div class="row"><label>Last sync</label><span class="muted">${room.lastGot?`got ${esc(room.lastFrom)}'s board ${Math.round((Date.now()-room.lastGot)/1000)}s ago`:"nothing received yet"}${room.lastSent?` · sent yours ${Math.round((Date.now()-room.lastSent)/1000)}s ago`:""} · update #${Math.max(room.lastRev,0)}</span></div>
       <div class="row"><button class="sm" id="r-sync">Send my board to the room</button><button class="sm" id="r-pull">Get the room's board</button><button class="sm danger" id="r-leave">Leave room</button></div>`
@@ -1296,6 +1298,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
+const APP_VERSION="1.7";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -1316,39 +1319,47 @@ const room = {
     const out=new Uint8Array(12+ct.length); out.set(iv); out.set(ct,12); return out; },
   async open(u8){ const iv=u8.slice(0,12), pt=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv}, this.key, u8.slice(12)));
     try{ return JSON.parse(await new Response(new Blob([pt]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text()); }catch(e){ return JSON.parse(new TextDecoder().decode(pt)); } },
+  clients:[], seen:{},
+  connected(){ return this.clients.filter(c=>c.connected); },
+  serversText(){ return this.clients.map(c=>`${c._name} ${c.connected?"✓":"…"}`).join(" · ")||"none"; },
   async join(code, creating){
-    code=code.trim().toUpperCase(); if(this.client) this.leave(true);
+    code=code.trim().toUpperCase().replace(/\s+/g,""); if(!code.startsWith("MGS-") && /^[A-Z0-9]{4}$/.test(code)) code="MGS-"+code;
+    if(this.clients.length) this.leave(true);
     this.code=code; this.creating=creating; this.lastRev=creating?0:-1; saveLS("st-room",JSON.stringify({code,creating:false})); this.set("Connecting to room…");
     try{ await this.loadLib(); await this.keys(code); }catch(e){ this.set(e.message); return; }
-    this.connect();
+    BROKERS.forEach(url=>this.connectOne(url));      // join every server at once so both phones always share one
   },
-  connect(){
-    const url=BROKERS[this.bi%BROKERS.length];
-    const c=mqtt.connect(url,{clientId:"st_"+this.me+"_"+Math.random().toString(36).slice(2,6), clean:true, keepalive:30, reconnectPeriod:3000, connectTimeout:8000});
-    this.client=c; let ok=false;
-    c.on("connect",()=>{ ok=true; this.set("Live in room "+this.code);
+  connectOne(url){
+    const c=mqtt.connect(url,{clientId:"st_"+this.me+"_"+Math.random().toString(36).slice(2,6), clean:true, keepalive:30, reconnectPeriod:3000, connectTimeout:10000});
+    c._name=/hivemq/.test(url)?"HiveMQ":/emqx/.test(url)?"EMQX":url.replace(/^wss?:\/\//,"").split(/[:/]/)[0];
+    this.clients.push(c);
+    c.on("connect",()=>{
       c.subscribe([this.topic+"/state",this.topic+"/hi"],{qos:1},()=>{
-        if(this.creating){ this.creating=false; this.push(true); addLog(`Created room ${this.code}`); }
-        this.hello(); }); });
+        if(this.creating){ this.creating=false; addLog(`Created room ${this.code}`); }
+        if(this.lastRev>=0) this.push(true);        // make sure this server has our latest board
+        this.hello(); });
+      this.set("Live in room "+this.code); });
     c.on("message",(t,payload)=>this.recv(t,payload));
-    c.on("reconnect",()=>this.set("Reconnecting…"));
-    c.on("offline",()=>this.set("Offline — will reconnect when you're back"));
-    c.on("error",()=>{});
-    setTimeout(()=>{ if(!ok && this.client===c){ c.end(true); this.bi++; this.set("Trying backup server…"); this.connect(); } }, 9000);
+    const upd=()=>this.set(this.connected().length?"Live in room "+this.code:"Reconnecting…");
+    c.on("reconnect",upd); c.on("offline",upd); c.on("close",upd); c.on("error",()=>{});
   },
-  async hello(){ if(!this.client||!this.client.connected) return; try{ this.client.publish(this.topic+"/hi", await this.seal({from:this.me,name:S.me,t:Date.now()}), {qos:0}); }catch(e){} },
+  async publishAll(topic, obj, opts){ const live=this.connected(); if(!live.length) return; const payload=await this.seal(obj); live.forEach(c=>{ try{ c.publish(topic,payload,opts); }catch(e){} }); },
+  hello(){ if(this.code) this.publishAll(this.topic+"/hi",{from:this.me,name:S.me,t:Date.now(),v:APP_VERSION},{qos:0}); },
   push(now){
-    if(!this.client || this.applying) return;
+    if(!this.clients.length || this.applying) return;
     clearTimeout(this.pushTimer);
-    this.pushTimer=setTimeout(async()=>{ if(!this.client) return;
-      const st=JSON.parse(JSON.stringify(S.st)); st.log=st.log.slice(0,80); const rev=Math.max(this.lastRev,0)+1; this.lastRev=rev; this.lastSent=Date.now();
-      try{ this.client.publish(this.topic+"/state", await this.seal({from:this.me,name:S.me,rev,st}), {qos:1,retain:true}); }catch(e){} }, now?0:250);
+    this.pushTimer=setTimeout(()=>{ if(!this.clients.length) return;
+      const st=JSON.parse(JSON.stringify(S.st)); st.log=st.log.slice(0,80);
+      if(!this.pendingRev || this.pendingRev<=this.lastRev) this.pendingRev=Math.max(this.lastRev,0)+1;
+      const rev=this.pendingRev; this.lastRev=rev; this.lastSent=Date.now();
+      this.publishAll(this.topic+"/state",{from:this.me,name:S.me,rev,st},{qos:1,retain:true}); }, now?0:250);
   },
-  pull(){ if(!this.client) return; this.lastRev=-1; this.client.unsubscribe(this.topic+"/state",()=>this.client.subscribe(this.topic+"/state",{qos:1})); },
+  pull(){ this.lastRev=-1; this.connected().forEach(c=>c.unsubscribe(this.topic+"/state",()=>c.subscribe(this.topic+"/state",{qos:1}))); },
   async recv(topic,payload){
     let m; try{ m=await this.open(new Uint8Array(payload)); }catch(e){ return; }
-    if(topic.endsWith("/hi")){ if(m.from!==this.me){ const isNew=!this.people[m.from]||Date.now()-this.people[m.from].t>45000; this.people[m.from]={name:m.name,t:m.t||Date.now()}; if(isNew){ this.hello(); } if(S.pane==="net") renderNetPane(); } return; }
+    if(topic.endsWith("/hi")){ if(m.from!==this.me){ if(m.v&&m.v!==APP_VERSION) this.otherVersion=m.v; const isNew=!this.people[m.from]||Date.now()-this.people[m.from].t>45000; this.people[m.from]={name:m.name,t:m.t||Date.now()}; if(isNew){ this.hello(); } if(S.pane==="net") renderNetPane(); } return; }
     if(m.from===this.me) return;                                   // our own echo
+    const sig=m.from+":"+m.rev; if(this.seen[sig]) return; this.seen[sig]=1;   // same update via the second server
     if(this.lastRev>=0 && m.rev<this.lastRev) return;             // a stale copy
     this.lastRev=Math.max(this.lastRev,m.rev); if(m.name) this.people[m.from]={name:m.name,t:Date.now()};
     this.lastFrom=m.name||"your friend"; this.lastGot=Date.now();
@@ -1356,7 +1367,7 @@ const room = {
     S.st=Object.assign(defaultState(), m.st); afterReplace(); if(first) fitView(); this.applying=false;
     toast(`Board updated by ${m.name||"your friend"}`);
   },
-  leave(silent){ try{ this.client&&this.client.end(true); }catch(e){} this.client=null; this.code=null; this.people={}; if(!silent){ try{ localStorage.removeItem("st-room"); }catch(e){} this.set(""); } }
+  leave(silent){ this.clients.forEach(c=>{ try{ c.end(true); }catch(e){} }); this.clients=[]; this.code=null; this.people={}; this.seen={}; if(!silent){ try{ localStorage.removeItem("st-room"); }catch(e){} this.set(""); } }
 };
 setInterval(()=>room.hello(), 20000);
 function toast(msg){ let t=document.getElementById("toast"); if(!t){ t=document.createElement("div"); t.id="toast";
@@ -1364,8 +1375,8 @@ function toast(msg){ let t=document.getElementById("toast"); if(!t){ t=document.
   document.body.appendChild(t); } t.textContent=msg; t.style.opacity="1"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.opacity="0",1800); }
 // come back to the page: reconnect right away and re-check the direct link
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") return;
-  if(room.client && !room.client.connected){ room.set("Reconnecting…"); try{ room.client.reconnect(); }catch(e){} }
-  if(room.client && room.client.connected) room.hello();
+  room.clients.forEach(c=>{ if(!c.connected){ try{ c.reconnect(); }catch(e){} } });
+  if(room.code){ room.set(room.connected().length?"Live in room "+room.code:"Reconnecting…"); room.hello(); }
   if(net.dc && net.dc.readyState==="open"){ net.raw({t:"ping"}); } });
 // direct link heartbeat: notice when the other phone has gone quiet
 setInterval(()=>{ if(!(net.dc&&net.dc.readyState==="open")) return; net.raw({t:"ping"});
