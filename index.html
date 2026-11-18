@@ -2995,7 +2995,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="6.3";
+const APP_VERSION="6.4";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3145,6 +3145,11 @@ function saveCamp(){ const c=S.st.camp; if(!c) return; if(!c.code) c.code=newCam
   all[c.id]={name:c.name,t:Date.now(),cleared:Object.keys(c.best||{}).filter(k=>c.best[k].result==="cleared").length,state:st};
   try{ localStorage.setItem("st-camps",JSON.stringify(all)); }catch(e){ const ks=Object.keys(all).sort((a,b)=>all[a].t-all[b].t); if(ks.length>1){ delete all[ks[0]]; try{ localStorage.setItem("st-camps",JSON.stringify(all)); }catch(_){} } } }
 function applyCustom(){ const c=S.st.camp; if(c&&c.custom) Object.assign(EQUIP,c.custom); }
+function deleteCampaign(id){ const all=camps(), nm=(all[id]||{}).name||(S.st.camp&&S.st.camp.id===id&&S.st.camp.name)||"Campaign"; delete all[id];
+  try{ localStorage.setItem("st-camps",JSON.stringify(all)); }catch(e){}
+  if(S.st.camp&&S.st.camp.id===id){ try{ campSync.stop(); }catch(e){} commit(s=>{ const n=defaultState(); Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,{screen:"lobby"}); }, `Campaign deleted: ${nm}`); }
+  else { addLog(`Campaign deleted: ${nm}`); renderScreen(); }
+  toast(`Deleted “${nm}” from this phone`); }
 function setScreen(k,extra){ commit(s=>{ s.screen=k; if(extra) Object.assign(s,extra); }); }
 function newCampaign(name){ const c={id:"c"+Date.now().toString(36),code:newCampCode(),name:name||"Shadow Moses",unlocked:["stage1"],memory:[],custom:{},runs:{},best:{},created:Date.now()};
   commit(s=>{ const n=defaultState(); Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,{camp:c,screen:"missions"}); }, `New campaign: ${c.name}`); }
@@ -3204,8 +3209,8 @@ function renderScreen(){
         :`<p class="muted">Playing on this device only. To play together, create a room and send the code to your friend.</p>
           <div class="row"><button class="on" id="l-create">Create a room</button><input type="text" id="l-code" placeholder="MGS-XXXX" style="flex:1;min-width:0"><button class="sm" id="l-join">Join</button></div>`}</div>
       <div class="scard"><div class="sh">2 · Campaign</div>
-        ${camp?`<div class="row"><b style="flex:1">${esc(camp.name)}</b><button class="on" data-go="missions">Continue →</button></div>`:""}
-        ${saved.filter(([id])=>!camp||id!==camp.id).map(([id,v])=>`<div class="row"><span style="flex:1"><b>${esc(v.name)}</b><br><span class="muted">${v.cleared} mission${v.cleared===1?"":"s"} cleared · ${new Date(v.t).toLocaleDateString()}</span></span><button class="sm" data-load="${id}">Load</button></div>`).join("")}
+        ${camp?`<div class="row"><b style="flex:1">${esc(camp.name)}</b><button class="on" data-go="missions">Continue →</button><button class="sm danger" data-delcamp="${camp.id}" aria-label="Delete campaign">🗑</button></div>`:""}
+        ${saved.filter(([id])=>!camp||id!==camp.id).map(([id,v])=>`<div class="row"><span style="flex:1"><b>${esc(v.name)}</b><br><span class="muted">${v.cleared} mission${v.cleared===1?"":"s"} cleared · ${new Date(v.t).toLocaleDateString()}</span></span><button class="sm" data-load="${id}">Load</button><button class="sm danger" data-delcamp="${id}" aria-label="Delete campaign">🗑</button></div>`).join("")}
         <div class="row"><input type="text" id="l-new" placeholder="New campaign name" style="flex:1;min-width:0"><button class="${camp?"sm":"on"}" id="l-start">New campaign</button></div>
         <div class="row"><input type="text" id="l-cj" placeholder="CAMP-XXXX-XXXX" style="flex:1;min-width:0"><button class="sm" id="l-cjoin">Join a campaign</button></div>
         <p class="muted">A campaign remembers unlocked missions, your Memory Box and every run. It saves by itself on each phone in the room.</p></div>`; }
@@ -3277,6 +3282,9 @@ function renderScreen(){
   on("#l-start",()=>newCampaign(q("#l-new").value.trim()));
   on("#l-cjoin",()=>joinCampaign(q("#l-cj").value));
   all("[data-load]",b=>loadCampaign(b.dataset.load));
+  el.querySelectorAll("[data-delcamp]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const id=b.dataset.delcamp, nm=(camps()[id]||{}).name||(S.st.camp&&S.st.camp.name)||"this campaign";
+    if(!b.dataset.armed){ b.dataset.armed=1; b.textContent="Delete?"; alertMsg(`Tap Delete? again to remove “${nm}” from this phone. Missions, runs and its Memory Box go with it.`); setTimeout(()=>{ if(b.isConnected){ delete b.dataset.armed; b.textContent="🗑"; } },4000); return; }
+    deleteCampaign(id); });
   all("[data-brief]",b=>{ const k_=b.dataset.brief, ps=people(); setScreen("briefing",{brief:Object.assign({key:k_,seats:{},loadout:{},runners:charsOf(k_).length===1?ps.map(p=>({id:p.id,name:p.name})):[]},(S.st.brief&&S.st.brief.key===k_)?S.st.brief:{})}); });
   all("[data-seat]",b=>commit(s=>{ s.brief.seats=s.brief.seats||{}; const cur=s.brief.seats[b.dataset.seat]; s.brief.seats[b.dataset.seat]=cur&&cur.id===b.dataset.pid?null:{id:b.dataset.pid,name:b.dataset.pn}; }));
   el.querySelectorAll("[data-sproxy]").forEach(i=>i.onchange=()=>commit(s=>{ const c=s.brief.seats[i.dataset.sproxy]; if(c) c.proxy=i.value.trim(); }));
