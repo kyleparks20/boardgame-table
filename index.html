@@ -2109,7 +2109,10 @@ function reactionPanel(g){ return new Promise(res=>{
   const draw=()=>{ g=P(g.id); if(!g){ box.style.display="none"; res(0); return; }
     const toks=tokenAt(g.r,g.c), pls=S.st.pieces.filter(isPlayer);
     const opts=t=>{ const o=[];
-      if(t.type==="attn"){ o.push(fx(t.mode==="alert"?"Flip to ? (investigate)":"Flip to ! (alert)",()=>commit(s=>{ const q=s.pieces.find(x=>x.id===t.id); q.mode=q.mode==="alert"?"q":"alert"; },`Reaction: ${tokName(t)} flipped to ${t.mode==="alert"?"?":"!"}`)));
+      const own=t.type==="attn"&&pls.find(pl=>(pl.label||"").toLowerCase()===(t.owner||"").toLowerCase());
+      if(own){ const flipTo=t.mode==="alert"?"q":"alert";
+        o.push(fx(`Flip to ${flipTo==="q"?"?":"!"} and put it under ${nameOf(own)}`,()=>commit(s=>{ const q=s.pieces.find(x=>x.id===t.id); q.mode=flipTo; q.r=own.r; q.c=own.c; },`Reaction: ${t.owner}'s token flipped to ${flipTo==="q"?"?":"!"} and placed under ${nameOf(own)} at ${sq(own.r,own.c)}`))); }
+      if(t.type==="attn"){ o.push(fx(t.mode==="alert"?"Flip to ? (stays here)":"Flip to ! (stays here)",()=>commit(s=>{ const q=s.pieces.find(x=>x.id===t.id); q.mode=q.mode==="alert"?"q":"alert"; },`Reaction: ${tokName(t)} flipped to ${t.mode==="alert"?"?":"!"}`)));
         pls.forEach(pl=>o.push(fx(`Move it under ${nameOf(pl)}`,()=>commit(s=>{ const q=s.pieces.find(x=>x.id===t.id); q.r=pl.r; q.c=pl.c; },`Reaction: ${t.owner}'s token moved under ${nameOf(pl)} at ${sq(pl.r,pl.c)}`))));
         o.push(fx("Remove it from the map",()=>commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==t.id); },`Reaction: ${tokName(t)} removed from the map`))); }
       if(t.type==="ko"){ o.push(fx(t.stars===1?"Wake him up (becomes a guard)":"Stir him (★★ → ★)",()=>{ if((t.stars||2)>1) commit(s=>{ s.pieces.find(x=>x.id===t.id).stars=1; },`Reaction: KO guard at ${sq(t.r,t.c)} stirs → ★`); else wakeGuard(t); }));
@@ -2750,7 +2753,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="5.4";
+const APP_VERSION="5.5";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
