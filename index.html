@@ -264,6 +264,23 @@ button.big{flex:1;min-height:54px;font-size:17px;font-weight:700}
 .stat{background:#141b18;border:1px solid #26322d;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-family:Rajdhani,Inter,sans-serif;font-size:28px}.stat span{font-size:11.5px;color:var(--muted)}.stat.bad b{color:#ff8a7a}
 .op{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid #26322d;border-radius:12px;margin:6px 0;background:#141b18}.op.kia{border-color:#c0392b;opacity:.9}
 .kia-tag{background:#c0392b;color:#fff;font-weight:800;letter-spacing:.12em;padding:2px 8px;border-radius:6px;font-size:12px}
+
+/* ---- pass 5.1 ---- */
+#rollbox,#rollview{position:fixed!important;left:50%!important;right:auto!important;top:50%!important;bottom:auto!important;transform:translate(-50%,-50%);width:min(440px,92vw)!important;max-height:80vh;overflow:auto;z-index:60}
+#rollview{display:none;background:#121816fa;border:1px solid #2f6b49;border-radius:18px;padding:14px 16px;box-shadow:0 18px 50px #000c;pointer-events:none}
+#rollview.show{display:block}
+#alertbox{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%) scale(.96);z-index:70;width:min(380px,86vw);background:#2a1414f5;border:2px solid #e0533f;border-radius:16px;padding:16px 18px;display:flex;gap:12px;align-items:center;font-size:16px;font-weight:600;color:#ffe3de;box-shadow:0 18px 50px #000d;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+#alertbox.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+#alertbox .ab-ic{font-size:26px;color:#ff8a7a}
+#status{position:absolute;left:0;right:0;top:0;z-index:6;height:34px;display:flex;align-items:center;justify-content:center;font-family:Rajdhani,Inter,sans-serif;font-size:17px!important;font-weight:700;letter-spacing:.12em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 12px;pointer-events:none;border-radius:0!important;box-shadow:0 2px 12px #0008!important;border-bottom:1px solid #ffffff22}
+#zonebar{top:42px!important}
+#toast{top:96px!important}
+nav.hud{justify-content:center!important;gap:4px;padding:0 4px}
+nav.hud button{flex:0 0 64px!important;max-width:64px!important}
+nav.hud .turnbtn{flex:0 0 74px!important;max-width:74px!important;margin:6px 4px!important;border-radius:14px!important;box-shadow:0 0 0 1px #7ff0a8,0 4px 12px #0008!important;border-width:1px!important}
+nav.hud .turnbtn .ic{font-size:18px!important} nav.hud .turnbtn b{font-size:13px!important;max-width:68px!important}
+#qbar{left:50%!important;right:auto!important;transform:translateX(-50%);width:min(520px,94vw);padding:10px 14px!important;font-size:15px;justify-content:center;flex-wrap:wrap;-webkit-mask-image:none!important;mask-image:none!important}
+.tp-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tp-acts button{flex:1 1 auto}
 </style>
 </head>
 <body>
@@ -282,7 +299,7 @@ button.big{flex:1;min-height:54px;font-size:17px;font-weight:700}
 <div id="stage">
   <canvas id="board"></canvas>
   <div id="hover">—</div>
-  <div id="status" style="position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:6;padding:4px 12px;border-radius:16px;font-size:13px;font-weight:700;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;pointer-events:none"></div>
+  <div id="status"></div>
   <div id="armed"><span id="armed-txt"></span><button id="armed-x">Cancel</button></div>
   <button id="eye"></button>
   <div id="zonebar"></div>
@@ -475,8 +492,8 @@ const LAYOUTS = {
       "h:5,3", "v:6,1","v:7,1","v:6,3","v:7,3", "h:7,2","h:7,3",            // barracks (C5–D6), door at C4→C5
       "h:5,6", "v:6,4","v:7,4","v:6,6","v:7,6", "h:7,5","h:7,6",            // right room (F5–G6), door at F4→F5
       "h:10,1","h:10,2" ],                                                  // wall above B10/C10
-    arrows:{"6,2":0,"7,2":0,"7,3":3,"7,5":0}, marks:{"7,2":"radio"}, counts:{"6,3":3},
-    shafts:{"Cargo Dock":{r:0,c:3}}, lift:null, liftNeeds:"A", liftGuard:true,
+    arrows:{"6,2":0,"7,2":0,"7,3":3,"7,5":0,"0,4":2}, marks:{"7,2":"radio"}, counts:{"6,3":3},
+    shafts:{"Cargo Dock":{r:0,c:3,icon:[1,0]}}, lift:null, liftNeeds:"A", liftGuard:{r:0,c:4,facing:2},
     rules:["Objective: collect Event A, then Interact next to the elevator shaft to call it down.",
       "The elevator comes down with a guard on it.",
       "Snake escapes by Interacting on the elevator — only when there is no red ! on the map."],
@@ -684,13 +701,13 @@ function activationOrder(){
 const stage=document.getElementById("stage"), cv=document.getElementById("board"), ctx=cv.getContext("2d");
 const boardW=()=>M+S.st.cols*CS, boardH=()=>M+S.st.rows*CS;
 function fitView(){
-  const w=stage.clientWidth, h=stage.clientHeight, pad=12;
-  const z=Math.max(0.2, Math.min((w-pad*2)/boardW(), (h-pad*2)/boardH()));
-  S.view={z, x:(w-boardW()*z)/2, y:Math.max(pad,(h-boardH()*z)/2)}; render();
+  const w=stage.clientWidth, h=stage.clientHeight, pad=12, top=(S.st.zones&&S.st.zones.length?84:46);
+  const z=Math.max(0.2, Math.min((w-pad*2)/boardW(), (h-top-pad)/boardH()));
+  S.view={z, x:(w-boardW()*z)/2, y:Math.max(top,top+(h-top-pad-boardH()*z)/2)}; render();
 }
 function fitZone(z){
   if(!z){ fitView(); return; } const w=stage.clientWidth, h=stage.clientHeight, pad=12, top=84, bot=60, bw=boardW(), y0=M+z.r0*CS, zh=(z.r1-z.r0+1)*CS;
-  const zz=Math.max(0.2, Math.min((w-pad*2)/bw, (h-top-bot)/zh));
+  const zz=Math.max(0.2, Math.min((w-pad*2)/bw, (h-top-bot)/zh)); /* zone view */
   S.view={z:zz, x:(w-bw*zz)/2, y:top+((h-top-bot)-zh*zz)/2-y0*zz}; S.zoneView=z.name; render(); renderZonebar(); }
 function renderZonebar(){ const el=document.getElementById("zonebar"); if(!el) return; const zs=S.st.zones||[];
   if(!zs.length){ el.innerHTML=""; return; }
@@ -748,7 +765,8 @@ function render(){
     ctx.strokeStyle=here?"#7fd3c3":"#52605d"; ctx.lineWidth=2.5; ctx.setLineDash(here?[]:[5,4]); ctx.strokeRect(x+3,y+3,CS*2-6,CS*2-6); ctx.setLineDash([]);
     ctx.fillStyle=here?"#000a":"#0008"; rr(x+CS-30,y+CS-9,60,18,5); ctx.fill();
     ctx.fillStyle=here?"#bfeee5":"#8f9c99"; ctx.font="bold 10px system-ui"; ctx.fillText(here?"⇅ ELEVATOR":"EMPTY SHAFT",x+CS,y+CS+1);
-    ctx.fillStyle=here?"#c0392bdd":"#5a2a2a99"; ctx.beginPath(); ctx.arc(x+CS*1.5,y+CS*1.5,10,0,7); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="11px system-ui"; ctx.fillText("☝",x+CS*1.5,y+CS*1.5+1); }
+    const ic=sh.icon||[1,1], ix=x+CS*(ic[1]+.5), iy=y+CS*(ic[0]+.5);
+    ctx.fillStyle=here?"#c0392bdd":"#5a2a2a99"; ctx.beginPath(); ctx.arc(ix,iy,10,0,7); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="11px system-ui"; ctx.fillText("☝",ix,iy+1); if(0) ctx.fillText("☝",x+CS*1.5,y+CS*1.5+1); }
   for(const k in (st.counts||{})){ const [r,c]=k.split(",").map(Number); ctx.fillStyle="#9fe0b5"; ctx.font="bold 9px system-ui"; ctx.fillText("COUNT",c*CS+CS/2,r*CS+CS/2-7); ctx.font="bold 15px system-ui"; ctx.fillText(st.counts[k],c*CS+CS/2,r*CS+CS/2+7); }
   ctx.strokeStyle="#ffffff16"; ctx.lineWidth=1/v.z;
   for(let c=0;c<=st.cols;c++){ ctx.beginPath(); ctx.moveTo(c*CS,0); ctx.lineTo(c*CS,bh); ctx.stroke(); }
@@ -902,7 +920,7 @@ cv.addEventListener("pointermove",ev=>{
   const h=toBoard(ev.clientX,ev.clientY); if(ev.pointerType==="mouse") S.hover=h.ok?h:null;
   if(S.drag){ S.drag.x=h.x; S.drag.y=h.y; if(h.r!==S.drag.r||h.c!==S.drag.c) S.drag.moved=true; render(); return; }
   if(S.paintSnap){ if(h.ok) paint(h); render(); return; }
-  if(S.dragWhy&&tapStart&&Math.hypot(ev.clientX-tapStart.x,ev.clientY-tapStart.y)>14){ toast(S.dragWhy); S.dragWhy=null; tapStart=null; return; }
+  if(S.dragWhy){ if(tapStart&&!tapStart.warned&&Math.hypot(ev.clientX-tapStart.x,ev.clientY-tapStart.y)>10){ tapStart.warned=true; toast("✗ "+S.dragWhy); } return; }
   if(tapStart){ // one-finger drag on empty board = pan
     const dx=ev.clientX-tapStart.x, dy=ev.clientY-tapStart.y;
     if(tapStart.pan || Math.hypot(dx,dy)>8){ tapStart.pan=true; S.view.x=tapStart.vx+dx; S.view.y=tapStart.vy+dy; render(); }
@@ -1133,6 +1151,7 @@ function renderBuildPane(){
 function renderQbar(){
   const q=document.getElementById("qbar"), p=P(S.sel);
   const show = p && !(S.pane && innerWidth<900); stage.classList.toggle("qb", !!show);
+  if(!p) S.openedFor=null;
   if(!show){ q.style.display="none"; return; }
   const T=TYPES[p.type]; let h=`<span class="sw" style="background:${T.color}">${T.short}</span><span class="name">${esc(nameOf(p))} · ${sq(p.r,p.c)}</span>`;
   if(!S.builder&&((isPlayer(p)&&!isMine(p))||(!isPlayer(p)&&(!amPlayer()||flow().g!=="review")))){
@@ -1162,6 +1181,8 @@ function renderQbar(){
       {label:`★ Focus & abilities`,run:()=>focusPanel(p)}, act("Knock",`knock ${p.label}`), act("✓ End turn",`end ${p.label}`), ...acts.filter(a=>!/dmg|token|Seen|attention|Rations|Disguise/i.test(a.label))];
   }
   if(p.hp) h+=`<span class="muted" style="white-space:nowrap">${p.type==="guard"?`${p.dmg||0}D ${p.kod||0}KO/${p.hp}`:`HP ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`}</span>`;
+  if(isPlayer(p)&&!S.builder){ S.myActs={id:p.id,acts:acts.filter(a=>!/Start .*turn|Focus & abilities|End turn/.test(a.label))}; q.style.display="none"; stage.classList.remove("qb");
+    if(S.openedFor!==p.id){ S.openedFor=p.id; setTimeout(()=>{ const tp=document.getElementById("turnpanel"); if(!tp.classList.contains("open")){ closeAll(); openTurnPanel(true); } },0); } return; }
   h+=acts.map((a,i)=>`<button class="sm" data-qa="${i}">${esc(a.label)}</button>`).join("");
   h+=`<button class="sm" data-q="more">More…</button><button class="sm danger" data-q="del" aria-label="Delete">✕</button>`;
   q.innerHTML=h; q.style.display="flex";
@@ -1872,8 +1893,8 @@ function adjShaft(p){ const st=S.st; return Object.keys(st.shafts||{}).find(k=>{
 function liftReady(){ const n=S.st.liftNeeds; return !n || !S.st.pieces.some(e=>e.type==="event"&&(e.label||"")===n); }
 function placeLift(to,why){ const st=S.st, from=st.lift?st.shafts[st.lift]:null, dst=st.shafts[to];
   commit(s=>{ if(from) s.pieces.forEach(q=>{ if(q.r>=from.r&&q.r<from.r+2&&q.c>=from.c&&q.c<from.c+2){ q.r+=dst.r-from.r; q.c+=dst.c-from.c; } }); s.lift=to;
-    if(!from && s.liftGuard && !s.liftGuardDone){ s.liftGuardDone=true; const g={id:s.nextId++,type:"guard",r:dst.r+1,c:dst.c,facing:2}; initPiece(g,s); s.pieces.push(g); } }, why);
-  if(!from && S.st.liftGuard && S.st.liftGuardDone) addLog(`The elevator arrives with a guard on it — set his square and facing to match the book`); }
+    if(!from && s.liftGuard && !s.liftGuardDone){ s.liftGuardDone=true; const gp=typeof s.liftGuard==="object"?s.liftGuard:{r:dst.r+1,c:dst.c,facing:2}; const g={id:s.nextId++,type:"guard",r:gp.r,c:gp.c,facing:gp.facing??2}; initPiece(g,s); s.pieces.push(g); } }, why);
+  if(!from && S.st.liftGuard && S.st.liftGuardDone) addLog(`The elevator arrives with a guard on it`); }
 function doElevator(p,dest){
   const st=S.st; if(!st.shafts) throw "this stage has no elevator";
   const err=useAction(p,"interact"); if(err) throw err;
@@ -2432,7 +2453,7 @@ async function physicsRoll(dice){
   const W=rect.width/PX, H=rect.height/PX;
   const world=new C.World({gravity:new C.Vec3(0,0,-60), allowSleep:true}); world.broadphase=new C.NaiveBroadphase();
   const mDie=new C.Material("die"), mTab=new C.Material("table");
-  world.addContactMaterial(new C.ContactMaterial(mDie,mTab,{friction:0.32,restitution:0.38}));
+  world.addContactMaterial(new C.ContactMaterial(mDie,mTab,{friction:0.24,restitution:0.5}));
   world.addContactMaterial(new C.ContactMaterial(mDie,mDie,{friction:0.25,restitution:0.45}));
   const plane=(pos,axis,ang)=>{ const b=new C.Body({mass:0,material:mTab,shape:new C.Plane()}); b.position.set(...pos); if(axis) b.quaternion.setFromAxisAngle(new C.Vec3(...axis),ang); world.addBody(b); };
   plane([0,0,0]);                                   // table (normal +z)
@@ -2441,11 +2462,11 @@ async function physicsRoll(dice){
   plane([0,0.2,0],[1,0,0],-Math.PI/2);              // top wall   (normal +y)
   plane([0,H-0.2,0],[1,0,0],Math.PI/2);             // bottom wall(normal −y)
   const items=dice.map((d,i)=>{
-    const b=new C.Body({mass:1,material:mDie,shape:new C.Box(new C.Vec3(0.5,0.5,0.5)),linearDamping:0.08,angularDamping:0.12,sleepSpeedLimit:0.25,sleepTimeLimit:0.35});
-    b.position.set(W-1.2-rnd()*0.8, H*(0.35+0.4*rnd())+(i-dice.length/2)*0.4, 2.5+rnd()*2.5);
+    const b=new C.Body({mass:1,material:mDie,shape:new C.Box(new C.Vec3(0.5,0.5,0.5)),linearDamping:0.04,angularDamping:0.06,sleepSpeedLimit:0.25,sleepTimeLimit:0.35});
+    b.position.set(W-1.0-rnd()*0.6, H*(0.3+0.4*rnd())+(i-dice.length/2)*0.5, 4+rnd()*3);
     b.quaternion.setFromEuler(rnd()*6.28,rnd()*6.28,rnd()*6.28);
-    b.velocity.set(-(11+rnd()*9), (rnd()-0.5)*8, 2+rnd()*4);
-    b.angularVelocity.set((rnd()-0.5)*30,(rnd()-0.5)*30,(rnd()-0.5)*30);
+    b.velocity.set(-(22+rnd()*12), (rnd()-0.5)*14, 6+rnd()*6);
+    b.angularVelocity.set((rnd()-0.5)*60,(rnd()-0.5)*60,(rnd()-0.5)*60);
     world.addBody(b);
     const sh=document.createElement("div"); sh.className="shadow"; fx.appendChild(sh);
     const w=document.createElement("div"); w.className="dw "+(d.k==="w"?"w":"b");
@@ -2492,7 +2513,19 @@ function focusSources(owner,dice){
   const mer=S.st.pieces.find(p=>p.type==="meryl"&&p.id!==owner.id); if(mer&&dist(mer,owner)<=2) add(mer,"I Can Still Help (within 2)");
   const ota=S.st.pieces.find(p=>p.type==="otacon"&&p.id!==owner.id); if(ota&&dist(ota,owner)<=2&&dice.some(d=>d.k==="b")) add(ota,"Codec Call (black dice only)",true);
   return out; }
+// share a roll with everyone in the room (they watch; only the roller can press buttons)
+function shareRoll(o,dice,stage_){ if(!inRoom()) return; const sc=dice?scoreDice(dice,o.vs):null;
+  room.publishAll(room.topic+"/roll",{from:room.me,name:S.me,id:o._rid,why:o.why,vs:o.vs,dice:dice?dice.map(d=>({k:d.k,v:d.v})):null,hits:sc?sc.hits:null,bang:sc?sc.bang:0,stage:stage_},{qos:0}); }
+function showRemoteRoll(m){ let v=document.getElementById("rollview"); if(!v){ v=document.createElement("div"); v.id="rollview"; document.body.appendChild(v); }
+  if(m.stage==="close"){ setTimeout(()=>{ if(v.dataset.id===m.id) v.classList.remove("show"); },1800); if(v.dataset.id!==m.id) return; }
+  v.dataset.id=m.id;
+  v.innerHTML=`<div class="rb-title">🎲 ${esc(m.name)} is rolling</div><div class="muted">${esc(m.why||"")}${m.vs!=null?` · each ${m.vs}+ is a hit`:""}</div>
+    ${m.dice?`<div class="rb-dice">${m.dice.map(d=>`<span class="chip ${d.k==="w"?"w":"b"} ${d.v==="!"?"bang":""}">${d.v}</span>`).join("")}</div><div class="rb-score"><b>${m.vs!=null?`${m.hits} hit${m.hits===1?"":"s"}`:"Rolled"}</b>${m.bang?` · <span class="bad">${m.bang} "!"</span>`:""}</div>`:`<div class="muted" style="margin:10px 0">Dice are in the air…</div>`}
+    <div class="muted">${m.stage==="close"?"Result applied.":"You're watching — "+esc(m.name)+" confirms the result."}</div>`;
+  v.classList.add("show");
+  if(m.stage==="rolled"&&m.dice){ const ds=m.dice.map(d=>({...d})); throwDice(ds,m.vs).then(()=>setTimeout(clearDice,1600)); } }
 function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player being attacked), kind, note, preview}
+  o._rid=Math.random().toString(36).slice(2,9);
   return new Promise(res=>{
     const box=document.getElementById("rollbox"); let dice=null, pick=null, rolling=false, hackerAdds=0;
     const owner=o.by?P(o.by.id):o.target?P(o.target.id):null;
@@ -2523,23 +2556,23 @@ function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player be
         <div class="row">${dice?`<button class="on" id="rb-go" style="flex:1">✓ OK — apply this result</button>`:`<button class="on" id="rb-roll" style="flex:1">🎲 Roll</button>`}<button class="sm danger" id="rb-stop">${dice?"Cancel":"Skip"}</button></div>`;
       box.style.display="block";
       const q=s_=>box.querySelector(s_);
-      if(q("#rb-roll")) q("#rb-roll").onclick=async e=>{ if(rolling) return; e.target.disabled=true; const ds=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:null})); await throwMore(ds); dice=ds; draw(); };
+      if(q("#rb-roll")) q("#rb-roll").onclick=async e=>{ if(rolling) return; e.target.disabled=true; shareRoll(o,null,"air"); const ds=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:null})); await throwMore(ds); dice=ds; shareRoll(o,dice,"rolled"); draw(); };
       box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
       box.querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{ pick=null; draw(); });
       box.querySelectorAll("[data-use]").forEach(b=>b.onclick=async()=>{ if(rolling) return; const s_=src[+b.dataset.use], v=b.dataset.v, d=dice[pick]; spendTok(s_);
         if(v==="re"){ const one=[{k:d.k,v:null}]; await throwMore(one); d.v=one[0].v; d.mod=true; }
         else if(v==="rm"){ dice.splice(pick,1); }
         else { d.v=d.v+(+v); d.mod=true; }
-        pick=null; draw(); });
+        pick=null; shareRoll(o,dice,"changed"); draw(); });
       box.querySelectorAll("[data-alone]").forEach(b=>b.onclick=()=>{ const d=dice[pick]; d.v=d.v+(+b.dataset.alone); d.mod=true; useOnce(owner,"alone"); addLog(`Snake uses "I Work Alone": ${+b.dataset.alone>0?"+1":"−1"} to one die`); pick=null; draw(); });
       box.querySelectorAll("[data-add]").forEach(b=>b.onclick=async()=>{ if(rolling) return; const s_=src[+b.dataset.add]; spendTok(s_); const one=[{k:s_.fx.add,v:null}]; await throwMore(one); dice.push(one[0]); draw(); });
       if(q("[data-hacker]")) q("[data-hacker]").onclick=async()=>{ if(rolling) return; hackerAdds++; addLog("Otacon uses Hacker: +1 black die"); const one=[{k:"b",v:null}]; await throwMore(one); dice.push(one[0]); draw(); };
-      if(q("#rb-go")) q("#rb-go").onclick=()=>{ box.style.display="none"; clearDice(); const sc=scoreDice(dice,o.vs);
+      if(q("#rb-go")) q("#rb-go").onclick=()=>{ box.style.display="none"; clearDice(); shareRoll(o,dice,"close"); const sc=scoreDice(dice,o.vs);
         const parts=[]; const ws=dice.filter(d=>d.k==="w").map(d=>d.v), bs=dice.filter(d=>d.k==="b").map(d=>d.v);
         if(ws.length) parts.push("white "+ws.join(", ")); if(bs.length) parts.push("black "+bs.join(", "));
         commit(()=>{}, `rolled ${parts.join(" · ")||"no dice"}${o.why?" — "+o.why:""}${o.vs!=null?` → ${sc.hits} hit${sc.hits===1?"":"s"}`:""}${sc.bang?` · ${sc.bang} "!"`:""}`);
         res({...sc, dice}); };
-      q("#rb-stop").onclick=()=>{ if(rolling) return; box.style.display="none"; clearDice(); res(null); };
+      q("#rb-stop").onclick=()=>{ if(rolling) return; box.style.display="none"; clearDice(); shareRoll(o,dice,"close"); res(null); };
     };
     draw();
   });
@@ -2665,7 +2698,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="5.0";
+const APP_VERSION="5.1";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -2703,7 +2736,7 @@ const room = {
     c._name=/hivemq/.test(url)?"HiveMQ":/emqx/.test(url)?"EMQX":url.replace(/^wss?:\/\//,"").split(/[:/]/)[0];
     this.clients.push(c);
     c.on("connect",()=>{
-      c.subscribe([this.topic+"/state",this.topic+"/hi"],{qos:1},()=>{
+      c.subscribe([this.topic+"/state",this.topic+"/hi",this.topic+"/roll"],{qos:1},()=>{
         if(this.creating){ this.creating=false; addLog(`Created room ${this.code}`); }
         if(this.lastRev>=0) this.push(true);        // make sure this server has our latest board
         this.hello(); });
@@ -2726,6 +2759,7 @@ const room = {
   pull(){ this.lastRev=-1; this.connected().forEach(c=>c.unsubscribe(this.topic+"/state",()=>c.subscribe(this.topic+"/state",{qos:1}))); },
   async recv(topic,payload){
     let m; try{ m=await this.open(new Uint8Array(payload)); }catch(e){ return; }
+    if(topic.endsWith("/roll")){ if(m.from!==this.me) showRemoteRoll(m); return; }
     if(topic.endsWith("/hi")){ if(m.from!==this.me){ if(m.v&&m.v!==APP_VERSION) this.otherVersion=m.v; const isNew=!this.people[m.from]||Date.now()-this.people[m.from].t>45000; this.people[m.from]={name:m.name,t:m.t||Date.now()}; if(isNew){ this.hello(); } if(S.pane==="net") renderNetPane(); } return; }
     if(m.from===this.me) return;                                   // our own echo
     const sig=m.from+":"+m.rev; if(this.seen[sig]) return; this.seen[sig]=1;   // same update via the second server
@@ -2739,9 +2773,11 @@ const room = {
   leave(silent){ this.clients.forEach(c=>{ try{ c.end(true); }catch(e){} }); this.clients=[]; this.code=null; this.people={}; this.seen={}; if(!silent){ try{ localStorage.removeItem("st-room"); }catch(e){} this.set(""); } }
 };
 setInterval(()=>room.hello(), 20000);
-function toast(msg){ let t=document.getElementById("toast"); if(!t){ t=document.createElement("div"); t.id="toast";
+function toast(msg){ if(/^✗/.test(msg)) return alertMsg(msg.replace(/^✗\s*/,"")); let t=document.getElementById("toast"); if(!t){ t=document.createElement("div"); t.id="toast";
   t.style.cssText="position:fixed;left:50%;top:58px;transform:translateX(-50%);background:#2e7d4f;color:#fff;padding:6px 14px;border-radius:18px;font-size:13px;z-index:60;pointer-events:none;transition:opacity .4s";
   document.body.appendChild(t); } t.textContent=msg; t.style.opacity="1"; clearTimeout(t._h); t._h=setTimeout(()=>t.style.opacity="0",1800); }
+function alertMsg(text){ let a=document.getElementById("alertbox"); if(!a){ a=document.createElement("div"); a.id="alertbox"; document.body.appendChild(a); a.onclick=()=>a.classList.remove("show"); }
+  a.innerHTML=`<div class="ab-ic">⚠</div><div>${esc(text.charAt(0).toUpperCase()+text.slice(1))}</div>`; a.classList.add("show"); clearTimeout(a._h); a._h=setTimeout(()=>a.classList.remove("show"),2600); }
 // come back to the page: reconnect right away and re-check the direct link
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") return;
   room.clients.forEach(c=>{ if(!c.connected){ try{ c.reconnect(); }catch(e){} } });
@@ -2991,6 +3027,7 @@ renderTurnPanel=function(){
       ${!done&&st.phase==="Player"?`<div class="dots">${dots(p)}</div>`:""}`;
     if(on&&mine) h+=`${!st.noFocus?`<div class="tp-foc">${T.focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}">${esc(n)}</span>`).join("")}</div>`:""}
         <div class="tp-hint">Drag ${esc(nameOf(p))} 1 square to Sneak or 2 to Dash (noisy). Tap ${esc(nameOf(p))} for attacks and other actions.</div>
+        ${S.myActs&&S.myActs.id===p.id&&S.myActs.acts.length?`<div class="tp-acts">${S.myActs.acts.map((a,i)=>`<button class="sm" data-ma="${i}">${esc(a.label)}</button>`).join("")}</div>`:`<div class="muted" style="margin-top:6px">Tap ${esc(nameOf(p))} on the board to see attacks and other actions here.</div>`}
         <div class="row" style="margin:6px 0 0"><button class="sm" data-fp="${p.id}" style="flex:1">★ Focus & abilities</button><button class="sm" data-ai="${esc(p.label)}" style="flex:1">🤖 AI helper</button></div>
         <div class="row" style="margin:6px 0 0"><button class="sm" id="tp-step" ${S.steps.length?"":"disabled"}>↶ Last action</button><button class="sm" id="tp-undo">↶ Whole turn</button><button class="on" id="tp-end" style="flex:1">✓ End turn</button></div>`;
     else if(!done&&st.phase==="Player"&&!f.active&&mine&&amPlayer()) h+=`<div class="row" style="margin:6px 0 0"><button class="on" data-start="${p.id}" style="flex:1">▶ Start ${esc(nameOf(p))}'s turn</button></div>`;
@@ -3003,8 +3040,9 @@ renderTurnPanel=function(){
   h+=`<div class="muted" style="margin-top:6px">${vdeckOn()?"Virtual":"Physical"} deck: ${st.blue} blue · ${st.red} red${st.lastCard?` · last: ${esc(cardText(st.lastCard))}`:""}</div></div>`;
   el.innerHTML=h;
   const on=(id,fn)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=fn; };
-  el.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>{ try{ startTurn(P(+b.dataset.start)); S.steps=[]; S.sel=+b.dataset.start; refresh(); }catch(e){ toast("✗ "+e); } });
+  el.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>{ try{ startTurn(P(+b.dataset.start)); S.steps=[]; S.sel=+b.dataset.start; S.openedFor=S.sel; refresh(); }catch(e){ toast("✗ "+e); } });
   el.querySelectorAll("[data-fp]").forEach(b=>b.onclick=()=>focusPanel(P(+b.dataset.fp)));
+  el.querySelectorAll("[data-ma]").forEach(b=>b.onclick=()=>{ const a=S.myActs&&S.myActs.acts[+b.dataset.ma]; if(a) a.run(); });
   el.querySelectorAll("[data-ai]").forEach(b=>b.onclick=()=>{ closeAll(); openSheet("ai"); const sel=document.getElementById("ai-who"); sel.value=b.dataset.ai; sel.dataset.picked="1"; });
   on("tp-step",undoStep); on("tp-undo",()=>{ revertTurn(); S.steps=[]; }); on("tp-end",async()=>{ await confirmTurn(); S.steps=[]; }); on("tp-guards",startGuards); on("tp-gundo",revertGuards); on("tp-gok",confirmGuards);
 };
