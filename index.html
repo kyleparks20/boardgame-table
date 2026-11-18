@@ -281,6 +281,12 @@ nav.hud .turnbtn{flex:0 0 74px!important;max-width:74px!important;margin:6px 4px
 nav.hud .turnbtn .ic{font-size:18px!important} nav.hud .turnbtn b{font-size:13px!important;max-width:68px!important}
 #qbar{left:50%!important;right:auto!important;transform:translateX(-50%);width:min(520px,94vw);padding:10px 14px!important;font-size:15px;justify-content:center;flex-wrap:wrap;-webkit-mask-image:none!important;mask-image:none!important}
 .rx-tok{border:1px solid #2a3732;border-radius:12px;padding:8px 10px;margin:8px 0;background:#141b18}
+.obj{display:flex;gap:8px;align-items:center;padding:7px 9px;border-radius:10px;margin:5px 0;background:#141b18;border:1px solid #26322d;font-size:14px}
+.obj.required,.obj.either{border-left:4px solid #e5a63a}.obj.optional{border-left:4px solid #4f6d5e}.obj.done{border-left-color:var(--accent)}.obj.done span:nth-child(2){color:#9fd8b4}
+.ob-box{width:20px;height:20px;border-radius:6px;border:1.5px solid #4f6d5e;display:inline-flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;flex:none}
+.ob-tag{font-size:10px;letter-spacing:.1em;font-weight:800;padding:2px 6px;border-radius:6px;white-space:nowrap}.ob-tag.required,.ob-tag.either{background:#e5a63a22;color:#f2c06a}.ob-tag.optional{background:#ffffff10;color:#9fb3a8}
+.spec{font-size:13.5px;padding:6px 9px;margin:4px 0;border-radius:9px;background:#2a2412;border:1px solid #5a4a1e;color:#f0e2bf}
+.gm{font-size:12px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:8px;border:2px solid #2e7d4f;color:#9fe0b5}.gm.alert{border-color:#ff3b2f;color:#ff8a7a}.gm.investigate{border-color:#3d9bff;color:#9cc8ff}
 .tp-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tp-acts button{flex:1 1 auto}
 </style>
 </head>
@@ -867,7 +873,9 @@ function drawPiece(p,x,y,spotted,orderNo){
     const f=p.facing;
     if((T.kind==="guard"||T.kind==="boss") && f!=null) wedge(x,y,f,"#f5f5f5");
     ctx.lineWidth=2; ctx.strokeStyle="#000b";
-    if(T.kind==="guard"){ ctx.fillStyle=T.color; rr(x+8,y+8,CS-16,CS-16,5); ctx.fill(); ctx.stroke();
+    if(T.kind==="guard"){ const md=guardModes()[p.id]||"patrol", mc=md==="alert"?"#ff3b2f":md==="investigate"?"#3d9bff":"#000b";
+      if(md!=="patrol"){ ctx.save(); ctx.shadowColor=mc; ctx.shadowBlur=8; ctx.strokeStyle=mc; ctx.lineWidth=3.5; rr(x+5,y+5,CS-10,CS-10,7); ctx.stroke(); ctx.restore(); }
+      ctx.fillStyle=T.color; rr(x+8,y+8,CS-16,CS-16,5); ctx.fill(); ctx.stroke();
       ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText(p.label||"G",cx,cy); }
     else if(T.kind==="boss"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.moveTo(cx,y+3); ctx.lineTo(x+CS-3,cy); ctx.lineTo(cx,y+CS-3); ctx.lineTo(x+3,cy); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText("B",cx,cy); nameTag(p.label||"Boss",x,y,"#5e130b"); }
@@ -1158,6 +1166,7 @@ function renderQbar(){
   if(!S.builder&&((isPlayer(p)&&!isMine(p))||(!isPlayer(p)&&(!amPlayer()||flow().g!=="review")))){
     if(p.hp) h+=`<span class="muted" style="white-space:nowrap">${p.type==="guard"?`${p.dmg||0} dmg · ${p.kod||0} KO of ${p.hp}`:`HP ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`}</span>`;
     if(p.facing!=null&&p.type!=="camera") h+=`<span class="muted">facing ${DIRN[p.facing]}</span>`;
+    if(p.type==="guard"){ const md=guardModes()[p.id]||"patrol"; h+=`<span class="gm ${md}">${md==="alert"?"ALERT · moves the red number":md==="investigate"?"INVESTIGATE · blue number":"PATROL · blue number"}</span>`; }
     if(isPlayer(p)) h+=`<span class="muted">${esc(seatLabel(p))}</span><button class="sm" id="qb-info">ℹ Info</button>`;
     q.innerHTML=h; q.style.display="flex"; const ib=q.querySelector("#qb-info"); if(ib) ib.onclick=()=>{ closeAll(); openSheet("team"); }; return; }
   let acts=actionsFor(p).filter(a=>a.quick);
@@ -2060,6 +2069,15 @@ function guardStep(g,r,c,d,{ignore,arrow}={}){
   if(!side.length) return null;
   return side.find(x=>x.d===(arrow==="L"?left:right))||side[0];
 }
+function guardModes(){ const st=S.st; if(S._gm&&S._gm.ver===st.ver) return S._gm.m; const m={};
+  try{ for(const g of st.pieces.filter(p=>p.type==="guard")){ const z=zoneOfPiece(g), zp=st.pieces.filter(p=>inZone(z,p.r));
+      if(zp.some(p=>p.type==="attn"&&p.mode==="alert")){ m[g.id]="alert"; continue; }
+      const qs=zp.filter(p=>p.type==="attn"&&p.mode!=="alert"), guards=zp.filter(p=>p.type==="guard"), L=(a,t)=>{ const pth=guardPath(a,t.r,t.c); return pth?pth.length:Infinity; };
+      if(qs.some(t=>{ const d=L(g,t); return d<Infinity&&guards.every(o=>o.id===g.id||L(o,t)>=d); })){ m[g.id]="investigate"; continue; }
+      const cams=zp.filter(p=>p.type==="camera");
+      if(zp.some(p=>(p.type==="ko"||p.type==="dead")&&(los(g,p.r,p.c)||cams.some(c=>los(c,p.r,p.c))))){ m[g.id]="investigate"; continue; }
+      m[g.id]="patrol"; } }catch(e){}
+  S._gm={ver:st.ver,m}; return m; }
 // shortest path (fewest spaces, then fewest turns) from guard to target square; target may hold a player
 function guardPath(g,tr,tc){
   const key3=(r,c,d)=>r*1000+c*10+d, best=new Map(), q=[];
@@ -2732,7 +2750,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="5.2";
+const APP_VERSION="5.4";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -2835,6 +2853,18 @@ const WIN={
   stage1:{how:"Collect Event A, then ride the elevator out with no red ! on the map."},
   stage2:{how:"Collect Event A, then end a turn on an Exit square.",exitNeeds:"A"},
   stage3:{how:"Defeat 12 guards in the Holding Cells — or collect Event C and end a turn on the Exit.",exitNeeds:"C",defeat:true}};
+// objectives (required / optional) and special rules per mission — special rules override the normal rules
+const OBJ={
+  stage1:{objs:[{t:"Collect Event A",k:"required",done:st=>has(st,"A")},{t:"Ride the elevator out (Interact on it) with no red ! on the map",k:"required",done:st=>!!st.report&&st.report.result==="cleared"}],
+    special:["Snake only.","No Focus tokens in this mission.","Collecting Event A brings the elevator down — with a guard on it.","The elevator won't leave while any red ! is on the map."]},
+  stage2:{objs:[{t:"Collect Event A",k:"required",done:st=>has(st,"A")},{t:"Then end a turn on an Exit square",k:"required",done:st=>!!st.report&&st.report.result==="cleared"},{t:"Collect Event B",k:"optional",done:st=>has(st,"B")}],
+    special:["Snake only.","The camera next to Event B always sees it — stepping onto B gets you spotted (CMON FAQ)."]},
+  stage3:{objs:[{t:"Defeat 12 guards in the Holding Cells",k:"either",done:st=>st.defeat&&st.defeat.count>=12,prog:st=>st.defeat?`${st.defeat.count||0}/12`:""},{t:"OR collect Event C, then end a turn on the Exit",k:"either",done:st=>has(st,"C")},{t:"Event A (cutscene)",k:"optional",done:st=>has(st,"A")},{t:"Event B (cutscene)",k:"optional",done:st=>has(st,"B")}],
+    special:["Reinforcements: while the Holding Cells are active, one extra Radio-In happens there before each Guard Order card.","Defeat Guards: a guard knocked out or killed in the Holding Cells is removed and counted toward 12 — no KO or dead token.","Elevator: Interact on it to ride it (everyone on it comes along); Interact next to an empty shaft to call it.","Working Alone (1 player only): Holding Cells guards have 1 health.","A zone is active while a player or a player's ! is in it."]}};
+const has=(st,ev)=>(st.stats&&st.stats.objectives||[]).includes(ev)||st.pieces.some(p=>isPlayer(p)&&(p.carry||[]).includes(ev));
+function objectivesHtml(k,st,live){ const O=OBJ[k]; if(!O) return ""; const tag={required:"REQUIRED",optional:"OPTIONAL",either:"REQUIRED · EITHER"};
+  return `<div class="sh2">Objectives</div>`+O.objs.map(o=>{ const d=live&&o.done(st); return `<div class="obj ${o.k} ${d?"done":""}"><span class="ob-box">${d?"✓":""}</span><span style="flex:1">${esc(o.t)}${live&&o.prog&&o.prog(st)?` <b>${o.prog(st)}</b>`:""}</span><span class="ob-tag ${o.k}">${tag[o.k]}</span></div>`; }).join("")
+    +`<div class="sh2">Special rules <span class="muted" style="text-transform:none;letter-spacing:0">— these override the normal rules</span></div>`+O.special.map(r=>`<div class="spec">★ ${esc(r)}</div>`).join(""); }
 const inRoom=()=>!!room.code;
 const myId=()=>inRoom()?room.me:"local";
 function people(){ const now=Date.now(), out=[{id:myId(),name:S.me,me:true}];
@@ -2934,7 +2964,7 @@ function renderScreen(){
   if(k==="briefing"){ const key_=st.brief.key, L=LAYOUTS[key_], chars=charsOf(key_), solo=chars.length===1, br=st.brief, ps=people();
     const pick=(lab,cur)=>ps.map(p=>`<button class="sm ${cur&&cur.id===p.id?"on":""}" data-seat="${esc(lab)}" data-pid="${p.id}" data-pn="${esc(p.name)}">${esc(p.name)}${p.me?" (me)":""}</button>`).join("");
     h=`<div class="topbar">${back("missions","← Missions")}<div class="ttl">Briefing</div><span></span></div>
-      <div class="brief"><div class="bt">${esc(L.name)}</div><div>${esc(WIN[key_].how)}</div>${(L.rules||[]).filter(r=>!/^Objective/.test(r)).map(r=>`<div class="muted">• ${esc(r)}</div>`).join("")}</div>
+      <div class="brief"><div class="bt">${esc(L.name)}</div>${objectivesHtml(key_,st,false)}</div>
       <div class="sh">Team</div>
       ${solo?`<div class="scard"><div class="row" style="margin:0"><span class="sw" style="background:${TYPES[chars[0]].color}">${TYPES[chars[0]].short}</span><b>${TYPES[chars[0]].name}</b><span class="muted" style="margin-left:auto">one character — take turns</span></div>
           <p class="muted">Runners play ${TYPES[chars[0]].name} one at a time, in this order. If a run ends, the next runner gets a go; the best run is kept.</p>
@@ -3023,9 +3053,10 @@ function renderTeamPane(){ const el=document.getElementById("pane-team"); if(!el
       <div class="sh2">Equipment</div>${(p.equip||[]).length?p.equip.map(e=>{ const E=EQUIP[e.k]||{name:e.k,text:""}; return `<div class="muted"><b style="color:var(--text)">${esc(E.name)}</b>${e.ch!=null?` [${e.ch}]`:""} — ${esc(E.text)}</div>`; }).join(""):`<div class="muted">None</div>`}
       <details><summary class="muted">Abilities</summary>${C.abilities.map(([n,t])=>`<div class="muted"><b style="color:var(--text)">${esc(n)}</b> — ${esc(t)}</div>`).join("")}</details></div>`; }).join("")||`<p class="muted">No characters on the board.</p>`; }
 function renderMissionPane(){ const el=document.getElementById("pane-mission"); if(!el) return; const st=S.st, k=st.run&&st.run.key, si=statusInfo();
-  el.innerHTML=`<div class="scard"><b>${esc(st.stage||"Free play")}</b>${k?`<div class="muted">${esc(WIN[k].how)}</div>`:""}
+  const sk=k||st.stageKey;
+  el.innerHTML=`<div class="scard"><b>${esc(st.stage||"Free play")}</b>${sk&&OBJ[sk]?objectivesHtml(sk,st,true):""}
       <div class="row"><span class="pill">Round ${st.round}</span><span class="pill">${si.level==="alert"?"! Alert":si.level==="caution"?"? Investigating":"Clear"}</span>${st.defeat?`<span class="pill">${st.defeat.count||0}/${st.defeat.goal} defeated</span>`:""}${st.run&&st.run.runners&&st.run.runners.length?`<span class="pill">${esc(st.run.runners[st.run.idx].name)}'s run</span>`:""}</div>
-      ${(st.rules||[]).length?`<details><summary class="muted">Mission rules</summary>${st.rules.map(r=>`<div class="muted">• ${esc(r)}</div>`).join("")}</details>`:""}</div>
+      ${!(sk&&OBJ[sk])&&(st.rules||[]).length?`<details open><summary class="muted">Mission rules</summary>${st.rules.map(r=>`<div class="muted">• ${esc(r)}</div>`).join("")}</details>`:""}</div>
     ${st.camp?`<div class="scard"><b>🎒 Memory Box</b> <span class="muted">· ${st.camp.memory.length} card${st.camp.memory.length===1?"":"s"}</span>
       <div class="row"><button class="sm" data-mgo="missions">Mission select</button><button class="sm" data-mgo="memory">Open Memory Box</button><button class="sm" data-mgo="lobby">Lobby</button></div>
       <p class="muted">Your campaign saves automatically after every move.</p></div>`:`<div class="scard"><button class="on" data-mgo="lobby">Go to the lobby</button></div>`}
