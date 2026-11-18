@@ -287,6 +287,8 @@ nav.hud .turnbtn .ic{font-size:18px!important} nav.hud .turnbtn b{font-size:13px
 .ob-tag{font-size:10px;letter-spacing:.1em;font-weight:800;padding:2px 6px;border-radius:6px;white-space:nowrap}.ob-tag.required,.ob-tag.either{background:#e5a63a22;color:#f2c06a}.ob-tag.optional{background:#ffffff10;color:#9fb3a8}
 .spec{font-size:13.5px;padding:6px 9px;margin:4px 0;border-radius:9px;background:#2a2412;border:1px solid #5a4a1e;color:#f0e2bf}
 .gm{font-size:12px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:8px;border:2px solid #2e7d4f;color:#9fe0b5}.gm.alert{border-color:#ff3b2f;color:#ff8a7a}.gm.investigate{border-color:#3d9bff;color:#9cc8ff}
+body.modal::after{content:"";position:fixed;inset:0;background:#0009;z-index:59}
+body.modal #rollbox{z-index:61!important}
 .tp-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tp-acts button{flex:1 1 auto}
 </style>
 </head>
@@ -873,8 +875,9 @@ function drawPiece(p,x,y,spotted,orderNo){
     const f=p.facing;
     if((T.kind==="guard"||T.kind==="boss") && f!=null) wedge(x,y,f,"#f5f5f5");
     ctx.lineWidth=2; ctx.strokeStyle="#000b";
-    if(T.kind==="guard"){ const md=guardModes()[p.id]||"patrol", mc=md==="alert"?"#ff3b2f":md==="investigate"?"#3d9bff":"#000b";
-      if(md!=="patrol"){ ctx.save(); ctx.shadowColor=mc; ctx.shadowBlur=8; ctx.strokeStyle=mc; ctx.lineWidth=3.5; rr(x+5,y+5,CS-10,CS-10,7); ctx.stroke(); ctx.restore(); }
+    if(T.kind==="guard"){ const md=guardModes()[p.id]||"patrol", mc=md==="alert"?"#ff3b2f":"#3d9bff";
+      ctx.save(); ctx.shadowColor=mc; ctx.shadowBlur=md==="alert"?10:5; ctx.strokeStyle=mc; ctx.lineWidth=md==="alert"?3.5:2.5; rr(x+5,y+5,CS-10,CS-10,7); ctx.stroke(); ctx.restore();
+      if(S.moveBadge&&S.moveBadge.id===p.id){ ctx.fillStyle=mc; rr(x+CS/2-15,y-12,30,15,5); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="bold 10px system-ui"; ctx.fillText(S.moveBadge.text,x+CS/2,y-4.5); }
       ctx.fillStyle=T.color; rr(x+8,y+8,CS-16,CS-16,5); ctx.fill(); ctx.stroke();
       ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText(p.label||"G",cx,cy); }
     else if(T.kind==="boss"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.moveTo(cx,y+3); ctx.lineTo(x+CS-3,cy); ctx.lineTo(cx,y+CS-3); ctx.lineTo(x+3,cy); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -1166,7 +1169,7 @@ function renderQbar(){
   if(!S.builder&&((isPlayer(p)&&!isMine(p))||(!isPlayer(p)&&(!amPlayer()||flow().g!=="review")))){
     if(p.hp) h+=`<span class="muted" style="white-space:nowrap">${p.type==="guard"?`${p.dmg||0} dmg · ${p.kod||0} KO of ${p.hp}`:`HP ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`}</span>`;
     if(p.facing!=null&&p.type!=="camera") h+=`<span class="muted">facing ${DIRN[p.facing]}</span>`;
-    if(p.type==="guard"){ const md=guardModes()[p.id]||"patrol"; h+=`<span class="gm ${md}">${md==="alert"?"ALERT · moves the red number":md==="investigate"?"INVESTIGATE · blue number":"PATROL · blue number"}</span>`; }
+    if(p.type==="guard"){ const md=guardModes()[p.id]||"patrol"; h+=`<span class="gm ${md==="alert"?"alert":"investigate"}">${md==="alert"?"RED · alert speed (red number)":md==="investigate"?"BLUE · investigating (blue number)":"BLUE · patrol speed (blue number)"}</span>`; }
     if(isPlayer(p)) h+=`<span class="muted">${esc(seatLabel(p))}</span><button class="sm" id="qb-info">ℹ Info</button>`;
     q.innerHTML=h; q.style.display="flex"; const ib=q.querySelector("#qb-info"); if(ib) ib.onclick=()=>{ closeAll(); openSheet("team"); }; return; }
   let acts=actionsFor(p).filter(a=>a.quick);
@@ -2097,13 +2100,13 @@ function guardPath(g,tr,tc){
 const tokenAt=(r,c)=>S.st.pieces.filter(p=>p.r===r&&p.c===c&&(p.type==="attn"||p.type==="ko"||p.type==="dead"));
 function playersSeenBy(g){ return S.st.pieces.filter(p=>isPlayer(p)&&!p.disguised&&!p.stealth&&los(g,p.r,p.c)); }
 function guardFace(g,d,why){ if(g.facing===d) return; commit(st=>{ st.pieces.find(x=>x.id===g.id).facing=d; }, `${nameOf(g)} faces ${DIRN[d]}${why?" ("+why+")":""}`); }
-function guardMoveTo(g,s,mode,step){ const from=sq(g.r,g.c); commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=s.r; q.c=s.c; q.facing=s.d; }, `${nameOf(g)} ${from} ${mode}${s.leap?" (leapfrog)":""} ${sq(s.r,s.c)}${step?` · step ${step}`:""}${s.leap?" — jumped a guard: 2 squares, counts as 1 space":""}`); }
-function enemyAsk(title,text,buttons){ return new Promise(res=>{ const box=document.getElementById("rollbox");
+function guardMoveTo(g,s,mode,step){ const from=sq(g.r,g.c); if(step){ S.moveBadge={id:g.id,text:step}; } if(s.leap) toast(`${nameOf(g)} leapfrogs — 2 squares, counts as 1 space`); commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=s.r; q.c=s.c; q.facing=s.d; }, `${nameOf(g)} ${from} ${mode}${s.leap?" (leapfrog)":""} ${sq(s.r,s.c)}${step?` · step ${step}`:""}${s.leap?" — jumped a guard: 2 squares, counts as 1 space":""}`); }
+function enemyAsk(title,text,buttons){ modalOn(); return new Promise(res0=>{ const res=v=>{ modalOff(); res0(v); }; const box=document.getElementById("rollbox");
   box.innerHTML=`<div class="rb-title">${esc(title)}</div><div style="margin:6px 0 10px">${text}</div><div class="row">${buttons.map((b,i)=>`<button class="${i===0?"on":"sm"}" data-ea="${i}" style="${i===0?"flex:1":""}">${esc(b)}</button>`).join("")}</div>`;
   box.style.display="block"; box.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>{ box.style.display="none"; res(+b.dataset.ea); }); }); }
 // Guard Reaction pop-up: the board shows what's on the guard's square, you pick what your Reaction card says, the board does it
 const tokName=t=>t.type==="attn"?`${t.owner}'s ${t.mode==="alert"?"! (alert)":"? (investigate)"}`:t.type==="ko"?`KO guard ${t.stars===1?"★":"★★"}`:"Dead guard";
-function reactionPanel(g){ return new Promise(res=>{
+function reactionPanel(g){ modalOn(); return new Promise(res0=>{ const res=v=>{ modalOff(); res0(v); };
   const box=document.getElementById("rollbox"); const done=[];
   const fx=(label,fn)=>({label,fn});
   const draw=()=>{ g=P(g.id); if(!g){ box.style.display="none"; res(0); return; }
@@ -2258,11 +2261,12 @@ async function runEnemyPhase(card){
     if(card.cam&&S.st.pieces.some(p=>p.type==="camera")){ commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flip to ${S.st.cam==="green"?"orange":"green"}`); await autoSpot(); await sleep(300); }
     const zs=zonesAll().filter(zoneActive).sort((a,b)=>a&&b?(S.st.priority[0]==="T"?a.r0-b.r0:b.r0-a.r0):0), ord=activationOrder();
     for(const z of zs){ const gs=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).sort((a,b)=>ord[a.id]-ord[b.id]).map(p=>p.id);
-      for(const id of gs){ if(EN.stop) break; if(!P(id)) continue; S.sel=id; refresh(); await activateGuard(id,card); await sleep(250); } }
+      for(const id of gs){ if(EN.stop) break; if(!P(id)) continue; S.sel=id; refresh(); await activateGuard(id,card); await sleep(250); S.moveBadge=null; } }
+    S.moveBadge=null;
     S.sel=null; addLog(EN.stop?"Enemy phase stopped by the players":"Enemy phase done — check the board, then start the next round"); toast(EN.stop?"Enemy phase stopped":"Guards done");
   } finally { EN.busy=false; commit(s=>{ if(s.flow) s.flow.g="review"; }); refresh(); openTurnPanel(true); }
 }
-function openGuardCard(){
+function openGuardCard(){ if(busyModal()) return;
   const box=document.getElementById("rollbox"), c=Object.assign({color:S.st.blue>0?"blue":"red",blue:2,red:4,arrow:"R",action:"none",cam:false,over:false},EN.last||{},{over:false,color:S.st.blue>0?"blue":"red"});
   const draw=()=>{ const opt=(k,v,l)=>`<button class="sm ${c[k]===v?"on":""}" data-k="${k}" data-v="${v}">${l}</button>`, num=(k,l)=>`<div class="row"><label>${l}</label><button class="sm" data-n="${k},-1">−</button><b style="font-size:18px;min-width:22px;text-align:center">${c[k]}</b><button class="sm" data-n="${k},1">+</button></div>`;
     box.innerHTML=`<div class="rb-title">🃏 Guard Order card — copy what your card shows</div>
@@ -2277,9 +2281,9 @@ function openGuardCard(){
     box.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{ const v=b.dataset.v; c[b.dataset.k]=v==="true"?true:v==="false"?false:v; draw(); });
     box.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{ const [k,d]=b.dataset.n.split(","); c[k]=Math.max(0,Math.min(9,c[k]+(+d))); draw(); });
     box.querySelector("[data-over]").onclick=()=>{ c.over=!c.over; draw(); };
-    box.querySelector("#gc-go").onclick=()=>{ box.style.display="none"; if(innerWidth<900) closeSheet(); runEnemyPhase({...c}); };
-    box.querySelector("#gc-x").onclick=()=>{ box.style.display="none"; }; };
-  draw(); }
+    box.querySelector("#gc-go").onclick=()=>{ modalOff(); box.style.display="none"; if(innerWidth<900) closeSheet(); runEnemyPhase({...c}); };
+    box.querySelector("#gc-x").onclick=()=>{ modalOff(); box.style.display="none"; }; };
+  modalOn(); draw(); }
 
 // ---------- turn flow: whose turn it is, confirm / revert, guard turn review ----------
 function flow(){ const st=S.st; st.flow=st.flow||{active:null,snap:null,g:"idle",gsnap:null}; return st.flow; }
@@ -2302,7 +2306,8 @@ function dragBlock(p){
   if(turnDone(p)) return `${nameOf(p)} already finished this round`;
   return null; }
 function failStage(why){ if(S.st.camp&&S.st.run&&!S.st.report){ finishMission(/killed in action/i.test(why)?"kia":"failed",why); return; } if(S.st.failed) return; EN.stop=true; commit(s=>{ s.failed=why; }, `✖ STAGE FAILED — ${why}`); openTurnPanel(true); showFail(); }
-function showFail(){ const el=document.getElementById("seats"); if(!S.st.failed) return; const rb=document.getElementById("rollbox"); if(rb) rb.style.display="none";
+function clearModal(){ S.modal=0; document.body.classList.remove("modal"); const rb=document.getElementById("rollbox"); if(rb) rb.style.display="none"; clearDice(); }
+function showFail(){ const el=document.getElementById("seats"); if(!S.st.failed) return; clearModal(); const rb=document.getElementById("rollbox"); if(rb) rb.style.display="none";
   el.innerHTML=`<div class="wrap" style="text-align:center;padding-top:12vh"><div class="tp-fail-h" style="font-size:44px">MISSION FAILED</div><p style="font-size:17px">${esc(S.st.failed)}.</p>
     <p class="muted">Turns and guards are frozen until you restart or undo.</p>
     <div class="row"><button class="on" id="f-restart" style="flex:1">↻ Restart ${esc(S.st.stage||"stage")}</button></div>
@@ -2404,7 +2409,7 @@ function vdeckOn(){ return !!(S.st.vdeck&&S.st.vdeck.draw); }
 function burnVirtual(why){ const top=S.st.vdeck.draw[0]; if(!top) return;
   commit(s=>{ const c=s.vdeck.draw.shift(); s.vdeck.draw.push(c); deckCounts(s); }, `${why} → revealed ${cardText(top)}, moved to the bottom`);
   if(top.over){ failStage("the GAME OVER card was revealed"); toast("GAME OVER revealed — stage failed"); } }
-function flipVirtual(){
+function flipVirtual(){ if(busyModal()) return;
   const top=S.st.vdeck.draw[0]; if(!top){ toast("The deck is empty"); return; }
   S.preFlip=snapshot();
   commit(s=>{ const c=s.vdeck.draw.shift(); s.vdeck.disc.push(c); deckCounts(s); s.lastCard=c; }, `🃏 Flipped: ${cardText(top)}`);
@@ -2417,7 +2422,8 @@ function flipVirtual(){
       <div class="gc-row"><span>Cameras</span><b>${top.cam?"Flip":"—"}</b></div>`}</div>
     <div class="row"><button class="on" id="vf-go" style="flex:1">${top.over?"OK":"Run the guards"}</button></div>`;
   box.style.display="block";
-  box.querySelector("#vf-go").onclick=()=>{ box.style.display="none"; if(innerWidth<900) closeSheet();
+  modalOn();
+  box.querySelector("#vf-go").onclick=()=>{ modalOff(); box.style.display="none"; if(innerWidth<900) closeSheet();
     runEnemyPhase({...top, color:top.color||"blue", fromDeck:true}); };
 }
 function openDeckBuilder(){
@@ -2579,9 +2585,13 @@ function showRemoteRoll(m){ let v=document.getElementById("rollview"); if(!v){ v
     <div class="muted">${m.stage==="close"?"Result applied.":"You're watching — "+esc(m.name)+" confirms the result."}</div>`;
   v.classList.add("show");
   if(m.stage==="rolled"&&m.dice){ const ds=m.dice.map(d=>({...d})); throwDice(ds,m.vs).then(()=>setTimeout(clearDice,1600)); } }
+// a required pop-up (dice, reactions, card) holds the screen until it's answered
+function modalOn(){ S.modal=(S.modal||0)+1; document.body.classList.add("modal"); }
+function modalOff(){ S.modal=Math.max(0,(S.modal||0)-1); if(!S.modal) document.body.classList.remove("modal"); }
+function busyModal(){ if(S.modal){ alertMsg("Finish the pop-up on screen first"); return true; } return false; }
 function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player being attacked), kind, note, preview}
-  o._rid=Math.random().toString(36).slice(2,9);
-  return new Promise(res=>{
+  o._rid=Math.random().toString(36).slice(2,9); modalOn();
+  return new Promise(res0=>{ const res=v=>{ modalOff(); res0(v); };
     const box=document.getElementById("rollbox"); let dice=null, pick=null, rolling=false, hackerAdds=0;
     const owner=o.by?P(o.by.id):o.target?P(o.target.id):null;
     const spendTok=(s_)=>commit(st=>{ st.pieces.find(x=>x.id===s_.pl.id).focus[s_.i]=false; }, `${nameOf(s_.pl)} spends Focus "${s_.n}"${s_.why?" ("+s_.why+")":""} on: ${o.why||"a roll"}`);
@@ -2642,7 +2652,7 @@ async function corneredFox(fox){ const eq=(fox.equip||[]).map((e,i)=>({e,i})).fi
   const a=await enemyAsk(`Cornered Fox`,`Gray Fox took damage. He may place 1 charge on one of his equipment cards.`,[...eq.map(x=>`+1 on ${EQUIP[x.e.k].name} (${x.e.ch??0})`),"Skip"]);
   if(a<eq.length){ const x=eq[a]; commit(st=>{ const q=st.pieces.find(p=>p.id===fox.id).equip[x.i]; q.ch=(q.ch||0)+1; }, `Cornered Fox: +1 charge on ${EQUIP[x.e.k].name}`); } }
 // pop-up: Focus tokens (spend / refresh) and abilities for a character
-function focusPanel(p){ p=P(p.id); const box=document.getElementById("rollbox"), T=TYPES[p.type], C=charOf(p), act=flow().active===p.id;
+function focusPanel(p){ if(busyModal()) return; p=P(p.id); const box=document.getElementById("rollbox"), T=TYPES[p.type], C=charOf(p), act=flow().active===p.id;
   const ab=abilityStatus(p);
   box.innerHTML=`<div class="rb-title">${esc(nameOf(p))} · Focus tokens & abilities</div>
     <div class="muted" style="margin-bottom:6px">Spend a token while rolling: tap a die in the dice box. A <b>spent</b> token comes back with the <b>Focus</b> action — it costs the number of actions shown.${p.type==="fox"?" Gray Fox can't Focus while his ! is in his zone.":""}</div>
@@ -2753,7 +2763,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="5.5";
+const APP_VERSION="5.6";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -2924,7 +2934,7 @@ function finishMission(result,why){
     if(result==="cleared"){ const nx=CAMPAIGN[CAMPAIGN.indexOf(k)+1]; if(nx&&!c.unlocked.includes(nx)){ c.unlocked.push(nx); rep.newMission=nx; } c.earned=[...new Set([...(c.earned||[]),...rep.earned])]; }
     s.report=rep; s.screen="report"; if(result!=="cleared") s.failed=why; },
     result==="cleared"?`★ MISSION COMPLETE — ${st.stage}`:`✖ ${result==="kia"?"KILLED IN ACTION":"MISSION FAILED"} — ${why}`);
-  EN.stop=true; closeAll(); }
+  EN.stop=true; closeAll(); setTimeout(clearModal,50); }
 function checkWin(p){ const st=S.st, k=st.run&&st.run.key, W=k&&WIN[k]; if(!W||st.report) return;
   if(W.defeat&&st.defeat&&st.defeat.count>=st.defeat.goal) return finishMission("cleared",`${st.defeat.count} guards defeated in the ${st.defeat.zone}`);
   if(W.exitNeeds&&p&&st.cells[key(p.r,p.c)]==="exit"&&st.pieces.some(q=>isPlayer(q)&&(q.carry||[]).includes(W.exitNeeds))) return finishMission("cleared",`${nameOf(p)} reached the Exit with Event ${W.exitNeeds}`); }
@@ -3023,7 +3033,7 @@ function renderScreen(){
   all("[data-unmem]",b=>commit(s=>{ s.camp.memory=s.camp.memory.filter(m=>m.id!==b.dataset.unmem); }));
 }
 // record which equipment card a reward was (from the catalog, or a new card typed in)
-function recordCard(slot){ const box=document.getElementById("rollbox"), ks=Object.keys(EQUIP);
+function recordCard(slot){ if(busyModal()) return; const box=document.getElementById("rollbox"), ks=Object.keys(EQUIP);
   box.innerHTML=`<div class="rb-title">🎒 Record an unlocked card</div><p class="muted">Pick it from the list, or type in a new card from the campaign book.</p>
     <div class="row"><select id="rc-k" style="flex:1"><option value="">— a new card —</option>${ks.map(k=>`<option value="${k}">${esc(EQUIP[k].name)}</option>`).join("")}</select></div>
     <div id="rc-new"><div class="row"><input type="text" id="rc-name" placeholder="Card name" style="flex:1"><input type="text" id="rc-no" placeholder="#004" style="width:80px"></div>
@@ -3043,7 +3053,7 @@ function recordCard(slot){ const box=document.getElementById("rollbox"), ks=Obje
 // ---------- one panel at a time ----------
 function closeAll(keepTurn){ if(S.pane) closeSheet(); if(!keepTurn){ const tp=document.getElementById("turnpanel"); if(tp&&tp.classList.contains("open")) openTurnPanel(false); }
   ["menu","hist","seats"].forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.remove("open"); }); }
-function hudClick(what){
+function hudClick(what){ if(S.modal&&what!=="map"){ alertMsg("Finish the pop-up on screen first"); return; }
   if(what==="map"){ closeAll(); S.sel=null; S.zoneView=null; fitView(); refresh(); return; }
   if(what==="turn"){ const tp=document.getElementById("turnpanel"), open=tp.classList.contains("open"); closeAll(); if(!open) openTurnPanel(true); return; }
   const pane=what==="team"?"team":what==="mission"?"mission":"net"; const was=S.pane===pane; closeAll(); if(!was) openSheet(pane); }
