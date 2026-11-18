@@ -211,6 +211,9 @@ nav button.on{color:var(--accent);background:linear-gradient(#5fd38a1a,transpare
 .stagebtn:hover{border-color:#5fd38a77}
 .stagebtn b{font-family:Rajdhani,Inter,sans-serif;font-size:20px;letter-spacing:.03em}
 .hactor{border-radius:12px}
+.lround{border:1px solid var(--line);border-radius:14px;padding:8px 10px;margin:10px 0;background:#141b18;cursor:pointer}.lround:active{border-color:var(--accent)}
+.lround-h{display:flex;justify-content:space-between;align-items:baseline}.lround-h b{font-family:Rajdhani,Inter,sans-serif;font-size:18px;letter-spacing:.06em;color:var(--accent)}
+.log .hactor div{border:0;padding:2px 0}
 details > summary{cursor:pointer;list-style:none}
 details > summary::-webkit-details-marker{display:none}
 details > summary::before{content:"▸ ";color:var(--accent)} details[open] > summary::before{content:"▾ "}
@@ -220,6 +223,47 @@ details.fix summary{font-size:13px;font-weight:600}
 #zonebar button,#eye,.zoom button{box-shadow:0 3px 10px #0007;border-color:#2a3732}
 .log div{font-size:12.5px;padding:7px 0}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2a3732;border-radius:8px}
+
+/* ---- campaign HUD & screens ---- */
+#undo,#redo,#tp-btn,#ref-btn,#hist-btn,#tp-handle{display:none!important}
+header .info{display:block!important;flex:1;font-family:Rajdhani,Inter,sans-serif;font-size:15px;letter-spacing:.06em;color:#cfe3d7}
+@media (max-width:640px){ header h1{display:none} }
+nav.hud{justify-content:space-around;align-items:stretch;overflow:visible;padding:0 6px}
+nav.hud button{flex:1 1 0;max-width:110px}
+nav.hud .turnbtn{flex:0 0 96px;max-width:none;margin:-16px 6px 6px;border-radius:20px!important;background:linear-gradient(#36a465,#22704a)!important;color:#fff!important;border:2px solid #7ff0a8!important;box-shadow:0 6px 20px #000b,0 0 0 4px #0d1210;font-size:13px}
+nav.hud .turnbtn .ic{font-size:22px} nav.hud .turnbtn b{font-family:Rajdhani,Inter,sans-serif;letter-spacing:.06em;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:88px}
+#scr{position:fixed;inset:0;z-index:57;display:none;overflow:auto;background:radial-gradient(ellipse at top,#16261e,#070a09 62%);padding:calc(18px + env(safe-area-inset-top,0)) 16px 40px}
+#scr.open{display:block}
+.swrap{max-width:620px;margin:0 auto}
+.brand{font-family:Rajdhani,Inter,sans-serif;font-weight:700;font-size:34px;letter-spacing:.2em;color:var(--accent);text-align:center;margin-top:18px}
+.sub{text-align:center;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-size:11px;margin-bottom:18px}
+.sh{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:#7fae94;font-weight:700;margin:18px 0 8px}
+.sh2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7fae94;font-weight:700;margin:8px 0 2px}
+.scard{background:linear-gradient(180deg,#1a2420,#151d1a);border:1px solid #2a3732;border-radius:14px;padding:12px 14px;margin:10px 0}
+.scard .sh{margin-top:0}
+.code{font-family:Rajdhani,Inter,sans-serif;font-size:24px;letter-spacing:.12em;color:#fff}
+.plist{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.pp{background:#0f1513;border:1px solid #2a3732;border-radius:20px;padding:5px 12px;font-size:13px}.pp.me{border-color:var(--accent)}
+.pp .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:6px}
+.topbar{display:flex;align-items:center;gap:8px}.topbar .ttl{flex:1;text-align:center;font-family:Rajdhani,Inter,sans-serif;font-size:22px;letter-spacing:.1em;color:#eaf4ee}
+.mcard{display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,#1b2622,#151d1a);border:1px solid #2a3732;border-radius:14px;padding:14px;margin:10px 0;cursor:pointer;position:relative;overflow:hidden}
+.mcard:hover{border-color:#5fd38a88}.mcard.done{border-color:#2f8a57}
+.mnum{font-family:Rajdhani,Inter,sans-serif;font-size:30px;color:#3f6b54;font-weight:700}.mcard b{font-family:Rajdhani,Inter,sans-serif;font-size:19px;letter-spacing:.03em}
+.mbest{font-size:12px;color:#9fd8b4;margin-top:4px}.mbest.new{color:var(--warn)}.go{color:var(--accent);font-size:20px}
+.locked{cursor:default}.blur{filter:blur(5px);opacity:.55;user-select:none;pointer-events:none}
+.lock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Rajdhani,Inter,sans-serif;letter-spacing:.14em;color:#c9d6cf;font-weight:700}
+.eq{background:#141b18;border:1px solid #26322d;border-radius:12px;padding:10px 12px;margin:8px 0;position:relative}
+.eq.locked .blur{margin-bottom:4px}
+.brief{border-left:4px solid var(--accent);background:#121a16;border-radius:10px;padding:12px 14px;margin:10px 0}.bt{font-family:Rajdhani,Inter,sans-serif;font-size:24px;letter-spacing:.06em;color:#fff}
+button.big{flex:1;min-height:54px;font-size:17px;font-weight:700}
+.rep{text-align:center;padding:18px 10px;border-radius:16px;margin:8px 0;border:2px solid #2f8a57;background:#12241a}
+.rep.kia,.rep.failed{border-color:#c0392b;background:#2a1212}
+.rep-h{font-family:Rajdhani,Inter,sans-serif;font-size:34px;font-weight:700;letter-spacing:.14em;color:#7ff0a8}.rep.kia .rep-h,.rep.failed .rep-h{color:#ff6b5a}
+.rep-s{font-size:15px;margin:2px 0 4px}
+.pill{display:inline-block;padding:3px 10px;border-radius:12px;border:1px solid #2f8a57;color:#9fe0b5;font-size:12px;margin:4px 2px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}@media (max-width:480px){ .stats{grid-template-columns:repeat(2,1fr)} }
+.stat{background:#141b18;border:1px solid #26322d;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-family:Rajdhani,Inter,sans-serif;font-size:28px}.stat span{font-size:11.5px;color:var(--muted)}.stat.bad b{color:#ff8a7a}
+.op{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid #26322d;border-radius:12px;margin:6px 0;background:#141b18}.op.kia{border-color:#c0392b;opacity:.9}
+.kia-tag{background:#c0392b;color:#fff;font-weight:800;letter-spacing:.12em;padding:2px 8px;border-radius:6px;font-size:12px}
 </style>
 </head>
 <body>
@@ -255,6 +299,7 @@ details.fix summary{font-size:13px;font-weight:600}
 <aside id="turnpanel"><div class="tp-top"><b>Turn</b><button class="sm iconbtn" id="tp-x" aria-label="Hide">▸</button></div><div id="tp-body"></div></aside>
 <button id="tp-handle">Turn</button>
 <div id="seats" class="menuish"></div>
+<div id="scr"></div>
 <div id="sheet" aria-hidden="true">
   <div class="grab"><span class="bar"></span><h2 id="sheet-title"></h2><button class="sm iconbtn" id="sheet-x" aria-label="Close">✕</button></div><p id="sheet-sub" class="muted" style="margin:0;padding:6px 14px 0"></p>
   <div class="body">
@@ -276,6 +321,9 @@ details.fix summary{font-size:13px;font-weight:600}
     <div class="pane" id="pane-map"></div>
     <div class="pane" id="pane-net"></div>
     <div class="pane" id="pane-ref"></div>
+    <div class="pane" id="pane-team"></div>
+    <div class="pane" id="pane-mission"></div>
+    <div class="pane" id="pane-builder"></div>
     <div class="pane" id="pane-ai">
       <div class="card"><b>1 · Send the board to your AI</b>
         <div class="row"><label>It plays</label><select id="ai-who" style="flex:1"></select></div>
@@ -308,7 +356,14 @@ details.fix summary{font-size:13px;font-weight:600}
   <div id="hist-body"></div>
 </div></div>
 
-<nav id="tabs">
+<nav id="tabs" class="hud">
+  <button data-hud="map"><span class="ic">🗺</span>Map</button>
+  <button data-hud="team"><span class="ic">👥</span>Team</button>
+  <button data-hud="turn" class="turnbtn"><span class="ic">🎯</span><b id="hud-turn">Turn</b></button>
+  <button data-hud="mission"><span class="ic">🎒</span>Mission</button>
+  <button data-hud="net"><span class="ic">⇄</span>Connect</button>
+</nav>
+<nav id="oldtabs" style="display:none">
   <button data-pane="piece"><span class="ic">◉</span>Selected</button>
   <button data-pane="game"><span class="ic">⏱</span>Game</button>
   <button data-pane="dice"><span class="ic">⚄</span>Dice</button>
@@ -402,7 +457,7 @@ const CS=40, M=26; // base square size and label margin (board units)
 const LAYOUTS = {
   stage1: {
     noFocus:true, name:"Stage 1 · Cargo Dock", note:"Snake only · collect A, call the elevator (it brings a guard), ride it out with no red alert",
-    rowStart:-1, priority:"BL", blue:10, red:7,
+    rowStart:-1, priority:"BLcol", blue:10, red:7,
     map:[
       "xxxLLxxx",
       "xxxLLxxx",
@@ -552,7 +607,7 @@ function loadLS(k){ try{ return localStorage.getItem(k); }catch(e){ return null;
 function saveLS(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 (function restore(){
   const raw = loadLS("st-state");
-  if(raw){ try{ S.st = Object.assign(defaultState(), JSON.parse(raw)); }catch(e){} }
+  if(raw){ try{ S.st = Object.assign(defaultState(), JSON.parse(raw)); if(/^Stage 1/.test(S.st.stage||"")&&S.st.priority==="BL") S.st.priority="BLcol"; }catch(e){} }
   const bg = loadLS("st-bg"); if(bg) setBg(bg, false);
 })();
 
@@ -563,8 +618,8 @@ const P=id=>S.st.pieces.find(p=>p.id===id);
 const nameOf=p=>p.label||TYPES[p.type].name;
 
 function snapshot(){ return JSON.stringify(S.st); }
-function persist(){ saveLS("st-state", snapshot()); }
-function addLog(m){ S.st.log.unshift({t:Date.now(), w:S.me, m, r:S.st.round, ph:S.st.phase}); if(S.st.log.length>300) S.st.log.length=300; }
+function persist(){ saveLS("st-state", snapshot()); try{ saveCamp(); }catch(e){} }
+function addLog(m){ S.st.log.unshift({t:Date.now(), w:S.me, m, r:S.st.round, ph:S.st.phase}); if(S.st.log.length>300) S.st.log.length=300; try{ tally(m); if(/counted as defeated/.test(m)) setTimeout(()=>checkWin(),0); }catch(e){} }
 function commit(fn, msg){
   S.undo.push(snapshot()); if(S.undo.length>150) S.undo.shift(); S.redo=[];
   fn(S.st); if(msg) addLog(msg);
@@ -573,7 +628,7 @@ function commit(fn, msg){
 function undo(){ if(!S.undo.length) return; S.redo.push(snapshot()); S.st=JSON.parse(S.undo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
 function redo(){ if(!S.redo.length) return; S.undo.push(snapshot()); S.st=JSON.parse(S.redo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
 function afterReplace(){ if(S.sel && !P(S.sel)) S.sel=null; persist(); refresh(); }
-function refresh(){ render(); renderSide(); renderQbar(); renderZonebar(); renderTurnPanel(); if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
+function refresh(){ render(); renderSide(); renderQbar(); renderZonebar(); renderTurnPanel(); try{ renderScreen(); }catch(e){ console.error(e); } if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
 
 // ---------- rules ----------
 function blocked(r,c){
@@ -617,9 +672,11 @@ function computeLOS(){
   return {seen, spotted, beams};
 }
 function beamColor(v){ return v.type==="camera" ? (S.st.cam==="green"?[63,191,99]:[224,123,42]) : v.type==="boss" ? [255,80,60] : [255,184,48]; }
+// priority = green zig-zag tile. "TL": rows top→bottom, each left→right. "BLcol": columns left→right, each bottom→top.
+const PRIO={TL:"Rows top→bottom, each left→right (Z)",TR:"Rows top→bottom, each right→left",BL:"Rows bottom→top, each left→right",BR:"Rows bottom→top, each right→left",BLcol:"Columns left→right, each bottom→top (N, arrow up)",TLcol:"Columns left→right, each top→bottom"};
 function activationOrder(){
-  const pr=S.st.priority, gs=S.st.pieces.filter(p=>p.type==="guard");
-  gs.sort((a,b)=> (pr[0]==="T"?a.r-b.r:b.r-a.r) || (pr[1]==="L"?a.c-b.c:b.c-a.c));
+  const pr=S.st.priority, gs=S.st.pieces.filter(p=>p.type==="guard"), V=(a,b)=>pr[0]==="T"?a.r-b.r:b.r-a.r, H=(a,b)=>pr[1]==="L"?a.c-b.c:b.c-a.c;
+  gs.sort((a,b)=> /col$/.test(pr) ? (H(a,b)||V(a,b)) : (V(a,b)||H(a,b)));
   const m={}; gs.forEach((g,i)=>m[g.id]=i+1); return m;
 }
 
@@ -1000,10 +1057,11 @@ function actionsFor(p){
 }
 
 // ---------- sheet / tabs ----------
-const TITLES={ref:"Reference cards",ai:"Play with an AI",build:"Edit the board",piece:"Selected piece",game:"Game settings & saves",dice:"Roll dice",log:"Game log",map:"Map, backdrop & files",net:"Play with a friend"};
-const SUBS={build:"For setting up or fixing the map: add pieces, paint squares, walls and arrows. Not needed in normal play.",piece:"Tap a piece on the board to see everything about it here.",game:"Rules check, the Guard Order deck, cameras, sight lines and saves. Turns are in the 🎯 Turn panel.",dice:"A free dice roller. Actions roll their own dice automatically.",log:"Everything that happened, newest first. 📜 groups it by turn.",map:"Stage layout, backdrop picture, and save/load files.",net:"Share one board live between two phones.",ai:"Copy the board for an AI player and run the moves it sends back.",ref:"Character dashboards, equipment and bosses."};
+const TITLES={team:"Team",mission:"Mission",builder:"Menu",ref:"Reference cards",ai:"Play with an AI",build:"Edit the board",piece:"Selected piece",game:"Game settings & saves",dice:"Roll dice",log:"Game log",map:"Map, backdrop & files",net:"Play with a friend"};
+const SUBS={team:"Everyone's characters — stats, Focus tokens and equipment.",mission:"Objective, status, campaign and the mission log.",builder:"Campaign screens, builder tools and settings.",build:"For setting up or fixing the map: add pieces, paint squares, walls and arrows. Not needed in normal play.",piece:"Tap a piece on the board to see everything about it here.",game:"Rules check, the Guard Order deck, cameras, sight lines and saves. Turns are in the 🎯 Turn panel.",dice:"A free dice roller. Actions roll their own dice automatically.",log:"Each round, newest first, grouped by who moved. Tap a round to copy it and share it.",map:"Stage layout, backdrop picture, and save/load files.",net:"Share one board live between two phones.",ai:"Copy the board for an AI player and run the moves it sends back.",ref:"Character dashboards, equipment and bosses."};
 const sheet=document.getElementById("sheet");
 function openSheet(n){
+  { const tp=document.getElementById("turnpanel"); if(tp&&tp.classList.contains("open")) openTurnPanel(false); ["menu","hist","seats"].forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.remove("open"); }); }
   S.pane=n; sheet.classList.add("open"); sheet.setAttribute("aria-hidden","false");
   document.getElementById("sheet-title").textContent=TITLES[n]; document.getElementById("sheet-sub").textContent=SUBS[n]||"";
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.pane===n));
@@ -1011,10 +1069,11 @@ function openSheet(n){
   renderSide(); if(n==="net") renderNetPane(); renderQbar();
 }
 function closeSheet(){ S.pane=null; sheet.classList.remove("open"); sheet.setAttribute("aria-hidden","true"); document.querySelectorAll("#tabs button").forEach(b=>b.classList.remove("on")); renderQbar(); }
-document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; if(S.pane===b.dataset.pane) closeSheet(); else openSheet(b.dataset.pane); });
+document.getElementById("tabs").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; hudClick(b.dataset.hud); });
 document.getElementById("sheet-x").onclick=closeSheet;
 document.getElementById("tp-btn").onclick=()=>openTurnPanel();
-setTimeout(()=>{ if(loadLS("st-tp")!=="0" && !document.getElementById("menu").classList.contains("open")) openTurnPanel(true); },50);
+setTimeout(()=>{ if(S.st.failed) showFail(); },400);
+
 document.getElementById("tp-handle").onclick=()=>openTurnPanel(true);
 document.getElementById("tp-x").onclick=()=>openTurnPanel(false);
 document.getElementById("ref-btn").onclick=()=>{ if(S.pane==="ref") closeSheet(); else openSheet("ref"); };
@@ -1039,7 +1098,7 @@ function renderRefPane(){
   el.innerHTML=`<h3>Characters</h3>${ch}<h3>Equipment</h3><div class="card">${eq}</div><h3>Bosses</h3>${bs}
     <h3>Locks</h3><div class="card">Doors and terminals have lock levels 2 (yellow), 3 (orange), 4 (red), 5 (purple). Set a lock level on the piece; unlocking is marked by hand after the roll.</div>`;
 }
-function renderSide(){ renderRefPane(); renderBuildPane(); renderPiecePane(); renderGamePane(); renderLog(); renderMapPane(); renderAiPane(); }
+function renderSide(){ try{ renderTeamPane(); if(S.pane==="mission") renderMissionPane(); if(S.pane==="builder") renderBuilderPane(); }catch(e){ console.error(e); } renderRefPane(); renderBuildPane(); renderPiecePane(); renderGamePane(); renderLog(); renderMapPane(); renderAiPane(); }
 function renderAiPane(){
   const sel=document.getElementById("ai-who"); if(!sel) return; const cur=sel.dataset.picked?sel.value:"";
   const players=S.st.pieces.filter(p=>TYPES[p.type].kind==="player").map(p=>p.label);
@@ -1076,6 +1135,11 @@ function renderQbar(){
   const show = p && !(S.pane && innerWidth<900); stage.classList.toggle("qb", !!show);
   if(!show){ q.style.display="none"; return; }
   const T=TYPES[p.type]; let h=`<span class="sw" style="background:${T.color}">${T.short}</span><span class="name">${esc(nameOf(p))} · ${sq(p.r,p.c)}</span>`;
+  if(!S.builder&&((isPlayer(p)&&!isMine(p))||(!isPlayer(p)&&(!amPlayer()||flow().g!=="review")))){
+    if(p.hp) h+=`<span class="muted" style="white-space:nowrap">${p.type==="guard"?`${p.dmg||0} dmg · ${p.kod||0} KO of ${p.hp}`:`HP ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`}</span>`;
+    if(p.facing!=null&&p.type!=="camera") h+=`<span class="muted">facing ${DIRN[p.facing]}</span>`;
+    if(isPlayer(p)) h+=`<span class="muted">${esc(seatLabel(p))}</span><button class="sm" id="qb-info">ℹ Info</button>`;
+    q.innerHTML=h; q.style.display="flex"; const ib=q.querySelector("#qb-info"); if(ib) ib.onclick=()=>{ closeAll(); openSheet("team"); }; return; }
   let acts=actionsFor(p).filter(a=>a.quick);
   const blockWhy=rulesOn()&&isPlayer(p)?dragBlock(p):null;
   const canStart=rulesOn()&&isPlayer(p)&&S.st.phase==="Player"&&!flow().active&&!turnDone(p)&&flow().g!=="review";
@@ -1102,7 +1166,7 @@ function renderQbar(){
   h+=`<button class="sm" data-q="more">More…</button><button class="sm danger" data-q="del" aria-label="Delete">✕</button>`;
   q.innerHTML=h; q.style.display="flex";
   q.querySelectorAll("[data-qa]").forEach(b=>b.onclick=()=>acts[+b.dataset.qa].run());
-  q.querySelector('[data-q="more"]').onclick=()=>openSheet("piece");
+  q.querySelector('[data-q="more"]').onclick=()=>{ closeAll(); openSheet(isPlayer(p)&&!S.builder?"team":"piece"); };
   confirmDel(q.querySelector('[data-q="del"]'), p);
 }
 function renderPiecePane(){
@@ -1189,7 +1253,7 @@ function renderGamePane(){
     <p class="muted">Guards and cameras see every open square in front of them unless a wall, obstacle or locked door is inside the box between them.</p>
     <div class="row"><button class="sm ${S.losAll?"on":""}" id="los-all">Show all guard & camera sight</button></div>
     <div class="row"><button class="sm ${S.order?"on":""}" id="order">Show guard activation order</button></div>
-    <div class="row"><label>Priority</label><select id="prio" style="flex:1">${["TL","TR","BL","BR"].map(v=>`<option ${st.priority===v?"selected":""} value="${v}">${{TL:"Top-left",TR:"Top-right",BL:"Bottom-left",BR:"Bottom-right"}[v]} corner</option>`).join("")}</select></div></div>
+    <div class="row"><label>Priority</label><select id="prio" style="flex:1">${Object.keys(PRIO).map(v=>`<option ${st.priority===v?"selected":""} value="${v}">${PRIO[v]}</option>`).join("")}</select></div><p class="muted" style="margin:0">Match the green zig-zag tile on your stage. Turn on "Show guard activation order" to see the numbers.</p></div>
   <div class="card"><b>Players</b>${players.length?players.map(p=>{ const T=TYPES[p.type]; return `<div class="row"><span class="sw" style="background:${T.color}">${T.short}</span><b>${esc(p.label)}</b> ${sq(p.r,p.c)} · HP ${Math.max(0,(p.hp||0)-(p.dmg||0))}/${p.hp} · focus ${p.focus.filter(Boolean).length}/4</div>`; }).join(""):`<p class="muted">No player pieces yet.</p>`}</div>`;
   const on=(id,f)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=f; };
   on("rules-t",()=>commit(s=>{ s.rules=s.rules===false; }, `Rules check ${st.rules===false?"on":"off"}`));
@@ -1212,9 +1276,44 @@ function renderGamePane(){
   el.querySelector("#prio").onchange=e=>commit(s=>{ s.priority=e.target.value; });
   on("save-slot",()=>{ const n=el.querySelector("#save-name").value.trim()||el.querySelector("#save-name").placeholder; saveSlot(n); el.querySelector("#save-msg").textContent=`Saved "${n}".`; });
 }
-function renderLog(){
-  document.getElementById("log").innerHTML = S.st.log.map(l=>`<div><span class="muted">${new Date(l.t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</span> <b>${esc(l.w)}</b> ${esc(l.m)}</div>`).join("") || `<p class="muted">Moves, rolls and changes show up here for both players.</p>`;
+// ---------- Log: rounds, grouped by who acted; tap a round to copy it ----------
+const PLAY_RE=/( SNEAK | DASH | DRAG | FOCUS-MOVE |HAND-TO-HAND|COMBO|TAKEDOWN|SHOOT|SLASH|INTERACT|KNOCK|RIDES THE ELEVATOR|CALLS THE ELEVATOR|collects Event| ends turn|'s turn|SEEN|leapfrog|spends Focus|FOCUS refreshes|GAINS DISGUISE|CONSUMES|ACTIVATES|RECHARGES|HACK|draws attention|made noise|noise check)/;
+const GUARD_RE=/^(G\d+|Boss|Ocelot|Vulcan|Sniper|Psycho)\b.*( PATROL | ALERT | INVESTIGATE | — PATROL| — ALERT| — INVESTIGATE|ATTACKS|sees |REACTION|turns the corner|corner icon|forced arrow|never ends|boxed in|no path)/;
+const KEY_RE=/^(Guard Order card|🃏 Flipped|Radio-In|Reinforcements|Waken|Stay Alert|Lost Contact|Cameras flip|✖ STAGE FAILED|.*STAGE CLEARED|.*KILLED IN ACTION|.*knocked out|.*killed at|.* takes \d+ (KO )?damage|.*counted as defeated|The elevator|Event .* collected)/;
+function isPlayLine(m){ return PLAY_RE.test(m)||GUARD_RE.test(m)||KEY_RE.test(m); }
+S.logAll=false;
+function roundsOf(all){
+  const log=[...S.st.log].reverse().filter(l=>!/^—/.test(l.m)&&(all||isPlayLine(l.m))), rounds=[];
+  let R_=null, A=null;
+  for(const l of log){ const rk=l.r==null?0:l.r, act=actorOf(l.m), ph=l.ph==="Enemy"?"Guards":"Players";
+    if(!R_||R_.k!==rk){ R_={k:rk,blocks:[]}; rounds.push(R_); A=null; }
+    const name=/^(Guard Order card|🃏 Flipped|Radio-In|Reinforcements|Waken|Stay Alert|Lost Contact|Cameras flip)/.test(l.m)?"Guard card":act.name;
+    if(!A||A.name!==name||A.ph!==ph){ A={name,ph,color:name==="Guard card"?"#c0392b":act.color,items:[]}; R_.blocks.push(A); }
+    const mv=/^(.+?) ([A-Z]+-?\d+) (SNEAK|DASH|DRAG|FOCUS-MOVE|PATROL|ALERT|INVESTIGATE|→)(?: \(leapfrog\))? ([A-Z]+-?\d+)/.exec(l.m), last=A.items[A.items.length-1];
+    if(mv&&last&&last.path&&last.path[last.path.length-1]===mv[2]){ last.path.push(mv[4]); last.acts.push(mv[3]); }
+    else if(mv) A.items.push({path:[mv[2],mv[4]],acts:[mv[3]]});
+    else A.items.push({text:l.m.startsWith(name)?l.m.slice(name.length).replace(/^ —\s*/,"").trim():l.m});
+  }
+  return rounds;
 }
+const pathText=it=>it.path.map((x,i)=>i===0?x:` ${it.acts[i-1]==="→"?"→":it.acts[i-1].toLowerCase()+" →"} ${x}`).join("")+` (${it.path.length-1} sq)`;
+function roundText(r){ const out=[`Round ${r.k||"?"} — ${S.st.stage||""}`]; let ph=null;
+  for(const b of r.blocks){ if(b.ph!==ph){ ph=b.ph; out.push(`— ${ph} —`); } out.push((b.name==="Guard card"?"":`${b.name}: `)+b.items.map(it=>it.path?pathText(it):it.text).join(" · ")); }
+  return out.join("\n"); }
+function copyText(t,msg){ const ok=()=>toast(msg||"Copied"); try{ navigator.clipboard.writeText(t).then(ok,()=>{ prompt("Copy this:",t); }); }catch(e){ prompt("Copy this:",t); } }
+function renderLog(target){
+  const el=document.getElementById(target||"log"); if(!el) return; const rounds=roundsOf(S.logAll).reverse();
+  el.innerHTML=`<div class="row" style="margin:0 0 8px"><button class="sm ${S.logAll?"":"on"}" data-lf="0">Moves only</button><button class="sm ${S.logAll?"on":""}" data-lf="1">Everything</button><button class="sm" id="log-copyall" style="margin-left:auto">📋 Copy all</button></div>
+    <p class="muted" style="margin:0 0 6px">Tap a round to copy it for sharing.</p>`+
+    (rounds.length?rounds.map((r,i)=>{ let ph=null; return `<div class="lround" data-ri="${i}"><div class="lround-h"><b>Round ${r.k||"?"}</b><span class="muted">📋 tap to copy</span></div>`+
+      r.blocks.map(b=>{ const head=b.ph!==ph?`<div class="hphase">${b.ph==="Guards"?"Guards' phase":"Players' phase"}</div>`:""; ph=b.ph;
+        return head+`<div class="hactor" style="--c:${b.color}">${b.name==="Guard card"?"":`<b style="color:${b.color}">${esc(b.name)}</b>`}${b.items.map(it=>it.path?`<div class="path">${esc(pathText(it))}</div>`:`<div>${esc(it.text)}</div>`).join("")}</div>`; }).join("")+`</div>`; }).join("")
+     :`<p class="muted">Moves show up here round by round.</p>`);
+  el.querySelectorAll("[data-lf]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); S.logAll=b.dataset.lf==="1"; renderLog(); });
+  el.querySelectorAll("[data-ri]").forEach(d=>d.onclick=()=>copyText(roundText(rounds[+d.dataset.ri]),`Round ${rounds[+d.dataset.ri].k} copied`));
+  const ca=el.querySelector("#log-copyall"); if(ca) ca.onclick=e=>{ e.stopPropagation(); copyText([...rounds].reverse().map(roundText).join("\n\n"),"Whole game copied"); };
+}
+
 const pending={};
 function confirmTwice(id,el){
   if(pending[id] && Date.now()-pending[id]<3000){ delete pending[id]; return true; }
@@ -1465,7 +1564,7 @@ function renderMenu(){
     S.undo.push(snapshot()); S.st=Object.assign(defaultState(), JSON.parse(JSON.stringify(v.state))); S.st.ver++; addLog(`Loaded save: ${v.name}`); afterReplace(); net.sendState(); closeMenu(); fitView(); });
   m.querySelectorAll("[data-delsave]").forEach(b=>b.onclick=()=>{ if(b.dataset.armed){ putSaves(getSaves().filter(x=>String(x.id)!==b.dataset.delsave)); renderMenu(); } else { b.dataset.armed=1; b.textContent="Sure?"; } });
 }
-document.getElementById("menu-btn").onclick=openMenu;
+document.getElementById("menu-btn").onclick=()=>{ const was=S.pane==="builder"; closeAll(); if(!was) openSheet("builder"); };
 document.getElementById("menu-x").onclick=closeMenu;
 document.getElementById("menu-loadfile").onclick=()=>{ document.getElementById("load-file").click(); closeMenu(); };
 // a text map of part of the board (used for the local map in quick updates)
@@ -1487,6 +1586,12 @@ function gridRows(r0,r1,c0,c1,seen){ const st=S.st, CH={void:"x",obstacle:"#",ex
     if(ch && (!pc[k] || T.kind!=="token")) pc[k]=ch; });
   const out=["    "+[...Array(c1-c0+1)].map((_,i)=>colName(c0+i).padStart(2)).join("")];
   for(let r=r0;r<=r1;r++) out.push(String(r+rs).padStart(3)+" "+[...Array(c1-c0+1)].map((_,i)=>{ const c=c0+i; return " "+(pc[key(r,c)]||((st.marks||{})[key(r,c)]==="radio"?"@":null)||((st.arrows||{})[key(r,c)]!=null?AR[st.arrows[key(r,c)]]:null)||CH[st.cells[key(r,c)]]||(seen&&seen.has(key(r,c))?"*":".")); }).join(""));
+  return out; }
+// every edge between a playable square and a no-go square or the board edge, written per square ("B1 top+left")
+function outerWalls(r0,r1,c0,c1){ const st=S.st, open=(r,c)=>r>=0&&c>=0&&r<st.rows&&c<st.cols&&st.cells[key(r,c)]!=="void", out=[];
+  for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){ if(!open(r,c)) continue; const sides=[];
+    if(!open(r-1,c)) sides.push("top"); if(!open(r,c+1)) sides.push("right"); if(!open(r+1,c)) sides.push("bottom"); if(!open(r,c-1)) sides.push("left");
+    if(sides.length) out.push(`${sq(r,c)} ${sides.join("+")}`); }
   return out; }
 function boardText(who, quick){
   const st=S.st, F=["up","right","down","left"], L=[];
@@ -1534,6 +1639,7 @@ function boardText(who, quick){
   if(quick){ const me=who&&findPiece(who);
     if(me&&isPlayer(me)){ L.push("", `LOCAL MAP around ${nameOf(me)} (same symbols as the full map; * = a square a guard or camera sees right now):`); const r0=Math.max(0,me.r-4),r1=Math.min(st.rows-1,me.r+4),c0=Math.max(0,me.c-4),c1=Math.min(st.cols-1,me.c+4); L.push(...gridRows(r0,r1,c0,c1,seenSquares()));
       const nw=Object.keys(st.walls).map(k=>{ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); return {t,r,c}; }).filter(w=>w.r>=r0&&w.r<=r1&&w.c>=c0&&w.c<=c1).map(w=>w.t==="h"?`${sq(w.r,w.c)}/${sq(w.r+1,w.c)}`:`${sq(w.r,w.c)}|${sq(w.r,w.c+1)}`);
+      const ow=outerWalls(r0,r1,c0,c1); if(ow.length) L.push("Outer walls in this area (map edge): "+ow.join(", "));
       if(nw.length) L.push("Walls in this area (no movement or sight across): "+nw.join(", ")); }
     L.push("", ...LOS_HELP);
     const N=me&&isPlayer(me)?nameOf(me):"Snake";
@@ -1554,7 +1660,8 @@ function boardText(who, quick){
   const SEEN=seenSquares();
   for(let r=0;r<st.rows;r++) L.push(String(r+rs).padStart(3)+" "+[...Array(st.cols)].map((_,c)=>" "+(pc[key(r,c)]||((st.marks||{})[key(r,c)]==="radio"?"@":null)||((st.arrows||{})[key(r,c)]!=null?AR[st.arrows[key(r,c)]]:null)||CH[st.cells[key(r,c)]]||(SEEN.has(key(r,c))?"*":"."))).join(""));
   const W=Object.keys(st.walls).map(k=>{ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); return t==="h"?`${sq(r,c)}/${sq(r+1,c)}`:`${sq(r,c)}|${sq(r,c+1)}`; });
-  if(W.length) L.push("WALLS (no movement or sight across): "+W.join(", "));
+  if(W.length) L.push("WALLS inside the map (no movement or sight across): "+W.join(", "));
+  { const ow=outerWalls(0,st.rows-1,0,st.cols-1); if(ow.length) L.push("OUTER WALLS — the edge of the playable area, also solid (no movement or sight across): "+ow.join(", ")); }
   L.push("", "HOW TO REPLY: explain your plan if you like, then put each change on its own line in this exact format so the page can apply it. Move one square per line so the path is recorded.");
   L.push("PLAYER ACTIONS (the page checks every rule and rejects illegal ones with the reason; 4 actions per turn):");
   L.push("  sneak Snake H18            1 action, 1 square");
@@ -1642,6 +1749,7 @@ function statusInfo(){
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function useAction(p,kind,extra){ const t=tt(p), cost=ACT[kind]||1;
   if(S.st.failed) return "the stage has failed — restart or undo from the Turn panel";
+  if(!isMine(p)) return `${nameOf(p)} is played by ${seatLabel(p)}`;
   if(S.st.phase!=="Player") return "it's the guards' phase — players act in the players' phase";
   { const f=flow(); if(f.active&&f.active!==p.id) return `it's ${nameOf(P(f.active))}'s turn — end or undo it first (Turn panel)`;
     if(!f.active&&!S.scriptRunning) return `start ${nameOf(p)}'s turn first — tap ▶ Start turn`;
@@ -1772,7 +1880,7 @@ function doElevator(p,dest){
   const on=onLift(p.r,p.c), keys=Object.keys(st.shafts);
   if(on){
     if(keys.length===1){ if(statusInfo().al.length) throw "the elevator won't take you out while there's a red ! on the map";
-      spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} RIDES THE ELEVATOR OUT — STAGE CLEARED`); toast("Stage cleared!"); return "stage cleared"; }
+      spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} RIDES THE ELEVATOR OUT — STAGE CLEARED`); finishMission("cleared",`${nameOf(p)} rode the elevator out`); return "stage cleared"; }
     const to=dest?keys.find(k=>k.toLowerCase().startsWith(dest.toLowerCase())):keys.find(k=>k!==st.lift); if(!to||to===st.lift) throw "pick another shaft";
     spend(p,"interact",false); placeLift(to,`${nameOf(p)} RIDES THE ELEVATOR ${st.lift} → ${to}`); return `elevator → ${to}`; }
   const to=adjShaft(p);
@@ -1834,6 +1942,7 @@ async function endTurn(p,opts){
   const up=(t.hurt||[]).map(id=>P(id)).filter(g=>g&&g.type==="guard"&&((g.dmg||0)||(g.kod||0)));
   if(up.length){ playerToken(P(p.id),"alert"); addLog(`${up.map(nameOf).join(", ")} hurt but still standing → ${nameOf(p)} ALERTED`); out.push("a hurt guard is still up → !"); }
   commit(st=>{ st.tt[p.id].done=true; const q=st.pieces.find(x=>x.id===p.id); if(q) delete q.stealth; if(st.flow&&st.flow.active===p.id){ st.flow.active=null; st.flow.snap=null; } }, `✓ ${nameOf(p)} ends turn (${t.used} action${t.used===1?"":"s"} used)`);
+  setTimeout(()=>checkWin(P(p.id)),0);
   return out.join(" · ")||"turn ended";
 }
 // guards/cameras: anyone who can now see a player puts a ! under them (enemy phase, camera flips)
@@ -1851,7 +1960,9 @@ async function autoSpot(by){
   if(any) refresh();
 }
 // parse and run one player action line; returns a message or throws a reason
-async function runAction(line,note){
+async function runAction(line,note){ const snap=snapshot(), cmd=(line.split(/\s+/)[0]||"").toLowerCase(); const r=await runAction_(line,note);
+  if(cmd==="end") S.steps=[]; else { S.steps.push(snap); if(S.steps.length>30) S.steps.shift(); } return r; }
+async function runAction_(line,note){
   const w=line.split(/\s+/), cmd=w[0].toLowerCase(), p=findPiece(w[1]||"");
   if(!p) throw `no piece called "${w[1]||""}"`;
   if(!isPlayer(p)) throw `${nameOf(p)} isn't a player`;
@@ -1985,7 +2096,7 @@ async function activateGuard(gid,card){
     if(mine.length){ mode="INVESTIGATE"; target=mine.sort((a,b)=>pl(a)-pl(b))[0]; }
     else { const cams=zp.filter(p=>p.type==="camera"); const bodies=zp.filter(p=>(p.type==="ko"||p.type==="dead")&&(los(g,p.r,p.c)||cams.some(c=>los(c,p.r,p.c))));
       if(bodies.length){ mode="INVESTIGATE"; target=bodies.sort((a,b)=>pl(a)-pl(b))[0]; } } }
-  addLog(`${nameOf(g)} — ${mode}${target?` toward ${target.type==="attn"?target.owner+"'s "+(target.mode==="alert"?"!":"?"):target.type==="ko"?"KO guard":"dead guard"} at ${sq(target.r,target.c)}`:""} · moves ${n}`); refresh();
+  addLog(`${nameOf(g)} — ${mode} (${mode==="ALERT"?"red":"blue"} number)${target?` toward ${target.type==="attn"?target.owner+"'s "+(target.mode==="alert"?"!":"?"):target.type==="ko"?"KO guard":"dead guard"} at ${sq(target.r,target.c)}`:""} · moves ${n}`); refresh();
   if(target){
     const path=guardPath(g,target.r,target.c);
     if(!path){ addLog(`${nameOf(g)} has no path — stays put`); return; }
@@ -1998,7 +2109,9 @@ async function activateGuard(gid,card){
       if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
       if(tokenAt(g.r,g.c).length){ await guardReaction(g); noWallFacing(gid,card); return; } }
     g=P(gid); if(i<path.length && !playersSeenBy(g).length) guardFace(g,path[i].d,"faces along his path");
-    noWallFacing(gid,card); return; }
+    noWallFacing(gid,card);
+    if(await guardAttack(P(gid))){ if(tokenAt(P(gid).r,P(gid).c).length) await guardReaction(P(gid)); }
+    return; }
   // patrol: forward as far as possible; forced arrows turn at once; ends on a corner icon -> find a new path
   let left=n, guard=0;
   while(left>0&&guard++<40){ g=P(gid);
@@ -2010,7 +2123,7 @@ async function activateGuard(gid,card){
     g=P(gid);
     if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
     if(tokenAt(g.r,g.c).length){ await guardReaction(g); noWallFacing(gid,card); return; } }
-  g=P(gid); if(!g||playersSeenBy(g).length) return;
+  g=P(gid); if(!g) return; if(playersSeenBy(g).length){ await guardAttack(g); return; }
   if(S.st.cells[key(g.r,g.c)]==="corner"){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"ended on a corner icon"); }
   else { const r2=g.r+DR[g.facing], c2=g.c+DC[g.facing];   // only real obstacles/walls count here — a figure in front is not an obstacle
     if(!inBounds(r2,c2)||wallBetween(g.r,g.c,r2,c2)||blocked(r2,c2)){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"faces an obstacle"); } }
@@ -2095,12 +2208,14 @@ function openGuardCard(){
 // ---------- turn flow: whose turn it is, confirm / revert, guard turn review ----------
 function flow(){ const st=S.st; st.flow=st.flow||{active:null,snap:null,g:"idle",gsnap:null}; return st.flow; }
 const playersOf=()=>S.st.pieces.filter(isPlayer);
-const seatOf=p=>((S.st.seats||{})[p.label]||"");
+const seatOf=p=>{ const x=(S.st.seats||{})[p.label]; return !x?"":typeof x==="string"?x:x.name; };
 const turnDone=p=>!!(S.st.tt&&S.st.tt[p.id]&&S.st.tt[p.id].done);
 function rulesOn(){ return S.st.rules!==false; }
 // may this piece be dragged right now? returns null or the reason
 function dragBlock(p){
   if(S.st.failed&&isPlayer(p)) return "The stage has failed — restart or undo from the Turn panel";
+  if(!S.builder&&isPlayer(p)&&!isMine(p)) return `${nameOf(p)} is played by ${seatLabel(p)} — tap to see their info`;
+  if(!S.builder&&!isPlayer(p)&&!amPlayer()) return "You're watching — only players move pieces";
   if(!rulesOn()) return null; const f=flow();
   if(f.g==="review") return isPlayer(p)?"Players can't move now — confirm the guards' turn first":null;   // fixing guard mistakes only
   if(f.g==="running") return "The guards are moving — wait for them to finish";
@@ -2110,10 +2225,20 @@ function dragBlock(p){
   if(!f.active&&!turnDone(p)) return `Start ${nameOf(p)}'s turn first (▶ in the Turn panel or the quick bar)`;
   if(turnDone(p)) return `${nameOf(p)} already finished this round`;
   return null; }
-function failStage(why){ if(S.st.failed) return; EN.stop=true; commit(s=>{ s.failed=why; }, `✖ STAGE FAILED — ${why}`); toast("Stage failed"); openTurnPanel(true); }
+function failStage(why){ if(S.st.camp&&S.st.run&&!S.st.report){ finishMission(/killed in action/i.test(why)?"kia":"failed",why); return; } if(S.st.failed) return; EN.stop=true; commit(s=>{ s.failed=why; }, `✖ STAGE FAILED — ${why}`); openTurnPanel(true); showFail(); }
+function showFail(){ const el=document.getElementById("seats"); if(!S.st.failed) return; const rb=document.getElementById("rollbox"); if(rb) rb.style.display="none";
+  el.innerHTML=`<div class="wrap" style="text-align:center;padding-top:12vh"><div class="tp-fail-h" style="font-size:44px">MISSION FAILED</div><p style="font-size:17px">${esc(S.st.failed)}.</p>
+    <p class="muted">Turns and guards are frozen until you restart or undo.</p>
+    <div class="row"><button class="on" id="f-restart" style="flex:1">↻ Restart ${esc(S.st.stage||"stage")}</button></div>
+    <div class="row"><button class="sm" id="f-undo" style="flex:1">↶ Undo — go back to before it happened</button></div>
+    <div class="row"><button class="sm" id="f-look" style="flex:1">Look at the board</button></div></div>`;
+  el.classList.add("open");
+  el.querySelector("#f-restart").onclick=()=>{ el.classList.remove("open"); restartStage(); };
+  el.querySelector("#f-undo").onclick=()=>{ el.classList.remove("open"); undoFail(); };
+  el.querySelector("#f-look").onclick=()=>el.classList.remove("open"); }
 function restartStage(){ const k=S.st.stageKey||Object.keys(LAYOUTS).find(k=>LAYOUTS[k].name===S.st.stage); if(!k){ toast("Start the stage again from the ☰ menu"); return; } const seats=S.st.seats; startStage(k); if(seats) commit(s=>{ s.seats=seats; }); document.getElementById("seats").classList.remove("open"); }
 function undoFail(){ const f=flow(); if(f.gsnap){ revertGuards(); } else undo(); commit(s=>{ delete s.failed; }, "Stage-failed undone — play on from before it happened"); }
-function startTurn(p){ if(S.st.failed) throw "the stage has failed — restart or undo from the Turn panel"; const f=flow(); if(f.active===p.id) return; if(f.active) throw `It's ${nameOf(P(f.active))}'s turn — end or undo it first`; if(turnDone(p)) throw `${nameOf(p)} already finished this round`;
+function startTurn(p){ if(!isMine(p)) throw `${nameOf(p)} is played by ${seatLabel(p)}`; if(S.st.failed) throw "the stage has failed — restart or undo from the Turn panel"; const f=flow(); if(f.active===p.id) return; if(f.active) throw `It's ${nameOf(P(f.active))}'s turn — end or undo it first`; if(turnDone(p)) throw `${nameOf(p)} already finished this round`;
   const snap=snapshot(); commit(st=>{ st.flow=Object.assign(st.flow||{}, {active:p.id,snap}); }, `▶ ${nameOf(p)}'s turn${seatOf(p)?" ("+seatOf(p)+")":""}`); }
 function revertTurn(){ const f=flow(); if(!f.active||!f.snap) return; const id=f.active, snap=f.snap, nm=nameOf(P(id));
   S.undo.push(snapshot()); S.redo=[]; S.st=JSON.parse(snap); S.st.flow=Object.assign(S.st.flow||{}, {active:id,snap});
@@ -2139,7 +2264,7 @@ function openSeats(first){
   el.querySelectorAll("[data-seat]").forEach(b=>b.onclick=()=>{ commit(st=>{ st.seats=st.seats||{}; st.seats[b.dataset.seat]=b.dataset.v; }, `${b.dataset.seat} is played by ${b.dataset.v}`); openSeats(first); });
   el.querySelector("#seat-ok").onclick=()=>{ el.classList.remove("open"); openTurnPanel(true); };
 }
-function openTurnPanel(on){ const tp=document.getElementById("turnpanel"); const v=on==null?!tp.classList.contains("open"):on; tp.classList.toggle("open",v); document.body.classList.toggle("tp-open",v); saveLS("st-tp",v?"1":"0"); setTimeout(()=>{ fitView(); },230); renderTurnPanel(); }
+function openTurnPanel(on){ const tp=document.getElementById("turnpanel"); const v=on==null?!tp.classList.contains("open"):on; if(v&&S.pane) closeSheet(); tp.classList.toggle("open",v); document.body.classList.toggle("tp-open",v); saveLS("st-tp",v?"1":"0"); setTimeout(()=>{ fitView(); },230); renderTurnPanel(); }
 function renderTurnPanel(){
   const el=document.getElementById("tp-body"); if(!el) return; const st=S.st, f=flow(), ps=playersOf(), si=statusInfo();
   const allDone=ps.length&&ps.every(turnDone), act=P(f.active);
@@ -2540,7 +2665,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="4.4";
+const APP_VERSION="5.0";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -2627,12 +2752,269 @@ setInterval(()=>{ if(!(net.dc&&net.dc.readyState==="open")) return; net.raw({t:"
   if(net.lastPong && Date.now()-net.lastPong>20000 && !net.warned){ net.warned=true; net.setStatus("Your friend's page went quiet (app switched?). If it doesn't come back, use a room or new codes.","wait"); }
   if(net.lastPong && Date.now()-net.lastPong<6000 && net.warned){ net.warned=false; net.setStatus("Connected"+(net.peerName?" to "+net.peerName:""),"ok"); } }, 5000);
 
+// =====================================================================
+// CAMPAIGN MODE: lobby → missions → briefing → play → action report
+// =====================================================================
+const CAMPAIGN=["stage1","stage2","stage3"], CLASSIFIED=3;          // built missions, plus classified placeholders after them
+const REWARDS={
+  stage1:[{id:"s1a",label:"Stage 1 reward A"},{id:"s1b",label:"Stage 1 reward B"}],
+  stage2:[{id:"s2a",label:"Stage 2 reward"}],
+  stage3:[{id:"s3a",label:"Equipment #004",when:"defeat 12+ guards in the Holding Cells",test:st=>(st.defeat&&st.defeat.count>=12)},
+          {id:"s3b",label:"Equipment #005",when:"reach Event C",test:st=>(st.stats&&st.stats.objectives||[]).includes("C")}]};
+const WIN={
+  stage1:{how:"Collect Event A, then ride the elevator out with no red ! on the map."},
+  stage2:{how:"Collect Event A, then end a turn on an Exit square.",exitNeeds:"A"},
+  stage3:{how:"Defeat 12 guards in the Holding Cells — or collect Event C and end a turn on the Exit.",exitNeeds:"C",defeat:true}};
+const inRoom=()=>!!room.code;
+const myId=()=>inRoom()?room.me:"local";
+function people(){ const now=Date.now(), out=[{id:myId(),name:S.me,me:true}];
+  for(const [id,p] of Object.entries(room.people||{})) if(id!==room.me&&now-p.t<60000) out.push({id,name:p.name}); return out; }
+function seatObj(p){ const s=(S.st.seats||{})[p.label]; if(!s) return null; return typeof s==="string"?{id:"local",name:s}:s; }
+function isMine(p){ if(S.builder||!inRoom()) return true; const s=seatObj(p); return !s||s.id===room.me||s.id==="local"; }
+function amPlayer(){ if(S.builder||!inRoom()) return true; const seats=Object.values(S.st.seats||{}); return !seats.length||seats.some(s=>s&&(s.id===room.me||s.id==="local")); }
+const seatLabel=p=>{ const s=seatObj(p); return s?`${s.name}${s.proxy?` (for ${s.proxy})`:""}`:"unassigned"; };
+// ---------- stats: tallied from what happens ----------
+function tally(m){ const st=S.st; if(!st.stats) return; const t=st.stats;
+  if(/ is SEEN| spots |sees .* → !/.test(m)) t.spotted++;
+  if(/knocked out at/.test(m)) t.ko++;
+  if(/(?<!KILLED IN ACTION.*)\bkilled at /.test(m)) t.kills++;
+  const d=/^(Snake|Meryl|Otacon|Gray Fox) takes (\d+) damage/.exec(m); if(d) t.dmg+=+d[2];
+  if(/draws attention|made noise|rolled a white "!"/.test(m)) t.noise++;
+  const o=/collects Event (\w)/.exec(m); if(o&&!t.objectives.includes(o[1])) t.objectives.push(o[1]);
+  if(/^Guard Order card|^🃏 Flipped/.test(m)) t.cards++;
+  if(/ ALERT /.test(m)===false&&/→ ! (token )?under|is SEEN/.test(m)) t.alerts++; }
+const newStats=()=>({spotted:0,alerts:0,ko:0,kills:0,dmg:0,noise:0,cards:0,objectives:[]});
+// ---------- campaign storage (each device keeps a copy; the room shares it) ----------
+function camps(){ try{ return JSON.parse(loadLS("st-camps")||"{}")||{}; }catch(e){ return {}; } }
+function saveCamp(){ const c=S.st.camp; if(!c) return; const all=camps(); const st=JSON.parse(snapshot()); st.log=st.log.slice(0,120); if(st.flow){ delete st.flow.snap; delete st.flow.gsnap; }
+  all[c.id]={name:c.name,t:Date.now(),cleared:Object.keys(c.best||{}).filter(k=>c.best[k].result==="cleared").length,state:st};
+  try{ localStorage.setItem("st-camps",JSON.stringify(all)); }catch(e){ const ks=Object.keys(all).sort((a,b)=>all[a].t-all[b].t); if(ks.length>1){ delete all[ks[0]]; try{ localStorage.setItem("st-camps",JSON.stringify(all)); }catch(_){} } } }
+function applyCustom(){ const c=S.st.camp; if(c&&c.custom) Object.assign(EQUIP,c.custom); }
+function setScreen(k,extra){ commit(s=>{ s.screen=k; if(extra) Object.assign(s,extra); }); }
+function newCampaign(name){ const c={id:"c"+Date.now().toString(36),name:name||"Shadow Moses",unlocked:["stage1"],memory:[],custom:{},runs:{},best:{},created:Date.now()};
+  commit(s=>{ const n=defaultState(); Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,{camp:c,screen:"missions"}); }, `New campaign: ${c.name}`); }
+function loadCampaign(id){ const sv=camps()[id]; if(!sv) return; commit(s=>{ Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,defaultState(),sv.state,{screen:"missions"}); }, `Loaded campaign: ${sv.name}`); applyCustom(); }
+// ---------- launching a mission ----------
+function charsOf(k){ return LAYOUTS[k].pieces.filter(p=>TYPES[p.type].kind==="player").map(p=>p.type); }
+function launchMission(k,runIdx){
+  const camp=S.st.camp, br=S.st.brief||{}, chars=charsOf(k), solo=chars.length===1, run=S.st.run&&S.st.run.key===k?S.st.run:null;
+  const runners=solo?((br.key===k&&br.runners)||run&&run.runners||[]):[], idx=runIdx??0;
+  const n=buildPreset(k); n.camp=camp; n.brief=br; n.stats=newStats(); n.screen="play";
+  n.seats={}; chars.forEach(t=>{ const lab=TYPES[t].name; const s=solo?runners[idx]:(br.seats||{})[lab]; if(s) n.seats[lab]=s; });
+  n.run={key:k,runners,idx,attempt:((camp.runs[k]||[]).length)+1};
+  // loadout from the Memory Box
+  n.pieces.filter(p=>TYPES[p.type].kind==="player").forEach(p=>{ ensureChar(p); const pick=((br.loadout||{})[p.label]||[]).map(id=>camp.memory.find(m=>m.id===id)).filter(Boolean);
+    pick.forEach(m=>{ if(EQUIP[m.k]&&p.equip.length<CHARS[p.type].slots) p.equip.push({k:m.k,ch:EQUIP[m.k].charges,mem:m.id}); }); });
+  commit(s=>{ const keep={bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(x=>delete s[x]); Object.assign(s,n,keep); S.sel=null; },
+    `▶ Mission start: ${LAYOUTS[k].name}${solo&&runners[idx]?` — ${runners[idx].name}'s run`:""}`);
+  S.st.log=S.st.log.slice(0,1); S.steps=[]; persist(); stageBg(); S.zoneView=null; if(cardLib().length) buildDeck(); fitView(); closeAll(); refresh(); }
+// ---------- end of a mission ----------
+function runScore(r){ return (r.result==="cleared"?1e6:0)-r.rounds*1000-r.stats.spotted*50-r.stats.dmg*10+r.stats.ko; }
+function finishMission(result,why){
+  const st=S.st; if(st.report||!st.camp||!st.run){ if(result!=="cleared"&&!st.failed) commit(s=>{ s.failed=why; }, `✖ STAGE FAILED — ${why}`); return; }
+  const k=st.run.key, camp=st.camp, players=st.pieces.filter(isPlayer);
+  const rep={key:k,stage:st.stage,result,why,rounds:st.round,stats:JSON.parse(JSON.stringify(st.stats||newStats())),t:Date.now(),attempt:st.run.attempt,
+    team:players.map(p=>({name:nameOf(p),type:p.type,by:seatLabel(p),hp:Math.max(0,p.hp-(p.dmg||0)),max:p.hp,kia:(p.dmg||0)>=p.hp})),
+    earned:result==="cleared"?(REWARDS[k]||[]).filter(r=>!r.test||r.test(st)).map(r=>r.id):[]};
+  commit(s=>{ const c=s.camp; (c.runs[k]=c.runs[k]||[]).push(rep); const b=c.best[k];
+    rep.best=!b||runScore(rep)>runScore(b); if(rep.best) c.best[k]=rep;
+    if(result==="cleared"){ const nx=CAMPAIGN[CAMPAIGN.indexOf(k)+1]; if(nx&&!c.unlocked.includes(nx)){ c.unlocked.push(nx); rep.newMission=nx; } c.earned=[...new Set([...(c.earned||[]),...rep.earned])]; }
+    s.report=rep; s.screen="report"; if(result!=="cleared") s.failed=why; },
+    result==="cleared"?`★ MISSION COMPLETE — ${st.stage}`:`✖ ${result==="kia"?"KILLED IN ACTION":"MISSION FAILED"} — ${why}`);
+  EN.stop=true; closeAll(); }
+function checkWin(p){ const st=S.st, k=st.run&&st.run.key, W=k&&WIN[k]; if(!W||st.report) return;
+  if(W.defeat&&st.defeat&&st.defeat.count>=st.defeat.goal) return finishMission("cleared",`${st.defeat.count} guards defeated in the ${st.defeat.zone}`);
+  if(W.exitNeeds&&p&&st.cells[key(p.r,p.c)]==="exit"&&st.pieces.some(q=>isPlayer(q)&&(q.carry||[]).includes(W.exitNeeds))) return finishMission("cleared",`${nameOf(p)} reached the Exit with Event ${W.exitNeeds}`); }
+// ---------- the full-screen screens ----------
+function nextMissionLocked(i){ return `<div class="mcard locked"><div class="blur"><b>Mission ${i+1}</b><div>Classified operation</div></div><div class="lock">🔒 CLASSIFIED</div></div>`; }
+function renderScreen(){
+  const el=document.getElementById("scr"); if(!el) return; const st=S.st, k=st.screen;
+  if(!k||k==="play"){ el.classList.remove("open"); return; } el.classList.add("open");
+  const camp=st.camp, back=(to,l)=>`<button class="sm" data-go="${to}">${l}</button>`;
+  let h="";
+  if(k==="lobby"){ const ps=people(), saved=Object.entries(camps()).sort((a,b)=>b[1].t-a[1].t);
+    h=`<div class="brand">SNEAKING TABLE</div><div class="sub">Metal Gear Solid · campaign table</div>
+      <div class="scard"><div class="sh">1 · Your squad</div>
+        <div class="row"><label>Your name</label><input type="text" id="l-name" value="${esc(S.me)}" style="flex:1"></div>
+        ${inRoom()?`<div class="row"><label>Room</label><b class="code">${esc(room.code)}</b><span class="muted">${room.connected().length?"live":"connecting…"}</span></div>
+          <div class="plist">${ps.map(p=>`<div class="pp ${p.me?"me":""}"><span class="dot ok"></span>${esc(p.name)}${p.me?" (you)":""}</div>`).join("")}</div>
+          <p class="muted">Share the room code. Everyone who joins shows up here.</p>`
+        :`<p class="muted">Playing on this device only. To play together, create a room and send the code to your friend.</p>
+          <div class="row"><button class="on" id="l-create">Create a room</button><input type="text" id="l-code" placeholder="MGS-XXXX" style="flex:1;min-width:0"><button class="sm" id="l-join">Join</button></div>`}</div>
+      <div class="scard"><div class="sh">2 · Campaign</div>
+        ${camp?`<div class="row"><b style="flex:1">${esc(camp.name)}</b><button class="on" data-go="missions">Continue →</button></div>`:""}
+        ${saved.filter(([id])=>!camp||id!==camp.id).map(([id,v])=>`<div class="row"><span style="flex:1"><b>${esc(v.name)}</b><br><span class="muted">${v.cleared} mission${v.cleared===1?"":"s"} cleared · ${new Date(v.t).toLocaleDateString()}</span></span><button class="sm" data-load="${id}">Load</button></div>`).join("")}
+        <div class="row"><input type="text" id="l-new" placeholder="New campaign name" style="flex:1;min-width:0"><button class="${camp?"sm":"on"}" id="l-start">New campaign</button></div>
+        <p class="muted">A campaign remembers unlocked missions, your Memory Box and every run. It saves by itself on each phone in the room.</p></div>`; }
+  if(k==="missions"){ const c=camp;
+    h=`<div class="topbar">${back("lobby","← Lobby")}<div class="ttl">${esc(c.name)}</div><button class="sm" data-go="memory">🎒 Memory Box</button></div>
+      <div class="sh" style="margin-top:6px">Missions</div>
+      ${CAMPAIGN.map((key_,i)=>{ const L=LAYOUTS[key_], open=c.unlocked.includes(key_), b=c.best[key_];
+        if(!open) return `<div class="mcard locked"><div class="blur"><b>${esc(L.name)}</b><div>${esc(L.note)}</div></div><div class="lock">🔒 Clear the previous mission</div></div>`;
+        return `<div class="mcard ${b&&b.result==="cleared"?"done":""}" data-brief="${key_}"><div class="mnum">${String(i+1).padStart(2,"0")}</div><div style="flex:1"><b>${esc(L.name)}</b><div class="muted">${esc(WIN[key_].how)}</div>
+          ${b?`<div class="mbest">${b.result==="cleared"?"✓ Cleared":"✖ Not cleared yet"} · best run: ${b.rounds} rounds · spotted ${b.stats.spotted}× · ${b.team.map(t=>esc(t.by)).join(", ")}</div>`:`<div class="mbest new">New mission</div>`}</div><span class="go">▶</span></div>`; }).join("")}
+      ${[...Array(CLASSIFIED)].map((_,i)=>nextMissionLocked(CAMPAIGN.length+i)).join("")}`; }
+  if(k==="memory"){ const c=camp, earned=new Set(c.earned||[]);
+    const locked=CAMPAIGN.flatMap(key_=>(REWARDS[key_]||[]).filter(r=>!earned.has(r.id)).map(r=>({...r,stage:LAYOUTS[key_].name})));
+    h=`<div class="topbar">${back("missions","← Missions")}<div class="ttl">Memory Box</div><span></span></div>
+      <p class="muted">Equipment you've unlocked. Pick what each character carries in the mission briefing. Used or consumed equipment comes back for the next mission.</p>
+      <div class="sh">Unlocked</div>${c.memory.length?c.memory.map(m=>{ const E=EQUIP[m.k]||{name:m.k,text:""}; return `<div class="eq"><div class="row" style="margin:0"><b style="flex:1">${esc(E.name)}</b><span class="muted">${esc(m.no||"")}</span><button class="sm" data-unmem="${m.id}">Remove</button></div><div class="muted">${esc(E.text)}</div>${m.from?`<div class="muted">From ${esc(m.from)}</div>`:""}</div>`; }).join(""):`<p class="muted">Nothing yet — clear missions to unlock equipment.</p>`}
+      <div class="row"><button class="sm" id="mem-add">＋ Record an unlocked card</button></div>
+      <div class="sh">Still locked</div>${locked.map(r=>`<div class="eq locked"><div class="blur"><b>${esc(r.label)} · ??????</b><div>Effect hidden until unlocked.</div></div><div class="muted">${esc(r.stage)}${r.when?` — ${esc(r.when)}`:""}</div></div>`).join("")||`<p class="muted">Nothing left to unlock in these missions.</p>`}`; }
+  if(k==="briefing"){ const key_=st.brief.key, L=LAYOUTS[key_], chars=charsOf(key_), solo=chars.length===1, br=st.brief, ps=people();
+    const pick=(lab,cur)=>ps.map(p=>`<button class="sm ${cur&&cur.id===p.id?"on":""}" data-seat="${esc(lab)}" data-pid="${p.id}" data-pn="${esc(p.name)}">${esc(p.name)}${p.me?" (me)":""}</button>`).join("");
+    h=`<div class="topbar">${back("missions","← Missions")}<div class="ttl">Briefing</div><span></span></div>
+      <div class="brief"><div class="bt">${esc(L.name)}</div><div>${esc(WIN[key_].how)}</div>${(L.rules||[]).filter(r=>!/^Objective/.test(r)).map(r=>`<div class="muted">• ${esc(r)}</div>`).join("")}</div>
+      <div class="sh">Team</div>
+      ${solo?`<div class="scard"><div class="row" style="margin:0"><span class="sw" style="background:${TYPES[chars[0]].color}">${TYPES[chars[0]].short}</span><b>${TYPES[chars[0]].name}</b><span class="muted" style="margin-left:auto">one character — take turns</span></div>
+          <p class="muted">Runners play ${TYPES[chars[0]].name} one at a time, in this order. If a run ends, the next runner gets a go; the best run is kept.</p>
+          ${(br.runners||[]).map((r,i)=>`<div class="row"><b style="min-width:22px">${i+1}.</b><span style="flex:1">${esc(r.name)}</span><input type="text" placeholder="playing for… (e.g. Claude)" data-proxy="${i}" value="${esc(r.proxy||"")}" style="width:46%"><button class="sm" data-rup="${i}" ${i?"":"disabled"}>↑</button><button class="sm" data-rx="${i}">✕</button></div>`).join("")}
+          <div class="row">${ps.filter(p=>!(br.runners||[]).some(r=>r.id===p.id)).map(p=>`<button class="sm" data-radd="${p.id}" data-pn="${esc(p.name)}">＋ ${esc(p.name)}${p.me?" (me)":""}</button>`).join("")||`<span class="muted">Everyone is in the order.</span>`}</div></div>`
+       :chars.map(t=>{ const lab=TYPES[t].name, cur=(br.seats||{})[lab]; return `<div class="scard"><div class="row" style="margin:0"><span class="sw" style="background:${TYPES[t].color}">${TYPES[t].short}</span><b>${lab}</b><span class="muted" style="margin-left:auto">${cur?"played by "+esc(cur.name):"pick a player"}</span></div>
+          <div class="row">${pick(lab,cur)}</div>${cur?`<div class="row"><input type="text" placeholder="playing for… (e.g. Muse)" data-sproxy="${esc(lab)}" value="${esc(cur.proxy||"")}" style="flex:1"></div>`:""}</div>`; }).join("")}
+      <p class="muted">Anyone without a character watches as a spectator and can't move pieces.</p>
+      <div class="sh">Loadout</div>
+      ${chars.map(t=>{ const lab=TYPES[t].name, C=CHARS[t], mine=(br.loadout||{})[lab]||[], start=C.start.length, free=C.slots-start;
+        return `<div class="scard"><b>${lab}</b> <span class="muted">· ${C.slots} slots · starts with ${esc(C.startNote)}</span>
+          <div class="row">${camp.memory.length?camp.memory.map(m=>{ const on=mine.includes(m.id), full=!on&&mine.length>=free; return `<button class="sm ${on?"on":""}" data-eq="${esc(lab)}" data-mid="${m.id}" ${full?"disabled":""}>${esc((EQUIP[m.k]||{name:m.k}).name)}</button>`; }).join(""):`<span class="muted">Memory Box is empty.</span>`}</div>
+          <div class="muted">${mine.length}/${free} free slot${free===1?"":"s"} used</div></div>`; }).join("")}
+      <div class="row" style="margin-top:14px"><button class="on big" id="b-go" ${solo?((br.runners||[]).length?"":"disabled"):(chars.every(t=>(br.seats||{})[TYPES[t].name])?"":"disabled")}>▶ Start mission</button></div>`; }
+  if(k==="report"){ const r=st.report, L=LAYOUTS[r.key], solo=charsOf(r.key).length===1, run=st.run||{runners:[],idx:0}, nextR=solo&&run.runners[run.idx+1];
+    const S_=r.stats, stat=(n,v,bad)=>`<div class="stat ${bad&&v?"bad":""}"><b>${v}</b><span>${n}</span></div>`;
+    h=`<div class="rep ${r.result}"><div class="rep-h">${r.result==="cleared"?"MISSION COMPLETE":r.result==="kia"?"KILLED IN ACTION":"MISSION FAILED"}</div>
+        <div class="rep-s">${esc(L.name)} · run ${r.attempt}</div><div class="muted">${esc(r.why)}</div>${r.best?`<div class="pill">★ Best run for this mission</div>`:""}</div>
+      <div class="sh">Operatives</div>${r.team.map(t=>`<div class="op ${t.kia?"kia":""}"><span class="sw" style="background:${TYPES[t.type].color}">${TYPES[t.type].short}</span><b>${esc(t.name)}</b><span class="muted">${esc(t.by)}</span><span style="margin-left:auto">${t.kia?`<span class="kia-tag">KIA</span>`:`${t.hp}/${t.max} HP`}</span></div>`).join("")}
+      <div class="sh">Action report</div>
+      <div class="stats">${stat("Rounds",r.rounds)}${stat("Times spotted",S_.spotted,1)}${stat("Guards KO'd",S_.ko)}${stat("Guards killed",S_.kills,1)}${stat("Damage taken",S_.dmg,1)}${stat("Noise made",S_.noise,1)}${stat("Guard cards",S_.cards)}${stat("Objectives",S_.objectives.length)}</div>
+      <div class="sh">Objectives grabbed</div><div>${S_.objectives.length?S_.objectives.map(o=>`<span class="pill">Event ${esc(o)}</span>`).join(" "):`<span class="muted">None</span>`}</div>
+      ${r.result==="cleared"?`<div class="sh">Unlocked</div>
+        ${r.newMission?`<div class="eq"><b>New mission:</b> ${esc(LAYOUTS[r.newMission].name)}</div>`:""}
+        ${(REWARDS[r.key]||[]).map(w=>{ const got=r.earned.includes(w.id), rec=camp.memory.find(m=>m.slot===w.id);
+          return got?`<div class="eq"><b>${esc(w.label)}</b> ${rec?`→ ${esc((EQUIP[rec.k]||{name:rec.k}).name)} <span class="muted">in your Memory Box</span>`:`<button class="sm on" data-rec="${w.id}">Record which card it is</button><div class="muted">Check the campaign book for the card, then record it so it goes in your Memory Box.</div>`}</div>`
+            :`<div class="eq locked"><div class="blur"><b>${esc(w.label)} · ??????</b></div><div class="muted">Not earned this run${w.when?` — ${esc(w.when)}`:""}</div></div>`; }).join("")}`:""}
+      <div class="row" style="margin-top:14px">${nextR?`<button class="on big" id="r-next">▶ ${esc(nextR.name)}'s run</button>`:""}</div>
+      <div class="row"><button class="${nextR?"sm":"on"}" id="r-retry" style="flex:1">↻ Replay mission</button><button class="sm" data-go="missions" style="flex:1">Missions</button></div>
+      ${r.result!=="cleared"?`<div class="row"><button class="sm" id="r-undo" style="flex:1">↶ That was a mistake — undo it</button></div>`:""}`; }
+  el.innerHTML=`<div class="swrap">${h}</div>`;
+  const q=s_=>el.querySelector(s_), on=(s_,f)=>{ const b=q(s_); if(b) b.onclick=f; }, all=(s_,f)=>el.querySelectorAll(s_).forEach(b=>b.onclick=()=>f(b));
+  all("[data-go]",b=>setScreen(b.dataset.go));
+  const nm=q("#l-name"); if(nm) nm.onchange=e=>{ S.me=e.target.value.trim()||"Player"; saveLS("st-name",S.me); room.hello(); renderScreen(); };
+  on("#l-create",()=>{ room.join(room.newCode(),true); setTimeout(renderScreen,400); });
+  on("#l-join",()=>{ const c=q("#l-code").value.trim(); if(c){ room.join(c,false); setTimeout(renderScreen,600); } });
+  on("#l-start",()=>newCampaign(q("#l-new").value.trim()));
+  all("[data-load]",b=>loadCampaign(b.dataset.load));
+  all("[data-brief]",b=>{ const k_=b.dataset.brief, ps=people(); setScreen("briefing",{brief:Object.assign({key:k_,seats:{},loadout:{},runners:charsOf(k_).length===1?ps.map(p=>({id:p.id,name:p.name})):[]},(S.st.brief&&S.st.brief.key===k_)?S.st.brief:{})}); });
+  all("[data-seat]",b=>commit(s=>{ s.brief.seats=s.brief.seats||{}; const cur=s.brief.seats[b.dataset.seat]; s.brief.seats[b.dataset.seat]=cur&&cur.id===b.dataset.pid?null:{id:b.dataset.pid,name:b.dataset.pn}; }));
+  el.querySelectorAll("[data-sproxy]").forEach(i=>i.onchange=()=>commit(s=>{ const c=s.brief.seats[i.dataset.sproxy]; if(c) c.proxy=i.value.trim(); }));
+  el.querySelectorAll("[data-proxy]").forEach(i=>i.onchange=()=>commit(s=>{ s.brief.runners[+i.dataset.proxy].proxy=i.value.trim(); }));
+  all("[data-rup]",b=>commit(s=>{ const i=+b.dataset.rup, a=s.brief.runners; [a[i-1],a[i]]=[a[i],a[i-1]]; }));
+  all("[data-rx]",b=>commit(s=>{ s.brief.runners.splice(+b.dataset.rx,1); }));
+  all("[data-radd]",b=>commit(s=>{ (s.brief.runners=s.brief.runners||[]).push({id:b.dataset.radd,name:b.dataset.pn}); }));
+  all("[data-eq]",b=>commit(s=>{ const L_=s.brief.loadout=s.brief.loadout||{}, a=L_[b.dataset.eq]=L_[b.dataset.eq]||[], id=b.dataset.mid; const i=a.indexOf(id); if(i>=0) a.splice(i,1); else { Object.values(L_).forEach(x=>{ const j=x.indexOf(id); if(j>=0) x.splice(j,1); }); a.push(id); } }));
+  on("#b-go",()=>launchMission(S.st.brief.key,0));
+  on("#r-next",()=>launchMission(S.st.report.key,(S.st.run.idx||0)+1));
+  on("#r-retry",()=>launchMission(S.st.report.key,(S.st.run&&S.st.run.idx)||0));
+  on("#r-undo",()=>{ commit(s=>{ const c=s.camp, list=c.runs[s.report.key]; if(list) list.pop(); if(c.best[s.report.key]===undefined); delete s.report; s.screen="play"; }); undoFail(); });
+  all("[data-rec]",b=>recordCard(b.dataset.rec));
+  on("#mem-add",()=>recordCard(null));
+  all("[data-unmem]",b=>commit(s=>{ s.camp.memory=s.camp.memory.filter(m=>m.id!==b.dataset.unmem); }));
+}
+// record which equipment card a reward was (from the catalog, or a new card typed in)
+function recordCard(slot){ const box=document.getElementById("rollbox"), ks=Object.keys(EQUIP);
+  box.innerHTML=`<div class="rb-title">🎒 Record an unlocked card</div><p class="muted">Pick it from the list, or type in a new card from the campaign book.</p>
+    <div class="row"><select id="rc-k" style="flex:1"><option value="">— a new card —</option>${ks.map(k=>`<option value="${k}">${esc(EQUIP[k].name)}</option>`).join("")}</select></div>
+    <div id="rc-new"><div class="row"><input type="text" id="rc-name" placeholder="Card name" style="flex:1"><input type="text" id="rc-no" placeholder="#004" style="width:80px"></div>
+      <textarea id="rc-text" placeholder="What it does, in a few words"></textarea>
+      <div class="row"><label>Type</label><select id="rc-act"><option value="shoot">Weapon (shoot)</option><option value="other">Other</option></select><label>White dice</label><input type="number" id="rc-w" value="1" style="width:60px"></div>
+      <div class="row"><label>Ammo/charges</label><input type="number" id="rc-ch" placeholder="none" style="width:80px"><label><input type="checkbox" id="rc-loud" checked> Loud</label></div></div>
+    <div class="row"><button class="on" id="rc-ok" style="flex:1">Add to Memory Box</button><button class="sm" id="rc-x">Cancel</button></div>`;
+  box.style.display="block"; const q=s_=>box.querySelector(s_);
+  q("#rc-k").onchange=e=>{ q("#rc-new").style.display=e.target.value?"none":"block"; };
+  q("#rc-x").onclick=()=>box.style.display="none";
+  q("#rc-ok").onclick=()=>{ let k=q("#rc-k").value; const custom={};
+    if(!k){ const name=q("#rc-name").value.trim(); if(!name){ toast("Give the card a name"); return; } k="c_"+name.toLowerCase().replace(/[^a-z0-9]+/g,"_");
+      const ch=q("#rc-ch").value; custom[k]={name,act:q("#rc-act").value==="shoot"?"shoot":"other",w:+q("#rc-w").value||1,charges:ch===""?null:+ch,loud:q("#rc-loud").checked,text:q("#rc-text").value.trim()||name}; Object.assign(EQUIP,custom); }
+    const rw=slot&&Object.values(REWARDS).flat().find(r=>r.id===slot);
+    commit(s=>{ Object.assign(s.camp.custom,custom); s.camp.memory.push({id:"m"+Date.now().toString(36),k,slot,no:q("#rc-no")?q("#rc-no").value.trim()||(rw&&/#\d+/.test(rw.label)?rw.label.match(/#\d+/)[0]:""):"",from:rw?rw.label:"recorded by hand"}); }, `Memory Box: ${EQUIP[k].name} unlocked`);
+    box.style.display="none"; }; }
+// ---------- one panel at a time ----------
+function closeAll(keepTurn){ if(S.pane) closeSheet(); if(!keepTurn){ const tp=document.getElementById("turnpanel"); if(tp&&tp.classList.contains("open")) openTurnPanel(false); }
+  ["menu","hist","seats"].forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.remove("open"); }); }
+function hudClick(what){
+  if(what==="map"){ closeAll(); S.sel=null; S.zoneView=null; fitView(); refresh(); return; }
+  if(what==="turn"){ const tp=document.getElementById("turnpanel"), open=tp.classList.contains("open"); closeAll(); if(!open) openTurnPanel(true); return; }
+  const pane=what==="team"?"team":what==="mission"?"mission":"net"; const was=S.pane===pane; closeAll(); if(!was) openSheet(pane); }
+// ---------- Team: everyone can look; only your own character has buttons ----------
+function renderTeamPane(){ const el=document.getElementById("pane-team"); if(!el) return; const ps=S.st.pieces.filter(isPlayer);
+  el.innerHTML=ps.map(p=>{ ensureChar(p); const T=TYPES[p.type], C=CHARS[p.type], mine=isMine(p)&&inRoom()?" · you":"";
+    return `<div class="scard"><div class="row" style="margin:0"><span class="sw" style="background:${T.color}">${T.short}</span><b>${esc(nameOf(p))}</b><span class="muted">${esc(seatLabel(p))}${mine}</span><span style="margin-left:auto"><b>${Math.max(0,p.hp-(p.dmg||0))}</b>/${p.hp} HP</span></div>
+      <div class="muted">${sq(p.r,p.c)} · Defense ${p.def??C.def} · Interact ${C.interact.w?C.interact.w+"W ":""}${C.interact.b}B${p.disguised?" · disguised":""}${p.carry&&p.carry.length?" · carrying "+p.carry.join(", "):""}</div>
+      ${S.st.noFocus?`<div class="muted">No Focus tokens this mission.</div>`:`<div class="tp-foc">${T.focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}" title="${esc(FOCUS_FX[n]||n)}">${esc(n)}</span>`).join("")}</div>`}
+      <div class="sh2">Equipment</div>${(p.equip||[]).length?p.equip.map(e=>{ const E=EQUIP[e.k]||{name:e.k,text:""}; return `<div class="muted"><b style="color:var(--text)">${esc(E.name)}</b>${e.ch!=null?` [${e.ch}]`:""} — ${esc(E.text)}</div>`; }).join(""):`<div class="muted">None</div>`}
+      <details><summary class="muted">Abilities</summary>${C.abilities.map(([n,t])=>`<div class="muted"><b style="color:var(--text)">${esc(n)}</b> — ${esc(t)}</div>`).join("")}</details></div>`; }).join("")||`<p class="muted">No characters on the board.</p>`; }
+function renderMissionPane(){ const el=document.getElementById("pane-mission"); if(!el) return; const st=S.st, k=st.run&&st.run.key, si=statusInfo();
+  el.innerHTML=`<div class="scard"><b>${esc(st.stage||"Free play")}</b>${k?`<div class="muted">${esc(WIN[k].how)}</div>`:""}
+      <div class="row"><span class="pill">Round ${st.round}</span><span class="pill">${si.level==="alert"?"! Alert":si.level==="caution"?"? Investigating":"Clear"}</span>${st.defeat?`<span class="pill">${st.defeat.count||0}/${st.defeat.goal} defeated</span>`:""}${st.run&&st.run.runners&&st.run.runners.length?`<span class="pill">${esc(st.run.runners[st.run.idx].name)}'s run</span>`:""}</div>
+      ${(st.rules||[]).length?`<details><summary class="muted">Mission rules</summary>${st.rules.map(r=>`<div class="muted">• ${esc(r)}</div>`).join("")}</details>`:""}</div>
+    ${st.camp?`<div class="scard"><b>🎒 Memory Box</b> <span class="muted">· ${st.camp.memory.length} card${st.camp.memory.length===1?"":"s"}</span>
+      <div class="row"><button class="sm" data-mgo="missions">Mission select</button><button class="sm" data-mgo="memory">Open Memory Box</button><button class="sm" data-mgo="lobby">Lobby</button></div>
+      <p class="muted">Your campaign saves automatically after every move.</p></div>`:`<div class="scard"><button class="on" data-mgo="lobby">Go to the lobby</button></div>`}
+    <div class="sh">Mission log</div><div class="log" id="log2"></div>`;
+  el.querySelectorAll("[data-mgo]").forEach(b=>b.onclick=()=>{ closeAll(); setScreen(b.dataset.mgo); });
+  renderLog("log2"); }
+function renderBuilderPane(){ const el=document.getElementById("pane-builder"); if(!el) return;
+  el.innerHTML=`<div class="scard"><b>Campaign</b><div class="row"><button class="on" data-scr="lobby">Lobby</button>${S.st.camp?`<button class="sm" data-scr="missions">Missions</button><button class="sm" data-scr="memory">Memory Box</button>`:""}</div></div>
+    <div class="sh">Builder & settings</div><div class="scard"><div class="row" style="margin:0"><b style="flex:1">Builder mode</b><button class="sm ${S.builder?"on":""}" id="bd-mode">${S.builder?"On — anything moves":"Off"}</button></div><p class="muted">Turn on to move any piece and skip turn locks — for setting up or fixing the table. This phone only.</p></div>
+    <div class="grid2">${[["build","✚ Edit the board"],["map","▦ Map, backdrop & files"],["game","⏱ Rules, deck & cameras"],["dice","⚄ Dice roller"],["ai","🤖 AI tools"],["ref","📖 Reference cards"],["log","☰ Full log"],["free","🗺 Free play (any map)"]].map(([k,l])=>`<button class="sm" data-bp="${k}">${l}</button>`).join("")}</div>
+    <div class="row"><button class="sm" id="bd-undo">↶ Undo</button><button class="sm" id="bd-redo">↷ Redo</button><button class="sm" id="bd-hist">📜 Play-by-play</button></div>`;
+  el.querySelectorAll("[data-scr]").forEach(b=>b.onclick=()=>{ closeAll(); setScreen(b.dataset.scr); });
+  el.querySelector("#bd-mode").onclick=()=>{ S.builder=!S.builder; refresh(); };
+  el.querySelectorAll("[data-bp]").forEach(b=>b.onclick=()=>{ const k=b.dataset.bp; if(k==="free"){ closeAll(); openMenu(); return; } if(k==="log"){ closeAll(); openSheet("log"); return; } closeAll(); openSheet(k); });
+  el.querySelector("#bd-undo").onclick=undo; el.querySelector("#bd-redo").onclick=redo; el.querySelector("#bd-hist").onclick=()=>{ closeAll(); openHistory(); }; }
+// ---------- undo the last action (this phone, during your own turn) ----------
+S.steps=[];
+function undoStep(){ const snap=S.steps.pop(); if(!snap) return; S.undo.push(snapshot()); S.st=JSON.parse(snap); addLog("↶ Undid the last action"); S.st.ver++; persist(); net.sendState(); afterReplace(); }
+// ---------- Turn panel (rebuilt with ownership) ----------
+renderTurnPanel=function(){
+  const el=document.getElementById("tp-body"); if(!el) return; const st=S.st, f=flow(), ps=playersOf(), si=statusInfo(), allDone=ps.length&&ps.every(turnDone);
+  const hb=document.getElementById("hud-turn"); if(hb){ const act=P(f.active); hb.textContent=st.failed?"Failed":st.phase==="Enemy"?"Guards":act?(isMine(act)&&inRoom()?"Your turn":nameOf(act)):"Round "+st.round; }
+  if(st.failed){ el.innerHTML=`<div class="tp-fail"><div class="tp-fail-h">✖ MISSION FAILED</div><div>${esc(st.failed)}.</div></div><div class="row"><button class="on" id="tp-rep" style="flex:1">See the action report</button></div>`;
+    el.querySelector("#tp-rep").onclick=()=>{ if(S.st.report) setScreen("report"); else showFail(); }; return; }
+  const dots=p=>{ const t=tt(p), n=4+(t.bonus||0); return [...Array(n)].map((_,i)=>`<span class="dot ${i<(t.used||0)?"used":""}"></span>`).join(""); };
+  let h=`<div class="tp-round">Round ${st.round} <span class="${st.phase==="Enemy"?"bad":""}">· ${st.phase==="Enemy"?"Guards' phase":"Players' phase"}</span></div>
+    <div class="tp-status ${si.level}">${si.level==="alert"?"! ALERT — guards hunt the nearest red !":si.level==="caution"?"? Investigating — the nearest guard checks the ?":"All clear — guards are patrolling"}</div>
+    ${!amPlayer()?`<div class="tp-note">You're watching as a spectator.</div>`:""}
+    <div class="tp-step ${st.phase==="Player"?"now":"past"}"><div class="tp-h">1 · Players</div><div class="muted" style="margin:-4px 0 4px">Any order · one at a time</div>`;
+  for(const p of ps){ const T=TYPES[p.type], t=tt(p), done=turnDone(p), on=f.active===p.id, mine=isMine(p);
+    h+=`<div class="tp-pl ${on?"on":done?"done":""}" style="--c:${T.color}"><div class="row" style="margin:0"><span class="sw" style="background:${T.color}">${T.short}</span><b style="flex:1">${esc(nameOf(p))}</b><span class="muted">${esc(seatLabel(p))}</span></div>
+      <div class="tp-st">${done?"✓ Turn done":on?`${mine?"Your move":"Playing now"} · ${actionsLeft(p)} action${actionsLeft(p)===1?"":"s"} left${t.noisy?` · 🔊 ${t.noisy} noisy`:""}`:st.phase==="Player"?"Waiting":"—"}</div>
+      ${!done&&st.phase==="Player"?`<div class="dots">${dots(p)}</div>`:""}`;
+    if(on&&mine) h+=`${!st.noFocus?`<div class="tp-foc">${T.focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}">${esc(n)}</span>`).join("")}</div>`:""}
+        <div class="tp-hint">Drag ${esc(nameOf(p))} 1 square to Sneak or 2 to Dash (noisy). Tap ${esc(nameOf(p))} for attacks and other actions.</div>
+        <div class="row" style="margin:6px 0 0"><button class="sm" data-fp="${p.id}" style="flex:1">★ Focus & abilities</button><button class="sm" data-ai="${esc(p.label)}" style="flex:1">🤖 AI helper</button></div>
+        <div class="row" style="margin:6px 0 0"><button class="sm" id="tp-step" ${S.steps.length?"":"disabled"}>↶ Last action</button><button class="sm" id="tp-undo">↶ Whole turn</button><button class="on" id="tp-end" style="flex:1">✓ End turn</button></div>`;
+    else if(!done&&st.phase==="Player"&&!f.active&&mine&&amPlayer()) h+=`<div class="row" style="margin:6px 0 0"><button class="on" data-start="${p.id}" style="flex:1">▶ Start ${esc(nameOf(p))}'s turn</button></div>`;
+    h+=`</div>`; }
+  h+=`</div><div class="tp-step ${st.phase==="Enemy"?"now":""}"><div class="tp-h">2 · Guards</div>`;
+  if(f.g==="running") h+=`<div class="tp-st">The guards are moving…</div>`;
+  else if(f.g==="review") h+=`<div class="tp-st">Guards are done. Check the board — guards can be dragged to fix a mistake.</div>${amPlayer()?`<div class="row" style="margin:6px 0 0"><button class="sm" id="tp-gundo">↶ Undo guards</button><button class="on" id="tp-gok" style="flex:1">✓ Confirm → Round ${st.round+1}</button></div>`:""}`;
+  else if(allDone) h+=`<div class="tp-st">Everyone has played.</div>${amPlayer()?`<div class="row" style="margin:6px 0 0"><button class="on" id="tp-guards" style="flex:1;background:#7a2f25;border-color:#c0392b">🃏 ${vdeckOn()?"Flip the top card":"Start the guards' turn"}</button></div>`:""}`;
+  else h+=`<div class="tp-st muted">Unlocks when ${ps.filter(p=>!turnDone(p)).map(nameOf).join(" and ")} ${ps.filter(p=>!turnDone(p)).length>1?"have":"has"} ended their turn.</div>`;
+  h+=`<div class="muted" style="margin-top:6px">${vdeckOn()?"Virtual":"Physical"} deck: ${st.blue} blue · ${st.red} red${st.lastCard?` · last: ${esc(cardText(st.lastCard))}`:""}</div></div>`;
+  el.innerHTML=h;
+  const on=(id,fn)=>{ const b=el.querySelector("#"+id); if(b) b.onclick=fn; };
+  el.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>{ try{ startTurn(P(+b.dataset.start)); S.steps=[]; S.sel=+b.dataset.start; refresh(); }catch(e){ toast("✗ "+e); } });
+  el.querySelectorAll("[data-fp]").forEach(b=>b.onclick=()=>focusPanel(P(+b.dataset.fp)));
+  el.querySelectorAll("[data-ai]").forEach(b=>b.onclick=()=>{ closeAll(); openSheet("ai"); const sel=document.getElementById("ai-who"); sel.value=b.dataset.ai; sel.dataset.picked="1"; });
+  on("tp-step",undoStep); on("tp-undo",()=>{ revertTurn(); S.steps=[]; }); on("tp-end",async()=>{ await confirmTurn(); S.steps=[]; }); on("tp-guards",startGuards); on("tp-gundo",revertGuards); on("tp-gok",confirmGuards);
+};
+
 // ---------- boot ----------
 syncEye();
 new ResizeObserver(()=>render()).observe(stage);
 const fresh=!loadLS("st-state");
 fitView(); syncArmed(); refresh(); renderNetPane();
-if(fresh) openMenu();
+if(!S.st.screen&&!S.st.camp) S.st.screen="lobby"; applyCustom(); renderScreen();
 try{ const saved=JSON.parse(loadLS("st-room")||"null"); if(saved&&saved.code) room.join(saved.code,false); }catch(e){}
 </script>
 </body>
