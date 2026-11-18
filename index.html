@@ -475,7 +475,7 @@ const CHARS = {
   snake:{def:3,hp:4,slots:3,fcost:[2,1,1,1],interact:{w:1,b:2},
     actions:["sneak","dash","hth","combo","focus","drag","interact","knock","takedown"],
     start:[], startNote:"On-site procurement (none)",
-    abilities:[["Silent Takedown (2)","Directly behind an adjacent guard: replace him with a KO guard token. No roll."],
+    abilities:[["Silent Takedown (2)","Directly behind an adjacent guard: replace him with a dead guard token (a kill). No roll."],
       ["Sneak Attack","Once per round, after damaging a target you're behind in the same row/column, deal +1 damage of the same type."],
       ["\"I Work Alone\"","Once per round, with no players within 2 spaces, +/−1 to one die when using a weapon."]]},
   meryl:{def:3,hp:4,slots:3,fcost:[2,2,1,1],interact:{w:1,b:2},
@@ -1359,6 +1359,7 @@ function renderQbar(){
     acts=[...(has("hth")?adj.flatMap(g=>[act(`👊 ${g.label}`,`hth ${p.label} ${g.label}`),act(`Combo ${g.label}`,`combo ${p.label} ${g.label}`),...(has("takedown")&&g.type==="guard"?[act(`Takedown ${g.label}`,`takedown ${p.label} ${g.label}`)]:[])]):[]),
       ...(has("slash")&&eqAct("slash")&&adj.length?[act("Slash",`slash ${p.label}`)]:[]),
       ...(eqAct("stealth")&&!p.stealth?[act("Stealth",`stealth ${p.label}`)]:[]),
+      ...(has("drag")&&body?[act("🫳 Drag body",`drag ${p.label}`)]:[]),
       ...(has("disguise")&&!p.disguised&&body?[act("Disguise",`disguise ${p.label}`)]:[]),
       ...(has("hack")&&S.st.pieces.some(x=>x.type==="terminal"&&Math.abs(x.r-p.r)+Math.abs(x.c-p.c)<=1)?[act("Hack",`hack ${p.label}`)]:[]),
       ...(eqAct("ration")&&p.dmg?[act("Rations",`ration ${p.label}`)]:[]),
@@ -1877,8 +1878,8 @@ function boardText(who, quick){
   L.push("  sneak Snake H18            1 action, 1 square");
   L.push("  dash Snake H17 H16         1 action, up to 2 squares (list each square), NOISY");
   L.push("  hth Snake G4 / combo Snake G4   hand-to-hand (1 action, 1 white) / combo (2 actions, 2 white + 1 black) on an adjacent guard; dice pop up, KO damage applied");
-  L.push("  takedown Snake G4          2 actions, Snake only, must be directly behind the guard; guard becomes a KO guard token ★★ (no roll)");
-  L.push("  knock Snake · interact Snake <thing> (rolls that character's Interact dice) · drag Snake <body square> <move-to square> (noisy) · ration Otacon (needs the Rations card)");
+  L.push("  takedown Snake G4          2 actions, Snake only, must be directly behind the guard; guard becomes a dead guard token ☠ (a kill, no roll)");
+  L.push("  knock Snake · interact Snake <thing> (rolls that character's Interact dice) · drag Snake <body square> <move-to square> <drop square next to you> (noisy) · ration Otacon (needs the Rations card)");
   L.push("  shoot Meryl G2 rifle  ·  shoot Fox G2 cannon 2 (spend 2 charges for +2 white)  ·  slash Fox [+1] (HF Blade, every adjacent figure)  ·  stealth Otacon (camo, no ! from LOS this turn)  ·  recharge Otacon");
   L.push("  elevator Snake [Armory]   1 action (Interact): ride the elevator with everyone on it, or call it while standing next to an empty shaft");
   L.push("  disguise Meryl (2 actions, next to a KO/dead token, her ! off the map)  ·  hack Otacon <terminal> · search Otacon · access Otacon <card>");
@@ -2015,7 +2016,7 @@ async function doAttack(p,kind,g,note){
     if(g.type!=="guard") throw "Silent Takedown only works on guards";
     const behind={r:g.r-DR[g.facing],c:g.c-DC[g.facing]};
     if(p.r!==behind.r||p.c!==behind.c) throw `Snake must be directly behind ${nameOf(g)} (at ${sq(behind.r,behind.c)})`;
-    spend(p,kind,false); commit(()=>{}, `${nameOf(p)} TAKEDOWN ${nameOf(g)}`); convertGuard(g,"ko"); return `takedown — ${nameOf(g)} replaced with a KO guard token`;
+    spend(p,kind,false); commit(()=>{}, `${nameOf(p)} SILENT TAKEDOWN ${nameOf(g)}`); convertGuard(g,"dead"); return `silent takedown — ${nameOf(g)} replaced with a dead guard token`;
   }
   const dice=kind==="combo"?{w:2,b:1}:{w:1,b:0};
   const r=await rollPrompt({...dice, by:p, kind:"attack", vs:defOf(g), why:`${nameOf(p)} ${kind==="combo"?"Combo Attack":"Hand-to-Hand"} on ${nameOf(g)}`, note});
@@ -2120,17 +2121,30 @@ function doSimple(p,kind,arg){
   if(kind==="interact"){ spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)}`); return "interact"; }
   if(kind==="drag"){ throw "use: drag <player> <body square> <square to move to>"; }
 }
-async function doDrag(p,bodySq,toSq){
+async function doDrag(p,bodySq,toSq,dropSq){
   const err=useAction(p,"drag"); if(err) throw err;
-  const b=parseSq(bodySq), to=parseSq(toSq); if(!b||!to) throw "drag needs the body's square and the square to move to";
-  const body=S.st.pieces.find(x=>(x.type==="ko"||x.type==="dead")&&x.r===b.r&&x.c===b.c); if(!body) throw `no KO or dead guard token at ${bodySq}`;
-  if(Math.abs(b.r-p.r)+Math.abs(b.c-p.c)>1) throw "the body must be on or next to the player's square";
-  const why=stepProblem(p,p.r,p.c,to.r,to.c); if(why) throw `can't move to ${toSq}: ${why}`;
-  const seen=[{r:p.r,c:p.c},to].some(s=>viewersSeeing(s.r,s.c,p).length);
-  const from=sq(p.r,p.c); spend(p,"drag",true);
-  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=to.r; q.c=to.c; const bb=st.pieces.find(x=>x.id===body.id); bb.r=from? p.r:p.r; bb.c=p.c; }, `${nameOf(p)} ${from} DRAG ${toSq} (pulls the body to ${from})`);
-  if(seen){ playerToken(P(p.id),"alert"); addLog(`${nameOf(p)} SEEN while dragging → !`); refresh(); }
-  return `drag — body now at ${from}`;
+  const bodies=S.st.pieces.filter(x=>(x.type==="ko"||x.type==="dead")&&Math.abs(x.r-p.r)+Math.abs(x.c-p.c)<=1);
+  if(!bodies.length) throw "no KO or dead guard token on or next to "+nameOf(p);
+  // 1) which body
+  let body=null; if(bodySq){ const b=parseSq(bodySq); body=b&&bodies.find(x=>x.r===b.r&&x.c===b.c); if(!body) throw `no KO or dead guard token at ${bodySq} on or next to ${nameOf(p)}`; }
+  else if(bodies.length===1) body=bodies[0];
+  else { const t=await pickSquare("Drag Body: tap the body to pick up",(r,c)=>bodies.some(x=>x.r===r&&x.c===c)); if(!t) throw "cancelled"; body=bodies.find(x=>x.r===t.r&&x.c===t.c); }
+  // 2) where Snake moves (1 space)
+  let to=toSq?parseSq(toSq):null;
+  if(!to){ const t=await pickSquare(`Drag Body: tap the square ${nameOf(p)} moves to`,(r,c)=>dist(p,{r,c})===1&&!stepProblem(p,p.r,p.c,r,c)&&!figureAt(r,c,p.id)); if(!t) throw "cancelled"; to=t; }
+  const why=stepProblem(p,p.r,p.c,to.r,to.c); if(why) throw `can't move to ${sq(to.r,to.c)}: ${why}`; if(figureAt(to.r,to.c,p.id)) throw `${sq(to.r,to.c)} is taken`;
+  const from={r:p.r,c:p.c}, seenStart=viewersSeeing(p.r,p.c,p).length>0;
+  spend(p,"drag",true);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=to.r; q.c=to.c; const bb=st.pieces.find(x=>x.id===body.id); bb.r=to.r; bb.c=to.c; }, `${nameOf(p)} ${sq(from.r,from.c)} DRAG ${sq(to.r,to.c)} carrying the ${body.type==="ko"?"KO guard":"body"}`);
+  await mineCheck(to.r,to.c,P(p.id)); const me=P(p.id); if(!me) return "drag";
+  // 3) drop the body in an empty space next to the new square
+  const emptyNext=(r,c)=>dist(me,{r,c})===1&&inBounds(r,c)&&!wallBetween(me.r,me.c,r,c)&&!blocked(r,c)&&!inTrip(r,c)&&!figureAt(r,c)&&!S.st.pieces.some(x=>(x.type==="ko"||x.type==="dead")&&x.id!==body.id&&x.r===r&&x.c===c);
+  let drop=dropSq?parseSq(dropSq):null; if(drop&&!emptyNext(drop.r,drop.c)) throw `${dropSq} isn't an empty space next to ${nameOf(me)}`;
+  if(!drop){ drop=await pickSquare(`Drag Body: tap an empty space next to ${nameOf(me)} to put the body down`,emptyNext); if(!drop){ drop=[0,1,2,3].map(d=>({r:me.r+DR[d],c:me.c+DC[d]})).find(s=>emptyNext(s.r,s.c))||{r:from.r,c:from.c}; } }
+  commit(st=>{ const bb=st.pieces.find(x=>x.id===body.id); bb.r=drop.r; bb.c=drop.c; }, `${nameOf(me)} puts the ${body.type==="ko"?"KO guard":"body"} down at ${sq(drop.r,drop.c)}`);
+  const seen=seenStart||viewersSeeing(me.r,me.c,me).length>0;
+  if(seen&&await decide("👁 Spotted!",`${esc(nameOf(me))} is seen while dragging the body — their ! goes under them.`)){ playerToken(P(me.id),"alert"); addLog(`${nameOf(me)} SEEN while dragging → !`); refresh(); }
+  return `drag — moved to ${sq(me.r,me.c)}, body at ${sq(drop.r,drop.c)} (noisy)`;
 }
 function doFocus(p,what,mode){ if(S.st.noFocus) throw "no Focus tokens in this stage";
   const T=TYPES[p.type]; const i=T.focus.findIndex(n=>n.toLowerCase().replace(/\s/g,"").startsWith(what.toLowerCase().replace(/\s/g,"")));
@@ -2200,7 +2214,7 @@ async function runAction_(line,note){
   if(cmd==="elevator") return await afterAct(p,"interact",doElevator(p,w[2]));
   if(cmd==="interact") return await afterAct(p,cmd,await doInteract(p,w.slice(2).join(" "),note));
   if(cmd==="knock"||cmd==="ration") return await afterAct(p,cmd,doSimple(p,cmd,w.slice(2).join(" ")));
-  if(cmd==="drag") return await doDrag(p,w[2],w[3]);
+  if(cmd==="drag") return await afterAct(p,"drag",await doDrag(p,w[2],w[3],w[4]));
   if(cmd==="focus"){ const mode=(w[2]||"").toLowerCase()==="refresh"?"refresh":"spend"; const name=w.slice(mode==="refresh"||(w[2]||"").toLowerCase()==="spend"?3:2).join(" "); return doFocus(p,name,mode); }
   if(cmd==="focusmove") return await focusMove(p,w[2]);
   if(cmd==="disguise"){ if(p.type!=="meryl") throw "only Meryl can disguise"; const err=useAction(p,"disguise"); if(err) throw err;
@@ -2901,7 +2915,7 @@ function focusPanel(p){ if(busyModal()) return; p=P(p.id); const box=document.ge
 }
 function abilityStatus(p){ const used=t=>!onceRound(p,t), r=(name,state,cls,how)=>({name,state,cls,how});
   if(p.type==="snake") return [
-    r("Silent Takedown","action · 2","",`Stand directly behind an adjacent guard: the button appears in the quick bar. No roll — he becomes a KO token.`),
+    r("Silent Takedown","action · 2","",`Stand directly behind an adjacent guard: the button appears in the quick bar. No roll — he becomes a dead guard token (a kill).`),
     r("Sneak Attack",used("sneakatk")?"used this round":"ready · automatic",used("sneakatk")?"off":"on",`Hit a guard from behind in his row or column and the board adds +1 damage by itself. Once per round.`),
     r(`"I Work Alone"`,used("alone")?"used this round":playersWithin(p,2).length?"blocked — a player is within 2":"ready",used("alone")||playersWithin(p,2).length?"off":"on",`When you shoot with no players within 2 squares, tap a die in the dice box for +1 or −1. Once per round.`)];
   if(p.type==="meryl") return [
@@ -2995,7 +3009,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="6.4";
+const APP_VERSION="6.5";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
