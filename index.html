@@ -808,7 +808,9 @@ const P=id=>S.st.pieces.find(p=>p.id===id);
 const nameOf=p=>p.label||TYPES[p.type].name;
 
 function snapshot(){ return JSON.stringify(S.st); }
-function persist(){ saveLS("st-state", snapshot()); try{ saveCamp(); }catch(e){} }
+function persist(){ clearTimeout(S.persistT); S.persistT=setTimeout(()=>{ saveLS("st-state", snapshot()); try{ saveCamp(); }catch(e){} },350); }
+window.addEventListener("pagehide",()=>{ try{ saveLS("st-state", snapshot()); saveCamp(); }catch(e){} });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ try{ saveLS("st-state", snapshot()); saveCamp(); }catch(e){} } });
 function addLog(m){ if(S.sim){ S.st.log.unshift({t:Date.now(),m}); return; } S.st.log.unshift({t:Date.now(), w:S.me, m, r:S.st.round, ph:S.st.phase}); if(S.st.log.length>300) S.st.log.length=300; try{ tally(m); if(/counted as defeated/.test(m)) setTimeout(()=>checkWin(),0); }catch(e){} }
 function commit(fn, msg){
   if(S.sim){ fn(S.st); if(msg) addLog(msg); return; }
@@ -901,7 +903,7 @@ function toBoard(clientX, clientY){
 
 // ---------- rendering ----------
 function render(){
-  const st=S.st, dpr=window.devicePixelRatio||1, W=stage.clientWidth, H=stage.clientHeight;
+  const st=S.st, dpr=Math.min(2,window.devicePixelRatio||1), W=stage.clientWidth, H=stage.clientHeight;
   if(cv.width!==Math.round(W*dpr) || cv.height!==Math.round(H*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); }
   ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#070a09"; ctx.fillRect(0,0,cv.width,cv.height);
   const v=S.view; ctx.setTransform(dpr*v.z,0,0,dpr*v.z,dpr*v.x,dpr*v.y);
@@ -1073,13 +1075,17 @@ function drawPiece(p,x,y,spotted,orderNo){
 
 // ---------- input: one finger = tap/drag pieces/paint, two fingers = pan + pinch ----------
 const ptrs=new Map(); let gesture=null, tapStart=null;
+function resetPointers(){ ptrs.clear(); gesture=null; tapStart=null; S.drag=null; S.dragWhy=null; }
+["lostpointercapture","pointerleave"].forEach(ev=>cv.addEventListener(ev,e=>{ if(ptrs.has(e.pointerId)&&e.type==="lostpointercapture") endPtr(e); else if(e.type==="pointerleave"&&e.pointerType!=="mouse"&&ptrs.has(e.pointerId)) ptrs.delete(e.pointerId); }));
+window.addEventListener("blur",resetPointers); document.addEventListener("visibilitychange",()=>{ if(document.hidden) resetPointers(); });
 function topPieceAt(r,c){
   const here=S.st.pieces.filter(p=>p.r===r&&p.c===c);
   here.sort((a,b)=>(TYPES[b.type].kind==="token"?0:1)-(TYPES[a.type].kind==="token"?0:1));
   return here[0];
 }
 cv.addEventListener("pointerdown",ev=>{
-  try{ cv.setPointerCapture(ev.pointerId); }catch(e){} ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  for(const [id,v] of ptrs) if(performance.now()-(v.t||0)>4000) ptrs.delete(id);   // stale finger from a lost pointerup
+  try{ cv.setPointerCapture(ev.pointerId); }catch(e){} ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY,t:performance.now()});
   if(ptrs.size===2){ // start pinch: cancel any one-finger action
     if(S.drag){ S.drag=null; } if(S.paintSnap){ S.st=JSON.parse(S.paintSnap); S.paintSnap=null; }
     tapStart=null; const [a,b]=[...ptrs.values()];
@@ -1096,7 +1102,7 @@ cv.addEventListener("pointerdown",ev=>{
 });
 cv.addEventListener("pointermove",ev=>{
   if(!ptrs.has(ev.pointerId)){ if(ev.pointerType==="mouse"){ const h=toBoard(ev.clientX,ev.clientY); S.hover=h.ok?h:null; render(); } return; }
-  ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY,t:performance.now()});
   if(gesture && ptrs.size>=2){
     const [a,b]=[...ptrs.values()], d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2, r=cv.getBoundingClientRect();
     S.view.x+=mx-gesture.mx; S.view.y+=my-gesture.my;
@@ -1137,7 +1143,7 @@ function endPtr(ev){
   if(S.addType){ placePiece(S.addType,h.r,h.c); return; }
   if(S.tool==="wall"){ toggleWall(h); return; }
   if(S.tool==="arrow"||S.tool==="radio"){ tapMark(h); return; }
-  if(S.tool==="move"){ if(S.sel){ S.sel=null; refresh(); } }
+  if(S.tool==="move"){ const tp=topPieceAt(h.r,h.c); if(tp){ if(S.sel!==tp.id){ S.sel=tp.id; refresh(); } } else if(S.sel){ S.sel=null; refresh(); } }
 }
 cv.addEventListener("pointerup",endPtr); cv.addEventListener("pointercancel",endPtr);
 cv.addEventListener("pointerleave",ev=>{ if(ev.pointerType==="mouse"){ S.hover=null; render(); } });
@@ -1514,7 +1520,9 @@ const pathText=it=>it.path.map((x,i)=>i===0?x:` ${it.acts[i-1]==="→"?"→":it.
 function roundText(r){ const out=[`Round ${r.k||"?"} — ${S.st.stage||""}`]; let ph=null;
   for(const b of r.blocks){ if(b.ph!==ph){ ph=b.ph; out.push(`— ${ph} —`); } out.push((b.name==="Guard card"?"":`${b.name}: `)+b.items.map(it=>it.path?pathText(it):it.text).join(" · ")); }
   return out.join("\n"); }
-function copyText(t,msg){ const ok=()=>toast(msg||"Copied"); try{ navigator.clipboard.writeText(t).then(ok,()=>{ prompt("Copy this:",t); }); }catch(e){ prompt("Copy this:",t); } }
+function copyBox(t){ modalOn(); const box=document.getElementById("rollbox"); box.innerHTML=`<div class="rb-title">📋 Copy this</div><textarea id="cb-t" style="width:100%;height:40vh;font-size:12px">${esc(t)}</textarea><div class="row"><button class="on" id="cb-sel" style="flex:1">Select all</button><button class="sm" id="cb-close">Close</button></div>`; box.style.display="block";
+  const ta=box.querySelector("#cb-t"); box.querySelector("#cb-sel").onclick=()=>{ ta.focus(); ta.select(); try{ document.execCommand("copy"); toast("Copied"); }catch(e){} }; box.querySelector("#cb-close").onclick=()=>{ box.style.display="none"; modalOff(); }; }
+function copyText(t,msg){ const ok=()=>toast(msg||"Copied"); try{ navigator.clipboard.writeText(t).then(ok,()=>{ copyBox(t); }); }catch(e){ copyBox(t); } }
 function renderLog(target){
   const el=document.getElementById(target||"log"); if(!el) return; const rounds=roundsOf(S.logAll).reverse();
   el.innerHTML=`<div class="row" style="margin:0 0 8px"><button class="sm ${S.logAll?"":"on"}" data-lf="0">Moves only</button><button class="sm ${S.logAll?"on":""}" data-lf="1">Everything</button><button class="sm" id="log-copyall" style="margin-left:auto">📋 Copy all</button></div>
@@ -1823,9 +1831,11 @@ function boardText(who, quick){
     if(me&&isPlayer(me)){ ensureChar(me); const C=charOf(me), T=TYPES[me.type], t=tt(me);
       L.push("", `=== YOUR CHARACTER: ${nameOf(me)} at ${sq(me.r,me.c)} ===`);
       L.push(`Health ${Math.max(0,me.hp-(me.dmg||0))}/${me.hp} · Defense ${me.def??C.def} · this turn: ${t.done?"already ENDED":`${actionsLeft(me)} action${actionsLeft(me)===1?"":"s"} left`}${me.disguised?" · DISGUISED (guards and cameras treat you as a guard)":""}${me.stealth?" · STEALTH ON":""}${me.carry&&me.carry.length?" · carrying "+me.carry.join(", "):""}`);
-      L.push("Actions you can take (cost in actions): "+C.actions.filter(a=>!(S.st.noFocus&&a==="focus")).map(a=>`${ACT_NAME[a]||a[0].toUpperCase()+a.slice(1)} ${a==="focus"?"(refresh cost)":"("+ACT[a]+")"}${a==="dash"||a==="drag"?" NOISY":""}`).join(", ")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="shoot")?", Shoot (1) LOUD":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="slash")?", Slash (1)":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="stealth")?", Stealth (1)":""));
+      const off=st.noActions||[]; if(off.length) L.push(`DISABLED THIS MISSION (covered by the Boss Stage Reference card — don't use them): ${off.filter(a=>a!=="noise").map(a=>ACT_NAME[a]||a[0].toUpperCase()+a.slice(1)).join(", ")} · no noise checks`);
+      L.push("Actions you can take (cost in actions): "+C.actions.filter(a=>!(S.st.noFocus&&a==="focus")&&!off.includes(a)).map(a=>`${ACT_NAME[a]||a[0].toUpperCase()+a.slice(1)} ${a==="focus"?"(refresh cost)":"("+ACT[a]+")"}${a==="dash"||a==="drag"?" NOISY":""}`).join(", ")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="shoot")?", Shoot (1) LOUD":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="slash")?", Slash (1)":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="stealth")?", Stealth (1)":""));
       if(S.st.noFocus) L.push("Focus tokens: NONE in this stage — you don't have them yet."); else { L.push("Your Focus tokens (spend one any time you roll; a spent one comes back with the Focus action):");
       T.focus.forEach((n,i)=>L.push(`  - ${n}: ${me.focus&&me.focus[i]?"READY":"SPENT"} — ${FOCUS_FX[n]||n} · refresh costs ${fcostOf(me,i)} action${fcostOf(me,i)>1?"s":""}`)); }
+      { const act=(label,line)=>({label,line}); const av=[...shootActs(me,act),...equipActs(me,act)]; if(av.length){ L.push("Equipment actions available right now (exact command to send):"); av.forEach(a=>L.push(`  - ${a.label.replace(/^\W+\s*/,"")}: ${a.line}`)); } }
       if(me.equip&&me.equip.length){ L.push("Your equipment:"); me.equip.forEach(e=>{ const E=EQUIP[e.k]; L.push(`  - ${E.name}${e.ch!=null?` [${e.ch} left]`:""}: ${E.text}`); }); } else L.push("Your equipment: none");
       L.push("Your abilities: "+C.abilities.map(([n,x])=>`${n} — ${x}`).join(" | "));
       const vs=S.st.pieces.filter(isViewer).filter(v=>los(v,me.r,me.c)&&!me.disguised);
@@ -1848,8 +1858,16 @@ function boardText(who, quick){
   by("ko").forEach(t=>L.push(`KO'd guard token at ${sq(t.r,t.c)} (${t.stars||2} star)`));
   by("dead").forEach(t=>L.push(`Dead guard token at ${sq(t.r,t.c)}`));
   by("event").forEach(t=>L.push(`Event ${t.label} at ${sq(t.r,t.c)}`));
-  by("door").forEach(t=>L.push(`Locked door (level ${t.level}) at ${sq(t.r,t.c)}${t.open?" · open":""}`));
-  by("terminal").forEach(t=>L.push(`Terminal (level ${t.level||2}) at ${sq(t.r,t.c)}${t.hacked?" · HACKED":""}`));
+  by("door").forEach(t=>L.push(`Locked door (level ${t.level}) at ${sq(t.r,t.c)}, locked side facing ${F[t.facing??0]}${t.open?" · OPEN":` · blocks movement and sight · unlock with Interact from next to it${t.combo&&t.combo.length?`: dice must show ${t.combo.join(", ")} (you may Interact again the same turn to reroll any dice; moving away loses progress)`:""}${t.level<=4?` or a Card Key Lv${t.level}+`:""}`}`));
+  by("terminal").forEach(t=>L.push(`Terminal (level ${t.level||2}) at ${sq(t.r,t.c)}${t.hacked?" · HACKED":` · Otacon hacks it (4 black)${t.combo&&t.combo.length?`: dice must show ${t.combo.join(", ")}`:""}`}`));
+  by("item").forEach(t=>L.push(`${({c4:"C-4",claymore:"Claymore mine (goes off when any figure steps on it: 2 damage to everyone within 2 in LOS)",timebomb:"Time Bomb (goes off at the start of its owner's next turn: 3 damage within 2)",missile:"Missile (hovering; steer it with Launch)",rope:"Rope",grenade:"Grenade"})[t.item]||t.item} at ${sq(t.r,t.c)}${t.owner?` · ${t.owner}'s`:""}`));
+  by("hidden").forEach(t=>L.push(`${t.deck==="hazard"?"Trap":"Objective"} ? token at ${sq(t.r,t.c)} · ${t.up?"face up: "+((HIDDEN_FACES[t.face]||{}).n||"?"):"face down"}`));
+  if(st.bossStage){ L.push("BOSS STAGE: no guards and no Guard Order cards. Each round every player takes a turn (any order), then the boss turns his top Boss card. Damage on the boss's turn comes from his card; damage you deal on your turn can trigger his reaction.");
+    if(st.bdeck) L.push(`Boss deck: ${st.bdeck.draw.length} cards (the top card is unknown to you)`);
+    if(st.hostage){ const t=st.tripwire; L.push(`HOSTAGE ${st.hostage.name}: ${Math.max(0,st.hostage.hp-(st.hostage.dmg||0))}/${st.hostage.hp} health — at 0 the mission fails. TRIP WIRES around ${sq(t.r0,t.c0)}–${sq(t.r1,t.c1)}: nobody can enter or cross those squares; they do NOT block sight. If your shot's line of sight box crosses them, every white "!" you roll deals 1 damage to the hostage.`); }
+    if(st.bossPath&&!quick) L.push("OCELOT'S LOOP (he only moves chevron to chevron in this order, skipping occupied ones, and faces the chevron's arrow): "+st.bossPath.map(([r,c,f])=>`${sq(r,c)}${["^",">","v","<"][f]}`).join(" → ")+" → back to the start");
+    { const tk=by("boss").find(b=>b.size); if(tk) L.push(`THE TANK fills ${sq(tk.r-1,tk.c-1)}–${sq(tk.r+1,tk.c+1)} (3×3). Only missiles, mines and grenades hurt it; it can't be leapfrogged; it runs over anyone in its way (1 damage). A grenade on its corner = 2, edge = 1★, center = 3★ (★ adds a bonus from the next Boss card).`); }
+    if(st.special==="grenades") L.push(`GRENADES card: everyone can Throw Grenade (1 action, roll 2 white: fly one number in one direction then the other number in another direction; 1 damage to every figure within 1 where it lands). Grenade crates at ${(st.crates||[]).map(([r,c])=>sq(r,c)).join(", ")} refill you to 2 (1 action). Grenades left: ${st.pieces.filter(isPlayer).map(p=>`${p.label} ${p.gren||0}`).join(", ")}`); }
   ["box","marker"].forEach(k=>by(k).forEach(t=>L.push(`${TYPES[k].name}${t.label?" "+t.label:""} at ${sq(t.r,t.c)}`)));
   const spots=(S.lastLOS||{spotted:[]}).spotted; if(spots.length) L.push("In line of sight right now: "+spots.map(x=>`${x.pl.label} ← ${x.v.label||"camera"} at ${sq(x.v.r,x.v.c)}`).join("; "));
   const recent=st.log.slice(0,6).reverse().map(l=>"- "+l.w+": "+l.m); if(recent.length){ L.push("Recent log:"); L.push(...recent); }
@@ -1863,16 +1881,21 @@ function boardText(who, quick){
     L.push("", "HOW TO REPLY: explain your plan in a sentence if you like, then write one action per line, exactly like these:",
       `  sneak ${N} F4          (1 action, move 1 square)`, `  dash ${N} F4 F5       (1 action, move up to 2 squares — list each square — NOISY)`,
       `  hth ${N} G2 / combo ${N} G2   (attack an adjacent guard)`, `  shoot ${N} G2 <weapon> · knock ${N} · interact ${N} · elevator ${N} · focus ${N} <token name> · focus ${N} refresh <token name>`,
+      `  drag ${N} <body sq> <move-to sq> <drop sq>   ·  toss ${N} grenade F4  ·  plant ${N} c4 F4  ·  detonate ${N}  ·  launch ${N} nikita F4  ·  hide ${N} boxA  ·  usekey ${N} key3  ·  tieup ${N}  ·  medicine ${N} (free)  ·  gthrow ${N} (boss Grenades card)  ·  crate ${N}`,
       `  end ${N}               (always finish with this line — it ends your turn)`,
       "  For any roll you can add the plan for each result:  roll 2W 1B vs 3 for Combo on G2  then  if hits>=2: ...   if hits=0: stop",
       "The board checks every line. An illegal move is refused and the turn pauses, so only write moves you're sure about."); return L.join("\n"); }
   // map grid
   const CH={void:"x",obstacle:"#",exit:"E",corner:"+",stairs:"S",stairsv:"V",barracks:"K",elevator:"L"}, rs=st.rowStart??1, AR=["^",">","v","<"];
   L.push("", ...LOS_HELP);
-  L.push("", "MAP (* = seen by a guard or camera right now, . floor, # obstacle, x no-go, E exit, + corner icon (guard ending a move here turns left/right per the card), ^ > v < forced-direction arrow (a patrolling guard entering it turns that way at once), S stairs (walk up/down), V stairs (walk left/right), K barracks, @ guard spawn (radio), L elevator; pieces: lowercase first letter of player name, g guard, b boss, c camera, ?/! attention token, k KO, d dead, A/B/C event letter)");
+  L.push("", "MAP (* = seen by a guard or camera right now, . floor, # obstacle, x no-go, E exit, + corner icon (guard ending a move here turns left/right per the card), ^ > v < forced-direction arrow (a patrolling guard entering it turns that way at once), S stairs (walk up/down), V stairs (walk left/right), K barracks, @ guard spawn (radio), L elevator; pieces: lowercase first letter of player name, g guard, b boss, c camera, ?/! attention token, k KO, d dead, A/B/C event letter, D locked door, i placed item (mine/C-4/missile), h hidden ? token, T trip wires (no entry), X the Tank, G grenade crate)");
   const pc={}; st.pieces.forEach(p=>{ const k=key(p.r,p.c); const T=TYPES[p.type];
     const ch = T.kind==="player" ? (p.label||T.name)[0].toLowerCase() : p.type==="guard"?"g":p.type==="boss"?"b":p.type==="camera"?"c":p.type==="attn"?(p.mode==="alert"?"!":"?"):p.type==="ko"?"k":p.type==="dead"?"d":p.type==="event"?(p.label||"A")[0]:null;
     if(ch && (!pc[k] || T.kind!=="token")) pc[k]=ch; });
+  st.pieces.filter(p=>p.size).forEach(t=>tankCells(t).forEach(x=>{ pc[key(x.r,x.c)]="X"; }));
+  st.pieces.filter(p=>p.type==="item").forEach(t=>{ if(!pc[key(t.r,t.c)]) pc[key(t.r,t.c)]="i"; }); st.pieces.filter(p=>p.type==="hidden").forEach(t=>{ if(!pc[key(t.r,t.c)]) pc[key(t.r,t.c)]="h"; }); st.pieces.filter(p=>p.type==="door"&&!p.open).forEach(t=>{ pc[key(t.r,t.c)]="D"; });
+  if(st.tripwire) for(let r=st.tripwire.r0;r<=st.tripwire.r1;r++) for(let c=st.tripwire.c0;c<=st.tripwire.c1;c++) pc[key(r,c)]="T";
+  if(st.crates) st.crates.forEach(([r,c])=>{ if(!pc[key(r,c)]) pc[key(r,c)]="G"; });
   L.push("    "+[...Array(st.cols)].map((_,c)=>colName(c).padStart(2)).join(""));
   const SEEN=seenSquares();
   for(let r=0;r<st.rows;r++) L.push(String(r+rs).padStart(3)+" "+[...Array(st.cols)].map((_,c)=>" "+(pc[key(r,c)]||((st.marks||{})[key(r,c)]==="radio"?"@":null)||((st.arrows||{})[key(r,c)]!=null?AR[st.arrows[key(r,c)]]:null)||CH[st.cells[key(r,c)]]||(SEEN.has(key(r,c))?"*":"."))).join(""));
@@ -1886,6 +1909,7 @@ function boardText(who, quick){
   L.push("  hth Snake G4 / combo Snake G4   hand-to-hand (1 action, 1 white) / combo (2 actions, 2 white + 1 black) on an adjacent guard; dice pop up, KO damage applied");
   L.push("  takedown Snake G4          2 actions, Snake only, must be directly behind the guard; guard becomes a dead guard token ☠ (a kill, no roll)");
   L.push("  knock Snake · interact Snake <thing> (rolls that character's Interact dice) · drag Snake <body square> <move-to square> <drop square next to you> (noisy) · ration Otacon (needs the Rations card)");
+  L.push("  EQUIPMENT: toss Snake grenade F4 (grenade/stun/chaff — chaff needs no square) · plant Snake c4 F4 (also claymore, timebomb; adjacent square) · detonate Snake (all your C-4) · launch Snake nikita F4 / launch Snake launcher F4 (adjacent square it starts from; Nikita is then steered with 2 black dice) · hide Snake boxA · usekey Snake key3 · telepathy Snake · scout Snake · scan Snake F4 · tieup Snake · medicine Snake · pentazemin Snake · gthrow Snake (boss stage Grenades card) · crate Snake");
   L.push("  shoot Meryl G2 rifle  ·  shoot Fox G2 cannon 2 (spend 2 charges for +2 white)  ·  slash Fox [+1] (HF Blade, every adjacent figure)  ·  stealth Otacon (camo, no ! from LOS this turn)  ·  recharge Otacon");
   L.push("  elevator Snake [Armory]   1 action (Interact): ride the elevator with everyone on it, or call it while standing next to an empty shaft");
   L.push("  disguise Meryl (2 actions, next to a KO/dead token, her ! off the map)  ·  hack Otacon <terminal> · search Otacon · access Otacon <card>");
@@ -2711,14 +2735,14 @@ function openDeckBuilder(){
     on("#f-x",()=>{ edit=null; draw(); });
     on("#dk-shuffle",()=>{ buildDeck(); el.classList.remove("open"); openTurnPanel(true); });
     on("#dk-off",()=>{ commit(s=>{ delete s.vdeck; s.physicalDeck=true; }, "Virtual deck turned off — using the physical cards"); draw(); });
-    on("#dk-export",()=>{ const t="STCARDS"+JSON.stringify(lib); try{ navigator.clipboard.writeText(t).then(()=>toast("Copied — send it to your friend"),()=>prompt("Copy this:",t)); }catch(e){ prompt("Copy this:",t); } });
+    on("#dk-export",()=>{ const t="STCARDS"+JSON.stringify(lib); try{ navigator.clipboard.writeText(t).then(()=>toast("Copied — send it to your friend"),()=>copyBox(t)); }catch(e){ copyBox(t); } });
     on("#dk-import",()=>{ const t=prompt("Paste the card library text:"); if(!t) return; try{ const a=JSON.parse(t.trim().replace(/^STCARDS/,"")); if(!Array.isArray(a)) throw 0; lib=a; saveLib(lib); toast(`Loaded ${a.length} cards`); draw(); }catch(e){ toast("That doesn't look like a card library"); } });
   };
   draw();
 }
 
 // ---------- turn scripts with dice rolls ----------
-const SCRIPT_CMDS=/^(elevator|move|face|dmg|kodmg|token|flip|ko|kill|remove|place|roll|noise|attack|if|note|stop|ask|sneak|dash|hth|combo|takedown|shoot|slash|stealth|recharge|hack|search|access|knock|ration|interact|drag|focus|focusmove|disguise|end)\b/i;
+const SCRIPT_CMDS=/^(toss|plant|detonate|launch|hide|usekey|telepathy|scout|scan|tieup|medicine|pentazemin|gthrow|crate|elevator|move|face|dmg|kodmg|token|flip|ko|kill|remove|place|roll|noise|attack|if|note|stop|ask|sneak|dash|hth|combo|takedown|shoot|slash|stealth|recharge|hack|search|access|knock|ration|interact|drag|focus|focusmove|disguise|end)\b/i;
 function parseDice(spec){
   const w=/(\d+)\s*(?:w\b|white)/i.exec(spec), b=/(\d+)\s*(?:b\b|black)/i.exec(spec), v=/\bvs\.?\s*(\d+)/i.exec(spec), f=/\bfor\s+(.+)$/i.exec(spec);
   return {w:w?+w[1]:0, b:b?+b[1]:0, vs:v?+v[1]:null, why:f?f[1].trim():""};
@@ -2806,7 +2830,8 @@ async function physicsRoll(dice){
     requestAnimationFrame(step); });
 }
 // roll a set of dice: physics if available, otherwise random numbers + a simple animation
-async function rollDice(dice,vs){
+async function rollDice(dice,vs){ S.rollingNow=true; try{ return await rollDice_(dice,vs); } finally { S.rollingNow=false; } }
+async function rollDice_(dice,vs){
   try{ const items=await physicsRoll(dice); items.forEach(it=>{ if(vs!=null&&it.d.v!=="!"&&+it.d.v>=vs) it.w.firstChild.classList.add("hit"); }); await sleep(500); return "physics"; }
   catch(e){ dice.forEach(d=>{ const v=1+Math.floor(rnd()*6); d.v=d.k==="w"&&v===1?"!":v; }); await throwDice(dice,vs); return "random"; }
 }
@@ -2838,6 +2863,14 @@ function showRemoteRoll(m){ let v=document.getElementById("rollview"); if(!v){ v
   v.classList.add("show");
   if(m.stage==="rolled"&&m.dice){ const ds=m.dice.map(d=>({...d})); throwDice(ds,m.vs).then(()=>setTimeout(clearDice,1600)); } }
 // a required pop-up (dice, reactions, card) holds the screen until it's answered
+setInterval(()=>{ const rb=document.getElementById("rollbox"), open=rb&&rb.style.display==="block";
+  if(document.body.classList.contains("modal")&&!open&&!S.rollingNow){ S.modalStale=(S.modalStale||0)+1; if(S.modalStale>=2){ S.modal=0; document.body.classList.remove("modal"); S.modalStale=0; console.warn("cleared a stuck pop-up overlay"); } } else S.modalStale=0; },1000);
+window.addEventListener("error",()=>{ setTimeout(()=>{ const rb=document.getElementById("rollbox"); if(!(rb&&rb.style.display==="block")){ S.modal=0; document.body.classList.remove("modal"); } },50); });
+window.addEventListener("unhandledrejection",()=>{ setTimeout(()=>{ const rb=document.getElementById("rollbox"); if(!(rb&&rb.style.display==="block")){ S.modal=0; document.body.classList.remove("modal"); } },50); });
+function unstick(){ S.modal=0; document.body.classList.remove("modal"); const rb=document.getElementById("rollbox"); if(rb) rb.style.display="none"; try{ clearDice(); }catch(e){}
+  if(S.pickSq){ const f=S.pickSq; S.pickSq=null; showPickBar(); f.res(null); } EN.busy=false; resetPointers(); const cd=document.getElementById("codec"); if(cd) cd.remove();
+  if(S.st.flow&&S.st.flow.g==="running") commit(s=>{ s.flow.g="review"; }, "Unstuck — the guard turn is paused for review: fix anything by hand, then confirm");
+  toast("Unstuck — everything is tappable again"); refresh(); }
 function modalOn(){ S.modal=(S.modal||0)+1; document.body.classList.add("modal"); }
 function modalOff(){ S.modal=Math.max(0,(S.modal||0)-1); if(!S.modal) document.body.classList.remove("modal"); }
 function busyModal(){ if(S.modal){ alertMsg("Finish the pop-up on screen first"); return true; } return false; }
@@ -3023,7 +3056,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="6.9";
+const APP_VERSION="7.0";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3362,13 +3395,20 @@ function hudClick(what){ if(S.modal&&what!=="map"){ alertMsg("Finish the pop-up 
   const pane={team:"team",mission:"mission",dice:"dice",ai:"ai",net:"net"}[what]||"net"; const was=S.pane===pane; closeAll(); if(!was) openSheet(pane);
   if(pane==="ai"){ const sel=document.getElementById("ai-who"), mine=S.st.pieces.find(p=>isPlayer(p)&&isMine(p)&&seatObj(p)); if(sel&&mine&&!sel.dataset.picked){ sel.value=mine.label; } } }
 // ---------- Team: everyone can look; only your own character has buttons ----------
+// Meryl's Disguise reference card (in our own words) — her Gain Disguise action plus how the disguise works
+const DISGUISE_CARD=p=>`<details ${p.disguised?"open":""}><summary class="muted">🎭 Disguise reference card${p.disguised?" — DISGUISED now":""}</summary><div class="scard" style="margin:4px 0">
+  <div><b>Gain Disguise (2 actions):</b> next to a KO or dead guard token, and her ! isn't on the map → she swaps to the Disguised Meryl figure.</div>
+  <div><b>While disguised:</b> guards and cameras treat her like a guard (they can leapfrog her).</div>
+  <div><b>She loses it if:</b> her ! is placed under her · she draws attention while a guard or camera can see her · she does anything other than Sneak, Dash or Focus while one can see her.</div>
+  <div><b>"A female guard?":</b> if an adjacent guard can see her, she rolls 2 white — a ! means she draws attention (and loses the disguise).</div>
+  <div class="muted">Not a guard for counting · don't use the radio · traps and laser sensors still go off ${(()=>{ try{ return codecChip("04.13"); }catch(e){ return ""; } })()}</div></div></details>`;
 function renderTeamPane(){ const el=document.getElementById("pane-team"); if(!el) return; const ps=S.st.pieces.filter(isPlayer);
   el.innerHTML=ps.map(p=>{ ensureChar(p); const T=TYPES[p.type], C=CHARS[p.type], mine=isMine(p)&&inRoom()?" · you":"";
     return `<div class="scard"><div class="row" style="margin:0"><span class="sw" style="background:${T.color}">${T.short}</span><b>${esc(nameOf(p))}</b><span class="muted">${esc(seatLabel(p))}${mine}</span><span style="margin-left:auto"><b>${Math.max(0,p.hp-(p.dmg||0))}</b>/${p.hp} HP</span></div>
       <div class="muted">${sq(p.r,p.c)} · Defense ${p.def??C.def} · Interact ${C.interact.w?C.interact.w+"W ":""}${C.interact.b}B${p.disguised?" · disguised":""}${p.carry&&p.carry.length?" · carrying "+p.carry.join(", "):""}</div>
       ${S.st.noFocus?`<div class="muted">No Focus tokens this mission.</div>`:`<div class="tp-foc">${T.focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}" title="${esc(FOCUS_FX[n]||n)}">${esc(n)}</span>`).join("")}</div>`}
       <div class="sh2">Equipment</div>${(p.equip||[]).length?p.equip.map(e=>{ const E=EQUIP[e.k]||{name:e.k,text:""}; return `<div class="muted"><b style="color:var(--text)">${esc(E.name)}</b>${e.ch!=null?` [${e.ch}]`:""} — ${esc(E.text)}</div>`; }).join(""):`<div class="muted">None</div>`}
-      <details><summary class="muted">Abilities</summary>${C.abilities.map(([n,t])=>`<div class="muted"><b style="color:var(--text)">${esc(n)}</b> — ${esc(t)}</div>`).join("")}</details></div>`; }).join("")||`<p class="muted">No characters on the board.</p>`; }
+      <details><summary class="muted">Abilities</summary>${C.abilities.map(([n,t])=>`<div class="muted"><b style="color:var(--text)">${esc(n)}</b> — ${esc(t)}</div>`).join("")}</details>${p.type==="meryl"?DISGUISE_CARD(p):""}</div>`; }).join("")||`<p class="muted">No characters on the board.</p>`; }
 function renderMissionPane(){ const el=document.getElementById("pane-mission"); if(!el) return; const st=S.st, k=st.run&&st.run.key, si=statusInfo();
   const sk=k||st.stageKey;
   el.innerHTML=`<div class="scard"><b>${esc(st.stage||"Free play")}</b>${sk&&OBJ[sk]?objectivesHtml(sk,st,true):""}
@@ -3383,11 +3423,11 @@ function renderMissionPane(){ const el=document.getElementById("pane-mission"); 
 function renderBuilderPane(){ const el=document.getElementById("pane-builder"); if(!el) return;
   el.innerHTML=`<div class="scard"><b>Campaign</b><div class="row"><button class="on" data-scr="lobby">Lobby</button>${S.st.camp?`<button class="sm" data-scr="missions">Missions</button><button class="sm" data-scr="memory">Memory Box</button>`:""}</div></div>
     <div class="sh">Builder & settings</div><div class="scard"><div class="row" style="margin:0"><b style="flex:1">Builder mode</b><button class="sm ${S.builder?"on":""}" id="bd-mode">${S.builder?"On — anything moves":"Off"}</button></div><p class="muted">Turn on to move any piece and skip turn locks — for setting up or fixing the table. This phone only.</p></div>
-    <div class="grid2">${[["build","✚ Edit the board"],["map","▦ Map, backdrop & files"],["game","⏱ Rules, deck & cameras"],["dice","⚄ Dice roller"],["ai","🤖 AI tools"],["ref","📖 Reference cards"],["log","☰ Full log"],["free","🗺 Free play (any map)"]].map(([k,l])=>`<button class="sm" data-bp="${k}">${l}</button>`).join("")}</div>
+    <div class="grid2">${[["unstick","🔧 Unstick the screen"],["build","✚ Edit the board"],["map","▦ Map, backdrop & files"],["game","⏱ Rules, deck & cameras"],["dice","⚄ Dice roller"],["ai","🤖 AI tools"],["ref","📖 Reference cards"],["log","☰ Full log"],["free","🗺 Free play (any map)"]].map(([k,l])=>`<button class="sm" data-bp="${k}">${l}</button>`).join("")}</div>
     <div class="row"><button class="sm" id="bd-undo">↶ Undo</button><button class="sm" id="bd-redo">↷ Redo</button><button class="sm" id="bd-hist">📜 Play-by-play</button></div>`;
   el.querySelectorAll("[data-scr]").forEach(b=>b.onclick=()=>{ closeAll(); setScreen(b.dataset.scr); });
   el.querySelector("#bd-mode").onclick=()=>{ S.builder=!S.builder; refresh(); };
-  el.querySelectorAll("[data-bp]").forEach(b=>b.onclick=()=>{ const k=b.dataset.bp; if(k==="free"){ closeAll(); openMenu(); return; } if(k==="log"){ closeAll(); openSheet("log"); return; } closeAll(); openSheet(k); });
+  el.querySelectorAll("[data-bp]").forEach(b=>b.onclick=()=>{ const k=b.dataset.bp; if(k==="unstick"){ closeAll(); unstick(); return; } if(k==="free"){ closeAll(); openMenu(); return; } if(k==="log"){ closeAll(); openSheet("log"); return; } closeAll(); openSheet(k); });
   el.querySelector("#bd-undo").onclick=undo; el.querySelector("#bd-redo").onclick=redo; el.querySelector("#bd-hist").onclick=()=>{ closeAll(); openHistory(); }; }
 // ---------- undo the last action (this phone, during your own turn) ----------
 S.steps=[];
@@ -3495,6 +3535,8 @@ const hasEq=(p,pred)=>(p.equip||[]).some(e=>EQUIP[e.k]&&pred(EQUIP[e.k],e));
 const numOf=v=>typeof v==="number"?v:0;
 
 // ---------- pick a square on the board ----------
+// a square given in the command (AI or typed) is used directly; otherwise tap one on the board
+async function pickOr(arg,title,valid){ const s=arg&&parseSq(arg); if(s){ if(!valid(s.r,s.c)) throw `${arg} isn't a legal square for that`; return s; } return pickSquare(title,valid); }
 function pickSquare(title,valid){ return new Promise(res=>{ const cells=new Set();
   for(let r=0;r<S.st.rows;r++) for(let c=0;c<S.st.cols;c++) if(valid(r,c)) cells.add(key(r,c));
   if(!cells.size){ alertMsg("✗ No legal square for that"); res(null); return; }
@@ -3558,7 +3600,7 @@ function drawHidden(p,x,y){ const cx=x+CS/2, cy=y+CS/2;
 
 // ---------- remote card reveal: everyone sees the card that was drawn ----------
 function revealCard(kind,card,extra){ const id=Math.random().toString(36).slice(2,8); S.seenReveal=id; commit(s=>{ s.reveal={id,kind,card,by:S.me,extra:extra||null,t:Date.now()}; }); }
-function revealSync(){ const rv=S.st.reveal; if(!rv||rv.id===S.seenReveal) return; const first=S.seenReveal===undefined; S.seenReveal=rv.id; if(first||rv.by===S.me) return;
+function revealSync(){ const rv=S.st.reveal; if(!rv||rv.id===S.seenReveal) return; S.seenReveal=rv.id; if(rv.by===S.me||Date.now()-(rv.t||0)>20000) return;
   let v=document.getElementById("revealview"); if(!v){ v=document.createElement("div"); v.id="revealview"; document.body.appendChild(v); }
   v.innerHTML=`<div class="rb-title">🃏 ${esc(rv.by)} drew a card</div>${cardHtml(rv.kind,rv.card,rv.extra)}<div class="row"><button class="sm" id="rvx" style="flex:1">OK</button></div>`;
   v.classList.add("show"); v.querySelector("#rvx").onclick=()=>v.classList.remove("show"); clearTimeout(S.rvT); S.rvT=setTimeout(()=>v.classList.remove("show"),12000); }
@@ -3724,14 +3766,14 @@ const EQ_CMDS={
     const err=useAction(p,"toss"); if(err) throw err;
     if(k==="chaff"){ const z=zoneOfPiece(p); spend(p,"toss",false); discardEq(p,k,"used"); if(!await decide("✨ Chaff Grenade",`Cameras and sensors in ${esc((z&&z.name)||"this zone")} go blind until the round ends; a guard in your zone means you draw attention.`)) return "done by hand"; commit(s=>{ s.chaff={zone:(z&&z.name)||"*",round:s.round}; }, `${nameOf(p)} TOSS Chaff Grenade — cameras and sensors in ${(z&&z.name)||"this zone"} are blind until the round ends`); addFx(p.r,p.c,"chaff",2);
       if(S.st.pieces.some(g=>g.type==="guard"&&sameZone(g,p))){ playerToken(P(p.id),"q"); addLog(`A guard is in the zone — ${nameOf(p)} draws attention`); } return "chaff out"; }
-    const t=await pickSquare(`Throw the ${E.name}: tap a square in line of sight, up to 5 away`,(r,c)=>!(r===p.r&&c===p.c)&&!blocked(r,c)&&dist(p,{r,c})<=5&&lineClear(p,{r,c})); if(!t) throw "cancelled";
+    const t=await pickOr(args[1],`Throw the ${E.name}: tap a square in line of sight, up to 5 away`,(r,c)=>!(r===p.r&&c===p.c)&&!blocked(r,c)&&dist(p,{r,c})<=5&&lineClear(p,{r,c})); if(!t) throw "cancelled";
     spend(p,"toss",false); discardEq(p,k,"thrown"); commit(()=>{}, `${nameOf(p)} TOSS ${E.name} → ${sq(t.r,t.c)} (LOUD)`);
     if(k==="stun"){ addFx(t.r,t.c,"flash",2); const gs=figsNear(t.r,t.c,2).filter(g=>g.type==="guard"); if(gs.length&&!await decide("⚡ Stun Grenade",`Knocks out: ${gs.map(g=>esc(nameOf(g))).join(", ")}.`)) gs.length=0; gs.forEach(g=>convertGuard(P(g.id),"ko")); addLog(gs.length?`Stun Grenade: ${gs.map(nameOf).join(", ")} knocked out`:"Stun Grenade: no guards in the flash"); }
     else await blastDamage(t.r,t.c,2,2,"Grenade","grenade");
     playerToken(P(p.id),"alert"); addLog(`The ${E.name} is LOUD → ! under ${nameOf(p)}`); refresh(); return `${E.name} thrown`; },
   async plant(p,args){ const k=args[0]||((p.equip||[]).find(e=>["c4","claymore","timebomb"].includes(e.k))||{}).k, ei=eqIndex(p,k), E=EQUIP[k]; if(!E||ei<0) throw `${nameOf(p)} has no ${k||"explosive"} card`;
     if((p.equip[ei].ch||0)<1) throw `no ${E.name} tokens left on the card`; const err=useAction(p,"plant"); if(err) throw err;
-    const t=await pickSquare(`Place the ${E.name}: tap an adjacent square`,adjFree(p)); if(!t) throw "cancelled";
+    const t=await pickOr(args[1],`Place the ${E.name}: tap an adjacent square`,adjFree(p)); if(!t) throw "cancelled";
     spend(p,"plant",false); commit(s=>{ const q=s.pieces.find(x=>x.id===p.id); q.equip[ei].ch--; s.pieces.push({id:s.nextId++,type:"item",item:E.tok,owner:p.label,r:t.r,c:t.c}); }, `${nameOf(p)} ${k==="timebomb"?"DROPS":"PLANTS"} ${E.name} at ${sq(t.r,t.c)}${k==="timebomb"?" — it goes off at the start of their next turn":""}`); return `${E.name} placed`; },
   async detonate(p){ const cs=S.st.pieces.filter(x=>x.type==="item"&&x.item==="c4"&&x.owner===p.label); if(!cs.length) throw `${nameOf(p)} has no C-4 on the map`;
     const err=useAction(p,"detonate"); if(err) throw err; spend(p,"detonate",false); commit(()=>{}, `${nameOf(p)} DETONATES ${cs.length} C-4`);
@@ -3742,7 +3784,7 @@ const EQ_CMDS={
     const err=useAction(p,"launch"); if(err) throw err; const inf=hasEq(p,x=>x.infAmmo);
     let m=S.st.pieces.find(x=>x.type==="item"&&x.item==="missile"&&x.owner===p.label&&x.src===k);
     if(k==="launcher"||!m){ if(!inf&&(p.equip[ei].ch||0)<1) throw `${E.name} is out of missiles`;
-      const t=await pickSquare(k==="launcher"?"Fire the Missile Launcher: tap the adjacent square it leaves from (it flies straight away from you)":"Place the Nikita missile in an adjacent square",(r,c)=>dist(p,{r,c})===1&&!wallBetween(p.r,p.c,r,c)&&inBounds(r,c)); if(!t) throw "cancelled";
+      const t=await pickOr(args[1],k==="launcher"?"Fire the Missile Launcher: tap the adjacent square it leaves from (it flies straight away from you)":"Place the Nikita missile in an adjacent square",(r,c)=>dist(p,{r,c})===1&&!wallBetween(p.r,p.c,r,c)&&inBounds(r,c)); if(!t) throw "cancelled";
       spend(p,"launch",false); const d=D4.find(d=>p.r+DR[d]===t.r&&p.c+DC[d]===t.c);
       commit(s=>{ const q=s.pieces.find(x=>x.id===p.id); if(!inf) q.equip[ei].ch--; s.pieces.push({id:s.nextId++,type:"item",item:"missile",owner:p.label,src:k,r:t.r,c:t.c,d}); }, `${nameOf(p)} LAUNCHES the ${E.name} from ${sq(t.r,t.c)} (LOUD)`);
       m=S.st.pieces.find(x=>x.type==="item"&&x.item==="missile"&&x.owner===p.label&&x.src===k);
@@ -3773,11 +3815,11 @@ const EQ_CMDS={
     if(!hs.length) return "nothing hidden within 5"; commit(s=>{ hs.forEach(h=>s.pieces.find(x=>x.id===h.id).up=true); }, `${nameOf(p)} SCOUTS with night vision: ${hs.map(h=>`${sq(h.r,h.c)} = ${(HIDDEN_FACES[h.face]||{}).n||"?"}`).join(", ")}`); return `${hs.length} revealed`; },
   async scan(p){ if(eqIndex(p,"thermal")<0) throw "needs Thermal Goggles"; const err=useAction(p,"scan"); if(err) throw err;
     const hs=S.st.pieces.filter(x=>x.type==="hidden"&&!x.up&&sameZone(x,p)); if(!hs.length) throw "nothing face down in this zone";
-    const t=await pickSquare("Scan: tap a face-down token in your zone",(r,c)=>hs.some(h=>h.r===r&&h.c===c)); if(!t) throw "cancelled"; const h=hs.find(h=>h.r===t.r&&h.c===t.c);
+    const t=await pickOr(args[0],"Scan: tap a face-down token in your zone",(r,c)=>hs.some(h=>h.r===r&&h.c===c)); if(!t) throw "cancelled"; const h=hs.find(h=>h.r===t.r&&h.c===t.c);
     spend(p,"scan",false); upd(h,q=>{ q.up=true; },`${nameOf(p)} SCANS ${sq(h.r,h.c)}: ${(HIDDEN_FACES[h.face]||{}).n||"?"}`); return "scanned"; },
-  async tieup(p){ const ei=eqIndex(p,"rope"); if(ei<0) throw "needs Rope"; if((p.equip[ei].ch||0)<1) throw "no rope left";
+  async tieup(p,args){ args=args||[]; const ei=eqIndex(p,"rope"); if(ei<0) throw "needs Rope"; if((p.equip[ei].ch||0)<1) throw "no rope left";
     const kos=S.st.pieces.filter(x=>x.type==="ko"&&!x.roped&&dist(x,p)<=1); if(!kos.length) throw "no KO guard next to you";
-    const err=useAction(p,"tieup"); if(err) throw err; const t=kos.length===1?kos[0]:await pickSquare("Tie up: tap the KO guard",(r,c)=>kos.some(k=>k.r===r&&k.c===c)).then(s=>s&&kos.find(k=>k.r===s.r&&k.c===s.c)); if(!t) throw "cancelled";
+    const err=useAction(p,"tieup"); if(err) throw err; const t=kos.length===1?kos[0]:await pickOr(args[0],"Tie up: tap the KO guard",(r,c)=>kos.some(k=>k.r===r&&k.c===c)).then(s=>s&&kos.find(k=>k.r===s.r&&k.c===s.c)); if(!t) throw "cancelled";
     spend(p,"tieup",false); commit(s=>{ s.pieces.find(x=>x.id===t.id).roped=true; s.pieces.find(x=>x.id===p.id).equip[ei].ch--; }, `${nameOf(p)} TIES UP the KO guard at ${sq(t.r,t.c)} — he won't wake from Waken Guards`); return "tied up"; },
   async medicine(p){ freeAct(p); if(eqIndex(p,"medicine")<0) throw "no Medicine card";
     commit(s=>{ const q=s.pieces.find(x=>x.id===p.id); q.focus=q.focus.map(()=>true); }, `${nameOf(p)} takes MEDICINE — every Focus token refreshed (free)`); discardEq(p,"medicine","used"); return "focus refreshed"; },
