@@ -192,6 +192,7 @@ nav button.on{color:var(--accent);background:linear-gradient(#5fd38a1a,transpare
 #turnpanel .tp-top{padding:10px 12px}
 #turnpanel .tp-top b{font-family:Rajdhani,Inter,sans-serif;font-size:18px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
 .tp-round{font-size:21px;margin:4px 0 8px}
+.tp-fail{border:2px solid #c0392b;background:#2a1212;border-radius:12px;padding:12px;margin:6px 0 10px}.tp-fail-h{font-family:Rajdhani,Inter,sans-serif;font-size:24px;font-weight:700;letter-spacing:.12em;color:#ff6b5a}
 .tp-step{background:#151c19;border-radius:14px;padding:10px 11px}
 .tp-h{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#a9c6b5}
 .tp-pl{border-radius:10px;padding:9px 10px}
@@ -375,7 +376,7 @@ const CHARS = {
 };
 // equipment cards: charges = gear/ammo count on the card (null = unlimited)
 const EQUIP = {
-  handgun:{name:"Handgun (.50 Cal)",charges:null,act:"shoot",w:1,loud:true,text:"Shoot (1): 1 white, target in LOS. LOUD — your ! goes under you."},
+  handgun:{name:"Handgun (.50 Cal)",charges:null,act:"shoot",w:1,loud:true,text:"Shoot (1): 1 white, target in LOS. LOUD — your attention token goes under you."},
   rifle:{name:"Light Assault Rifle",charges:3,act:"shoot",w:2,loud:true,text:"Shoot (1): spend 1 ammo, 2 white, target in LOS. LOUD."},
   cannon:{name:"Arm Cannon",charges:3,act:"shoot",w:1,loud:true,boost:true,text:"Shoot (1): 1 white, target in LOS; discard any charges for +1 white each. LOUD."},
   blade:{name:"High Frequency Blade",charges:3,act:"slash",w:1,text:"Slash (1): 1 white vs every adjacent figure; discard 1 charge for +1 white. When attacked, discard 1 charge: −1 to all their dice."},
@@ -400,7 +401,7 @@ const CS=40, M=26; // base square size and label margin (board units)
 // ---------- stage layouts (approximate schematics; edit freely) ----------
 const LAYOUTS = {
   stage1: {
-    name:"Stage 1 · Cargo Dock", note:"Snake only · collect A, call the elevator (it brings a guard), ride it out with no red alert",
+    noFocus:true, name:"Stage 1 · Cargo Dock", note:"Snake only · collect A, call the elevator (it brings a guard), ride it out with no red alert",
     rowStart:-1, priority:"BL", blue:10, red:7,
     map:[
       "xxxLLxxx",
@@ -484,7 +485,7 @@ LAYOUTS.stage3={
     marks:{"9,3":"radio","14,6":"radio"}, counts:{"8,4":3,"15,7":3},
     zones:[{name:"Holding Cells",r0:0,r1:9},{name:"Armory",r0:11,r1:20}],
     shafts:{"Holding Cells":{r:6,c:0},"Armory":{r:11,c:6}}, lift:"Holding Cells",
-    defeat:{zone:"Holding Cells",goal:12},
+    defeat:{zone:"Holding Cells",goal:12}, reinforce:"Holding Cells", aloneHp:{zone:"Holding Cells",hp:1},
     rules:["Objective: defeat 12 guards in the Holding Cells, OR reach Event C and then the Exit.",
       "Reinforcements: while the Holding Cells zone is active, resolve 1 extra radio-in there before each Guard Order card.",
       "Defeat Guards: a guard KO'd or killed in the Holding Cells is removed and counted (no token) — the board does this for you.",
@@ -508,12 +509,12 @@ function defaultState(){
     bgOpacity:0.55, bgVer:0, bgRect:{x:0,y:0,w:100,h:100}, stage:"Custom board", arrows:{}, marks:{}};
 }
 function buildPreset(name){
-  const L=LAYOUTS[name], st=defaultState(); st.stage=L.name;
+  const L=LAYOUTS[name], st=defaultState(); st.stage=L.name; st.stageKey=name; if(L.noFocus) st.noFocus=true;
   st.rows=L.map.length; st.cols=L.map[0].length; st.rowStart=L.rowStart; st.priority=L.priority; st.blue=L.blue; st.red=L.red; st.vb=L.blue; st.vr=L.red;
   L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
   L.walls.forEach(w=>st.walls[w]=1);
   st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{}); st.counts=Object.assign({},L.counts||{});
-  ["zones","shafts","lift","rules","liftNeeds","liftGuard"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
+  ["zones","shafts","lift","rules","liftNeeds","liftGuard","reinforce","aloneHp"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
   if(L.defeat) st.defeat=Object.assign({count:0},L.defeat);
   L.pieces.forEach(p=>{ const q=Object.assign({id:st.nextId++},p); initPiece(q,st); st.pieces.push(q); });
   return st;
@@ -522,7 +523,8 @@ function initPiece(p,st){
   const T=TYPES[p.type];
   if(T.kind==="player"){ const C=CHARS[p.type]; p.label=p.label||T.name; p.hp=C.hp; p.def=C.def; p.dmg=0; p.focus=[true,true,true,true];
     p.equip=p.equip||C.start.map(k=>({k,ch:EQUIP[k].charges})); }
-  if(p.type==="guard"){ p.label="G"+(st.guardNo++); if(p.facing==null) p.facing=2; p.hp=2; p.dmg=0; p.kod=0; }
+  if(p.type==="guard"){ p.label="G"+(st.guardNo++); if(p.facing==null) p.facing=2; p.hp=2; p.dmg=0; p.kod=0;
+    const ah=st.aloneHp, z=ah&&(st.zones||[]).find(z=>z.name===ah.zone); if(z&&p.r>=z.r0&&p.r<=z.r1&&st.pieces.filter(x=>TYPES[x.type].kind==="player").length===1) p.hp=ah.hp; }
   if(p.type==="boss"){ p.label=p.label||"Boss"; if(p.facing==null) p.facing=2; p.hp=T.hp; p.dmg=0; }
   if(p.type==="camera"){ if(p.fg==null) p.fg=2; if(p.fo==null) p.fo=3; }
   if(p.type==="attn"){ p.mode=p.mode||"q"; p.owner=p.owner||"Snake"; }
@@ -942,6 +944,7 @@ function hurt(p, n, ko){
   const dmg=Math.max(0,(p.dmg||0)+n), hp=p.hp||4; // bosses treat KO damage as normal damage
   let msg=`${nm} ${n>0?"takes":"heals"} ${Math.abs(n)}${ko&&p.type==="boss"?" (KO counts as normal)":""} damage → ${Math.max(0,hp-dmg)}/${hp} health`;
   if(dmg>=hp) msg += T.kind==="player" ? " — KILLED IN ACTION, stage failed" : " — DEFEATED";
+  if(dmg>=hp&&T.kind==="player") setTimeout(()=>failStage(`${nm} was killed in action`),0);
   commit(st=>{ st.pieces.find(x=>x.id===p.id).dmg=dmg; }, msg);
   if(p.type==="fox"&&n>0&&dmg<hp) setTimeout(()=>corneredFox(P(p.id)),50);
 }
@@ -1488,7 +1491,8 @@ function gridRows(r0,r1,c0,c1,seen){ const st=S.st, CH={void:"x",obstacle:"#",ex
 function boardText(who, quick){
   const st=S.st, F=["up","right","down","left"], L=[];
   L.push("METAL GEAR SOLID: THE BOARD GAME · board state from Sneaking Table");
-  if(who && who!=="Just reading") L.push(who.startsWith("Guards")?"You are the referee running the guards this enemy phase.":`You are playing ${who}. Plan ${who}'s turn only (4 actions, plus any Focus tokens).`);
+  if(st.failed){ L.push(`STAGE FAILED — ${st.failed}. Do NOT plan a turn; wait for the stage to be restarted.`); return L.join("\n"); }
+  if(who && who!=="Just reading") L.push(who.startsWith("Guards")?"You are the referee running the guards this enemy phase.":`You are playing ${who}. Plan ${who}'s turn only (4 actions${st.noFocus?"":", plus any Focus tokens"}).`);
   L.push(`${st.stage||"Board"} · Round ${st.round} · ${st.phase} phase · cameras ${st.cam} · LOS: sees every open square ahead unless a wall/obstacle is in the box · deck: ${st.blue} blue, ${st.red} red left · priority corner ${st.priority}`);
   if(quick) L.push("QUICK UPDATE — only the pieces, tokens and health below have changed. The MAP and WALLS are exactly the same as in the FULL BOARD you were given at the start of this stage: keep using that map. If you no longer have the full board, reply \"send the full board\" and nothing else.");
   else L.push("HOW THIS WORKS: this is the FULL BOARD. Remember the MAP and the WALLS list for the rest of this stage — they never change. After each turn you'll get a short QUICK UPDATE that only lists where the pieces and tokens are now; combine it with this map. If you ever lose track of the map, reply \"send the full board\".");
@@ -1500,9 +1504,9 @@ function boardText(who, quick){
     if(me&&isPlayer(me)){ ensureChar(me); const C=charOf(me), T=TYPES[me.type], t=tt(me);
       L.push("", `=== YOUR CHARACTER: ${nameOf(me)} at ${sq(me.r,me.c)} ===`);
       L.push(`Health ${Math.max(0,me.hp-(me.dmg||0))}/${me.hp} · Defense ${me.def??C.def} · this turn: ${t.done?"already ENDED":`${actionsLeft(me)} action${actionsLeft(me)===1?"":"s"} left`}${me.disguised?" · DISGUISED (guards and cameras treat you as a guard)":""}${me.stealth?" · STEALTH ON":""}${me.carry&&me.carry.length?" · carrying "+me.carry.join(", "):""}`);
-      L.push("Actions you can take (cost in actions): "+C.actions.map(a=>`${ACT_NAME[a]||a[0].toUpperCase()+a.slice(1)} ${a==="focus"?"(refresh cost)":"("+ACT[a]+")"}${a==="dash"||a==="drag"?" NOISY":""}`).join(", ")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="shoot")?", Shoot (1) LOUD":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="slash")?", Slash (1)":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="stealth")?", Stealth (1)":""));
-      L.push("Your Focus tokens (spend one any time you roll; a spent one comes back with the Focus action):");
-      T.focus.forEach((n,i)=>L.push(`  - ${n}: ${me.focus&&me.focus[i]?"READY":"SPENT"} — ${FOCUS_FX[n]||n} · refresh costs ${fcostOf(me,i)} action${fcostOf(me,i)>1?"s":""}`));
+      L.push("Actions you can take (cost in actions): "+C.actions.filter(a=>!(S.st.noFocus&&a==="focus")).map(a=>`${ACT_NAME[a]||a[0].toUpperCase()+a.slice(1)} ${a==="focus"?"(refresh cost)":"("+ACT[a]+")"}${a==="dash"||a==="drag"?" NOISY":""}`).join(", ")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="shoot")?", Shoot (1) LOUD":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="slash")?", Slash (1)":"")+(me.equip&&me.equip.some(e=>EQUIP[e.k].act==="stealth")?", Stealth (1)":""));
+      if(S.st.noFocus) L.push("Focus tokens: NONE in this stage — you don't have them yet."); else { L.push("Your Focus tokens (spend one any time you roll; a spent one comes back with the Focus action):");
+      T.focus.forEach((n,i)=>L.push(`  - ${n}: ${me.focus&&me.focus[i]?"READY":"SPENT"} — ${FOCUS_FX[n]||n} · refresh costs ${fcostOf(me,i)} action${fcostOf(me,i)>1?"s":""}`)); }
       if(me.equip&&me.equip.length){ L.push("Your equipment:"); me.equip.forEach(e=>{ const E=EQUIP[e.k]; L.push(`  - ${E.name}${e.ch!=null?` [${e.ch} left]`:""}: ${E.text}`); }); } else L.push("Your equipment: none");
       L.push("Your abilities: "+C.abilities.map(([n,x])=>`${n} — ${x}`).join(" | "));
       const vs=S.st.pieces.filter(isViewer).filter(v=>los(v,me.r,me.c)&&!me.disguised);
@@ -1514,7 +1518,7 @@ function boardText(who, quick){
   if(st.rules&&!quick){ L.push("STAGE RULES:"); st.rules.forEach(x=>L.push("  - "+x)); }
   st.pieces.filter(p=>TYPES[p.type].kind==="player").forEach(p=>{ const T=TYPES[p.type];
     const t=(st.tt||{})[p.id]||{used:0,noisy:0,bonus:0};
-    L.push(`${p.label} at ${sq(p.r,p.c)} · health ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp} · this turn: ${t.done?"ENDED":`${4+(t.bonus||0)-(t.used||0)} of ${4+(t.bonus||0)} actions left, ${t.noisy||0} noisy`} · defense ${p.def??3} · focus: ${T.focus.map((n,i)=>n+(p.focus&&p.focus[i]?" ready":" spent")+" (refresh "+fcostOf(p,i)+")").join(", ")}${p.equip&&p.equip.length?" · equipment: "+p.equip.map(e=>EQUIP[e.k].name+(e.ch!=null?` [${e.ch}]`:"")).join(", "):" · no equipment"}${p.disguised?" · DISGUISED":""}${p.stealth?" · STEALTH ON":""}${p.carry&&p.carry.length?" · carrying "+p.carry.join(", "):""}`); });
+    L.push(`${p.label} at ${sq(p.r,p.c)} · health ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp} · this turn: ${t.done?"ENDED":`${4+(t.bonus||0)-(t.used||0)} of ${4+(t.bonus||0)} actions left, ${t.noisy||0} noisy`} · defense ${p.def??3} · focus: ${st.noFocus?"none this stage":T.focus.map((n,i)=>n+(p.focus&&p.focus[i]?" ready":" spent")+" (refresh "+fcostOf(p,i)+")").join(", ")}${p.equip&&p.equip.length?" · equipment: "+p.equip.map(e=>EQUIP[e.k].name+(e.ch!=null?` [${e.ch}]`:"")).join(", "):" · no equipment"}${p.disguised?" · DISGUISED":""}${p.stealth?" · STEALTH ON":""}${p.carry&&p.carry.length?" · carrying "+p.carry.join(", "):""}`); });
   by("guard").forEach(g=>L.push(`Guard ${g.label} at ${sq(g.r,g.c)} facing ${F[g.facing]} (looks toward ${({up:"the rows above him",down:"the rows below him",left:"the columns left of him",right:"the columns right of him"})[F[g.facing]]})${g.dmg?` · ${g.dmg} dmg`:""}${g.kod?` · ${g.kod} KO dmg`:""}`));
   by("boss").forEach(g=>{ const B=BOSSES[g.boss]; L.push(`Boss ${g.label} at ${sq(g.r,g.c)} facing ${F[g.facing]} · ${g.dmg||0}/${g.hp} dmg${B?` · Defense ${B.def}, attacks ${B.atk} black${B.threat?`, threat ${B.threat[g.threat||0]}`:""}`:""}`); if(B&&!quick) B.notes.forEach(n=>L.push("    - "+n)); });
   by("camera").forEach(c=>L.push(`Camera at ${sq(c.r,c.c)} · cameras are ${st.cam.toUpperCase()} now, so it faces ${F[st.cam==="green"?c.fg:c.fo]} (green side faces ${F[c.fg]}, orange side faces ${F[c.fo]})`));
@@ -1637,6 +1641,7 @@ function statusInfo(){
 }
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function useAction(p,kind,extra){ const t=tt(p), cost=ACT[kind]||1;
+  if(S.st.failed) return "the stage has failed — restart or undo from the Turn panel";
   if(S.st.phase!=="Player") return "it's the guards' phase — players act in the players' phase";
   { const f=flow(); if(f.active&&f.active!==p.id) return `it's ${nameOf(P(f.active))}'s turn — end or undo it first (Turn panel)`;
     if(!f.active&&!S.scriptRunning) return `start ${nameOf(p)}'s turn first — tap ▶ Start turn`;
@@ -1663,12 +1668,13 @@ async function doMove(p,kind,path){
     commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=s.r; q.c=s.c; }, `${nameOf(p)} ${a} ${kind.toUpperCase()} ${sq(s.r,s.c)}${s.leap?` (leapfrogs ${s.leap.map(nameOf).join(", ")})`:""}`);
     // walking onto an objective/event collects it
     const ev=S.st.pieces.find(x=>x.type==="event"&&x.r===s.r&&x.c===s.c);
-    if(ev){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==ev.id); const q=st.pieces.find(x=>x.id===p.id); (q.carry=q.carry||[]).push(ev.label||"?"); }, `${nameOf(p)} collects Event ${ev.label} at ${sq(s.r,s.c)} — resolve it in the campaign book`); toast(`${nameOf(p)} collected ${ev.label} — check the campaign book`); }
+    if(ev){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==ev.id); const q=st.pieces.find(x=>x.id===p.id); (q.carry=q.carry||[]).push(ev.label||"?"); }, `${nameOf(p)} collects Event ${ev.label} at ${sq(s.r,s.c)} — resolve it in the campaign book`); toast(`${nameOf(p)} collected ${ev.label} — check the campaign book`);
+      if(S.st.liftNeeds&&ev.label===S.st.liftNeeds&&!S.st.lift&&S.st.shafts){ const k=Object.keys(S.st.shafts)[0]; placeLift(k,`Event ${ev.label} collected — the elevator comes down to the ${k} shaft`); toast("The elevator is coming down — with a guard on it"); } }
     if(i<path.length-1 && !S.dropMove) await sleep(320);   // AI/script moves step visibly; a drag-and-drop lands straight on the square
   }
   const me=P(p.id);
   const foes=leapt.filter(f=>f.type==="guard"||f.type==="boss");
-  if(foes.length){ playerToken(me,"alert"); addLog(`${nameOf(me)} leapfrogged ${foes.map(nameOf).join(", ")} → ! under ${nameOf(me)}`);
+  if(foes.length){ playerToken(me,"q"); addLog(`${nameOf(me)} leapfrogged ${foes.map(nameOf).join(", ")} → attention token under ${nameOf(me)}`);
     if(me.stealth) addLog("Stealth camouflage: the guards don't attack");
     else for(const g of foes){ const r_=await rollPrompt({target:me,kind:"enemy",w:0,b:g.type==="boss"&&g.atk?g.atk:2,vs:defOf(me),why:`${nameOf(g)} attacks ${nameOf(me)} for leapfrogging him`});
       if(r_){ commit(()=>{}, `${nameOf(g)} ATTACKS ${nameOf(me)} (leapfrogged) → ${r_.hits} hit${r_.hits===1?"":"s"}`); if(r_.hits) hurt(P(me.id),r_.hits); } } refresh(); }
@@ -1727,8 +1733,9 @@ async function doShoot(p,g,note,wname,extra){
   spend(p,"shoot",false);
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id), qe=q.equip[ei]; if(E.charges!=null) qe.ch=Math.max(0,(qe.ch||0)-(E.boost?boost:1)); }, `${nameOf(p)} SHOOT ${nameOf(g)} with ${E.name}${boost?` (+${boost} charge)`:""} → ${r.hits} hit${r.hits===1?"":"s"} (LOUD)`); S.lastRoll=r;
   applyHits(p,g,r,false);
-  playerToken(P(p.id),"alert"); addLog(`${nameOf(p)}'s shot is LOUD → ! at ${sq(p.r,p.c)}`); refresh();
-  return `shoot: ${r.hits} hit(s), ! placed (loud)`;
+  playerToken(P(p.id),"q"); addLog(`${nameOf(p)}'s shot is LOUD → attention token under ${nameOf(p)} at ${sq(p.r,p.c)} (? side if it wasn't on the map; a ! stays a !)`);
+  if(r.bang) addLog(`The white "!" also draws attention here — the token is already under ${nameOf(p)}, so nothing more happens`); refresh();
+  return `shoot: ${r.hits} hit(s), attention token placed (loud)`;
 }
 async function doSlash(p,note,extra){
   const err=useAction(p,"slash"); if(err) throw err;
@@ -1775,6 +1782,8 @@ function doElevator(p,dest){
   spend(p,"interact",false); placeLift(to,`${nameOf(p)} CALLS THE ELEVATOR to the ${to} shaft`); return `elevator called to ${to}`; }
 async function doInteract(p,arg,note){
   const err=useAction(p,"interact"); if(err) throw err; const C=charOf(p)||{interact:{w:1,b:2}};
+  const lock=S.st.pieces.find(x=>((x.type==="door"&&!x.open)||(x.type==="terminal"&&!x.hacked))&&dist(x,p)<=1);
+  if(!lock){ spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)} (no dice needed)`); return "interact — no dice needed"; }
   const r=await rollPrompt({by:p,kind:"interact",w:C.interact.w,b:C.interact.b,vs:null,why:`${nameOf(p)} Interact${arg?" — "+arg:""}`,note}); if(!r) throw "cancelled";
   S.lastRoll=r; spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)}`);
   if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" while interacting → draws attention`); refresh(); }
@@ -1799,7 +1808,7 @@ async function doDrag(p,bodySq,toSq){
   if(seen){ playerToken(P(p.id),"alert"); addLog(`${nameOf(p)} SEEN while dragging → !`); refresh(); }
   return `drag — body now at ${from}`;
 }
-function doFocus(p,what,mode){
+function doFocus(p,what,mode){ if(S.st.noFocus) throw "no Focus tokens in this stage";
   const T=TYPES[p.type]; const i=T.focus.findIndex(n=>n.toLowerCase().replace(/\s/g,"").startsWith(what.toLowerCase().replace(/\s/g,"")));
   if(i<0) throw `${nameOf(p)} has no focus token "${what}" (has: ${T.focus.join(", ")})`;
   if(mode==="refresh"){ const cost=fcostOf(p,i); const err=useAction(p,"focus"); if(err) throw err;
@@ -1937,7 +1946,7 @@ function guardPath(g,tr,tc){
 const tokenAt=(r,c)=>S.st.pieces.filter(p=>p.r===r&&p.c===c&&(p.type==="attn"||p.type==="ko"||p.type==="dead"));
 function playersSeenBy(g){ return S.st.pieces.filter(p=>isPlayer(p)&&!p.disguised&&!p.stealth&&los(g,p.r,p.c)); }
 function guardFace(g,d,why){ if(g.facing===d) return; commit(st=>{ st.pieces.find(x=>x.id===g.id).facing=d; }, `${nameOf(g)} faces ${DIRN[d]}${why?" ("+why+")":""}`); }
-function guardMoveTo(g,s,mode){ const from=sq(g.r,g.c); commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=s.r; q.c=s.c; q.facing=s.d; }, `${nameOf(g)} ${from} ${mode}${s.leap?" (leapfrog)":""} ${sq(s.r,s.c)}`); }
+function guardMoveTo(g,s,mode,step){ const from=sq(g.r,g.c); commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=s.r; q.c=s.c; q.facing=s.d; }, `${nameOf(g)} ${from} ${mode}${s.leap?" (leapfrog)":""} ${sq(s.r,s.c)}${step?` · step ${step}`:""}${s.leap?" — jumped a guard: 2 squares, counts as 1 space":""}`); }
 function enemyAsk(title,text,buttons){ return new Promise(res=>{ const box=document.getElementById("rollbox");
   box.innerHTML=`<div class="rb-title">${esc(title)}</div><div style="margin:6px 0 10px">${text}</div><div class="row">${buttons.map((b,i)=>`<button class="${i===0?"on":"sm"}" data-ea="${i}" style="${i===0?"flex:1":""}">${esc(b)}</button>`).join("")}</div>`;
   box.style.display="block"; box.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>{ box.style.display="none"; res(+b.dataset.ea); }); }); }
@@ -1983,7 +1992,9 @@ async function activateGuard(gid,card){
     let i=0;
     for(;i<Math.min(n,path.length);i++){ const s=path[i];
       if(S.st.pieces.some(p=>p.r===s.r&&p.c===s.c&&p.id!==g.id&&blocksFig(p))){ guardFace(g,s.d,"path blocked"); break; }
-      guardMoveTo(g,s,mode); g=P(gid); await sleep(300); if(EN.stop) return;
+      if(!s.leap&&s.d!==g.facing){ guardFace(g,s.d,"turns the corner"); g=P(gid); await sleep(200);
+        if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; } }
+      guardMoveTo(g,s,mode,`${i+1}/${n}`); g=P(gid); await sleep(300); if(EN.stop) return;
       if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
       if(tokenAt(g.r,g.c).length){ await guardReaction(g); noWallFacing(gid,card); return; } }
     g=P(gid); if(i<path.length && !playersSeenBy(g).length) guardFace(g,path[i].d,"faces along his path");
@@ -1992,8 +2003,9 @@ async function activateGuard(gid,card){
   let left=n, guard=0;
   while(left>0&&guard++<40){ g=P(gid);
     const s=guardStep(g,g.r,g.c,g.facing,{arrow:card.arrow});
-    if(!s){ const d=newPathFacing(g,card.arrow); if(d==null){ addLog(`${nameOf(g)} is boxed in — activation ends`); return; } guardFace(g,d,"blocked, finds a new path"); await sleep(200); continue; }
-    guardMoveTo(g,s,"PATROL"); left--; g=P(gid); await sleep(300); if(EN.stop) return;
+    if(!s){ const d=newPathFacing(g,card.arrow); if(d==null){ addLog(`${nameOf(g)} is boxed in — activation ends`); return; } guardFace(g,d,"blocked, finds a new path"); await sleep(200);
+      if(await guardAttack(P(gid))){ if(tokenAt(P(gid).r,P(gid).c).length) await guardReaction(P(gid)); return; } continue; }
+    guardMoveTo(g,s,"PATROL",`${n-left+1}/${n}`); left--; g=P(gid); await sleep(300); if(EN.stop) return;
     const arw=(S.st.arrows||{})[key(g.r,g.c)]; if(arw!=null&&arw!==g.facing) guardFace(g,arw,"forced arrow");
     g=P(gid);
     if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
@@ -2008,13 +2020,25 @@ function noWallFacing(gid,card){ const g=P(gid); if(!g) return; const r2=g.r+DR[
   if(!inBounds(r2,c2)||wallBetween(g.r,g.c,r2,c2)||blocked(r2,c2)){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"never ends facing a wall"); } }
 function spawnFacing(st,r,c){ const a=(st.arrows||{})[key(r,c)]; if(a!=null) return a; for(const d of [2,1,3,0]){ const r2=r+DR[d],c2=c+DC[d]; if(inBounds(r2,c2)&&!wallBetween(r,c,r2,c2)&&!blocked(r2,c2)) return d; } return 2; }
 function burnCard(why){ if(vdeckOn()){ burnVirtual(why); return; } commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `${why} → reveal the top Guard Order card and put it on the bottom (if it's GAME OVER, the stage fails)`); }
+async function radioIn(zones){ const st=S.st;
+    for(const z of zones){
+      const counts=Object.entries(st.counts||{}).filter(([k])=>inZone(z,+k.split(",")[0])), radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0]));
+      if(!counts.length||!radios.length) continue;
+      const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).length;
+      while(have<want){ const [r,c]=radios[0].split(",").map(Number); let spot=null;
+        const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
+        if(free(r,c)) spot={r,c}; else for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; }
+        if(!spot){ burnCard(`Radio-In: no room to spawn${z?" in the "+z.name:""}`); break; }
+        commit(s=>{ const g={id:s.nextId++,type:"guard",r:spot.r,c:spot.c,facing:spawnFacing(s,spot.r,spot.c)}; initPiece(g,s); s.pieces.push(g); }, `Radio-In: a guard spawns at ${sq(spot.r,spot.c)}${z?" ("+z.name+")":""}`);
+        have++; await sleep(250); } } }
 async function guardActionSection(card){
   const st=S.st, zones=zonesAll().filter(zoneActive);
   if(card.action==="waken"){
     for(const k of st.pieces.filter(p=>p.type==="ko"&&zones.some(z=>inZone(z,p.r)))){
       if((k.stars||2)>1) commit(s=>{ s.pieces.find(x=>x.id===k.id).stars=1; }, `Waken: KO token at ${sq(k.r,k.c)} → ★`);
       else { commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==k.id); s.pieces.push({id:s.nextId++,type:"guard",r:k.r,c:k.c,label:k.from||("G"+s.guardNo++),facing:spawnFacing(s,k.r,k.c),hp:2,dmg:0,kod:0}); }, `Waken: ${k.from||"guard"} gets up at ${sq(k.r,k.c)} — players may change his facing`); } } }
-  if(card.action==="radio"){
+  if(card.action==="radio") await radioIn(zones);
+  if(false){
     for(const z of zones){
       const counts=Object.entries(st.counts||{}).filter(([k])=>inZone(z,+k.split(",")[0])), radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0]));
       if(!counts.length||!radios.length) continue;
@@ -2028,7 +2052,7 @@ async function guardActionSection(card){
   if(card.action==="lost"){ const n=Math.floor(st.pieces.filter(p=>p.type==="dead").length/3); for(let i=0;i<n;i++) burnCard("Lost Contact (3 dead guards)"); if(!n) addLog("Lost Contact: fewer than 3 dead guard tokens — nothing happens"); }
   if(card.action==="stay"){
     for(const pl of st.pieces.filter(isPlayer).filter(p=>zones.some(z=>inZone(z,p.r)))){
-      const near=st.pieces.some(g=>g.type==="guard"&&Math.abs(g.r-pl.r)+Math.abs(g.c-pl.c)<=2&&(()=>{ const r0=Math.min(g.r,pl.r),r1=Math.max(g.r,pl.r),c0=Math.min(g.c,pl.c),c1=Math.max(g.c,pl.c); for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++) if(blocked(r,c)) return false; return true; })());
+      const near=st.pieces.some(g=>g.type==="guard"&&Math.abs(g.r-pl.r)+Math.abs(g.c-pl.c)<=2&&(()=>{ const r0=Math.min(g.r,pl.r),r1=Math.max(g.r,pl.r),c0=Math.min(g.c,pl.c),c1=Math.max(g.c,pl.c); for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++) if(blocked(r,c)) return false; for(let r=r0;r<r1;r++)for(let c=c0;c<=c1;c++) if(wall("h",r,c)) return false; for(let r=r0;r<=r1;r++)for(let c=c0;c<c1;c++) if(wall("v",r,c)) return false; return true; })());
       const al=st.pieces.some(x=>x.type==="attn"&&x.mode==="alert"&&(x.owner||"").toLowerCase()===(pl.label||"").toLowerCase());
       if(near&&!al){ playerToken(pl,"q"); addLog(`Stay Alert: ${nameOf(pl)} is within 2 of a guard → ? under ${nameOf(pl)}`); } } }
 }
@@ -2039,7 +2063,8 @@ async function runEnemyPhase(card){
     if(S.st.phase!=="Enemy") commit(s=>{ s.phase="Enemy"; }, `— Enemy phase, round ${S.st.round} —`);
     commit(s=>{ if(card.fromDeck) return; if(card.color==="red") s.red=Math.max(0,s.red-1); else s.blue=Math.max(0,s.blue-1); },
       `Guard Order card: ${card.over?"GAME OVER":`${card.color} · patrol ${card.blue} · alert ${card.red} · turn ${card.arrow==="L"?"left ⟲":"right ⟳"}${card.action!=="none"?" · "+({waken:"Waken Guard",radio:"Radio-In",lost:"Lost Contact",stay:"Stay Alert"})[card.action]:""}${card.cam?" · camera flip":""}`}`);
-    if(card.over){ addLog("GAME OVER card revealed — the stage is failed"); toast("Game Over"); return; }
+    if(card.over){ failStage("the GAME OVER card was revealed"); return; }
+    if(S.st.reinforce){ const z=(S.st.zones||[]).find(z=>z.name===S.st.reinforce); if(z&&zoneActive(z)){ addLog(`Reinforcements: extra Radio-In in the ${z.name}`); await radioIn([z]); } }
     await guardActionSection(card); if(EN.stop) return;
     if(card.cam&&S.st.pieces.some(p=>p.type==="camera")){ commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flip to ${S.st.cam==="green"?"orange":"green"}`); await autoSpot(); await sleep(300); }
     const zs=zonesAll().filter(zoneActive).sort((a,b)=>a&&b?(S.st.priority[0]==="T"?a.r0-b.r0:b.r0-a.r0):0), ord=activationOrder();
@@ -2075,6 +2100,7 @@ const turnDone=p=>!!(S.st.tt&&S.st.tt[p.id]&&S.st.tt[p.id].done);
 function rulesOn(){ return S.st.rules!==false; }
 // may this piece be dragged right now? returns null or the reason
 function dragBlock(p){
+  if(S.st.failed&&isPlayer(p)) return "The stage has failed — restart or undo from the Turn panel";
   if(!rulesOn()) return null; const f=flow();
   if(f.g==="review") return isPlayer(p)?"Players can't move now — confirm the guards' turn first":null;   // fixing guard mistakes only
   if(f.g==="running") return "The guards are moving — wait for them to finish";
@@ -2084,7 +2110,10 @@ function dragBlock(p){
   if(!f.active&&!turnDone(p)) return `Start ${nameOf(p)}'s turn first (▶ in the Turn panel or the quick bar)`;
   if(turnDone(p)) return `${nameOf(p)} already finished this round`;
   return null; }
-function startTurn(p){ const f=flow(); if(f.active===p.id) return; if(f.active) throw `It's ${nameOf(P(f.active))}'s turn — end or undo it first`; if(turnDone(p)) throw `${nameOf(p)} already finished this round`;
+function failStage(why){ if(S.st.failed) return; EN.stop=true; commit(s=>{ s.failed=why; }, `✖ STAGE FAILED — ${why}`); toast("Stage failed"); openTurnPanel(true); }
+function restartStage(){ const k=S.st.stageKey||Object.keys(LAYOUTS).find(k=>LAYOUTS[k].name===S.st.stage); if(!k){ toast("Start the stage again from the ☰ menu"); return; } const seats=S.st.seats; startStage(k); if(seats) commit(s=>{ s.seats=seats; }); document.getElementById("seats").classList.remove("open"); }
+function undoFail(){ const f=flow(); if(f.gsnap){ revertGuards(); } else undo(); commit(s=>{ delete s.failed; }, "Stage-failed undone — play on from before it happened"); }
+function startTurn(p){ if(S.st.failed) throw "the stage has failed — restart or undo from the Turn panel"; const f=flow(); if(f.active===p.id) return; if(f.active) throw `It's ${nameOf(P(f.active))}'s turn — end or undo it first`; if(turnDone(p)) throw `${nameOf(p)} already finished this round`;
   const snap=snapshot(); commit(st=>{ st.flow=Object.assign(st.flow||{}, {active:p.id,snap}); }, `▶ ${nameOf(p)}'s turn${seatOf(p)?" ("+seatOf(p)+")":""}`); }
 function revertTurn(){ const f=flow(); if(!f.active||!f.snap) return; const id=f.active, snap=f.snap, nm=nameOf(P(id));
   S.undo.push(snapshot()); S.redo=[]; S.st=JSON.parse(snap); S.st.flow=Object.assign(S.st.flow||{}, {active:id,snap});
@@ -2094,7 +2123,7 @@ async function startGuards(){ const f=flow(); if(f.active){ toast(`Finish ${name
   if(vdeckOn()) flipVirtual(); else openGuardCard(); }
 function revertGuards(){ const f=flow(); if(!f.gsnap) return; S.undo.push(snapshot()); S.redo=[]; S.st=JSON.parse(f.gsnap);
   addLog("↶ Guard turn undone — enter the card again"); S.st.ver++; persist(); net.sendState(); afterReplace(); toast("Guard turn undone"); }
-function confirmGuards(){ commit(s=>{ s.phase="Player"; s.round++; s.tt={}; s.flow={active:null,snap:null,g:"idle",gsnap:null}; }, `✓ Guard turn confirmed — Round ${S.st.round+1} begins`); toast(`Round ${S.st.round}`); }
+function confirmGuards(){ if(S.st.failed){ toast("The stage has failed — restart or undo"); return; } commit(s=>{ s.phase="Player"; s.round++; s.tt={}; s.flow={active:null,snap:null,g:"idle",gsnap:null}; }, `✓ Guard turn confirmed — Round ${S.st.round+1} begins`); toast(`Round ${S.st.round}`); }
 // who plays which character (set at the start of a stage)
 function openSeats(first){
   const el=document.getElementById("seats"), ps=playersOf(), others=Object.values(room.people||{}).map(x=>x.name).filter(n=>n&&n!==S.me);
@@ -2116,6 +2145,11 @@ function renderTurnPanel(){
   const allDone=ps.length&&ps.every(turnDone), act=P(f.active);
   const handle=document.getElementById("tp-handle"); if(handle) handle.innerHTML=st.phase==="Enemy"?"Guards":(act?esc(nameOf(act).split(" ")[0]):"Turn");
   const dots=(p)=>{ const t=tt(p), n=4+(t.bonus||0); return [...Array(n)].map((_,i)=>`<span class="dot ${i<(t.used||0)?"used":""}"></span>`).join(""); };
+  if(st.failed){ el.innerHTML=`<div class="tp-fail"><div class="tp-fail-h">✖ STAGE FAILED</div><div>${esc(st.failed)}.</div></div>
+      <div class="row"><button class="on" id="tp-restart" style="flex:1">↻ Restart ${esc(st.stage||"stage")}</button></div>
+      <div class="row"><button class="sm" id="tp-unfail" style="flex:1">↶ Undo — go back to before it happened</button></div>
+      <p class="muted">Restart sets the stage up fresh and keeps who's playing each character. Undo is for a mistake you want to replay.</p>`;
+    el.querySelector("#tp-restart").onclick=restartStage; el.querySelector("#tp-unfail").onclick=undoFail; return; }
   let h=`<div class="tp-round">Round ${st.round} <span class="${st.phase==="Enemy"?"bad":""}">· ${st.phase==="Enemy"?"Guards' phase":"Players' phase"}</span></div>
     <div class="tp-status ${si.level}">${si.level==="alert"?"! ALERT — guards hunt the nearest red !":si.level==="caution"?"? Investigating — the nearest guard checks the ?":"All clear — guards are patrolling"}</div>`;
   if(!rulesOn()) h+=`<div class="tp-note">Rules check is off (Game tab) — every piece moves freely and turns aren't tracked.</div>`;
@@ -2124,7 +2158,7 @@ function renderTurnPanel(){
     h+=`<div class="tp-pl ${on?"on":done?"done":""}" style="--c:${T.color}"><div class="row" style="margin:0"><span class="sw" style="background:${T.color}">${T.short}</span><b style="flex:1">${esc(nameOf(p))}</b><span class="muted">${esc(seatOf(p)||"unassigned")}</span></div>
       <div class="tp-st">${done?"✓ Turn done":on?`Playing now · ${actionsLeft(p)} action${actionsLeft(p)===1?"":"s"} left${t.noisy?` · 🔊 ${t.noisy} noisy`:""}`:st.phase==="Player"?"Waiting":"—"}</div>
       ${on||(!done&&st.phase==="Player")?`<div class="dots">${dots(p)}</div>`:""}
-      ${on?`<div class="tp-foc">${TYPES[p.type].focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}">${esc(n)}${p.focus&&p.focus[i]?"":` · ⟳${fcostOf(p,i)}`}</span>`).join("")}</div>
+      ${on&&!st.noFocus?`<div class="tp-foc">${TYPES[p.type].focus.map((n,i)=>`<span class="ftok ${p.focus&&p.focus[i]?"":"spent"}">${esc(n)}${p.focus&&p.focus[i]?"":` · ⟳${fcostOf(p,i)}`}</span>`).join("")}</div>
         <div class="row" style="margin:4px 0 0"><button class="sm" data-fp="${p.id}" style="flex:1">★ Focus tokens & abilities</button></div>
         <div class="tp-hint">Drag ${esc(nameOf(p))} 1 square to <b>Sneak</b> or 2 to <b>Dash</b> (noisy). Tap ${esc(nameOf(p))} for attacks and other actions.</div>
         <div class="row" style="margin:6px 0 0"><button class="sm" id="tp-undo">↶ Undo this turn</button><button class="on" id="tp-end" style="flex:1">✓ End turn</button></div>`
@@ -2168,7 +2202,7 @@ function vdeckOn(){ return !!(S.st.vdeck&&S.st.vdeck.draw); }
 // reveal the top card and put it on the bottom (Radio-In with no room, Lost Contact, some reactions)
 function burnVirtual(why){ const top=S.st.vdeck.draw[0]; if(!top) return;
   commit(s=>{ const c=s.vdeck.draw.shift(); s.vdeck.draw.push(c); deckCounts(s); }, `${why} → revealed ${cardText(top)}, moved to the bottom`);
-  if(top.over){ addLog("GAME OVER card revealed — the stage is failed"); toast("GAME OVER revealed — stage failed"); } }
+  if(top.over){ failStage("the GAME OVER card was revealed"); toast("GAME OVER revealed — stage failed"); } }
 function flipVirtual(){
   const top=S.st.vdeck.draw[0]; if(!top){ toast("The deck is empty"); return; }
   S.preFlip=snapshot();
@@ -2326,7 +2360,7 @@ const FOCUS_DICE={"Reroll":{per:"re"},"Reroll black":{per:"re",dieKind:"b"},"+2"
 const dist=(a,b)=>Math.abs(a.r-b.r)+Math.abs(a.c-b.c);
 // every ready token that can touch this roll, with who owns it and why it's allowed
 function focusSources(owner,dice){
-  if(!owner||!isPlayer(owner)) return []; const out=[];
+  if(!owner||!isPlayer(owner)||S.st.noFocus) return []; const out=[];
   const add=(pl,why,blackOnly)=>{ const T=TYPES[pl.type]; T.focus.forEach((n,i)=>{ const fx=FOCUS_DICE[n]; if(!fx||!(pl.focus&&pl.focus[i])) return;
     out.push({pl,i,n,fx,why,blackOnly}); }); };
   add(owner,"");
@@ -2399,7 +2433,8 @@ function focusPanel(p){ p=P(p.id); const box=document.getElementById("rollbox"),
   const ab=abilityStatus(p);
   box.innerHTML=`<div class="rb-title">${esc(nameOf(p))} · Focus tokens & abilities</div>
     <div class="muted" style="margin-bottom:6px">Spend a token while rolling: tap a die in the dice box. A <b>spent</b> token comes back with the <b>Focus</b> action — it costs the number of actions shown.${p.type==="fox"?" Gray Fox can't Focus while his ! is in his zone.":""}</div>
-    ${T.focus.map((n,i)=>{ const ready=p.focus&&p.focus[i], cost=fcostOf(p,i), can=act&&!ready&&actionsLeft(p)>=cost;
+    ${S.st.noFocus?`<div class="rb-note">No Focus tokens in this stage — they unlock from Stage 2.</div>`:""}
+    ${(S.st.noFocus?[]:T.focus).map((n,i)=>{ const ready=p.focus&&p.focus[i], cost=fcostOf(p,i), can=act&&!ready&&actionsLeft(p)>=cost;
       return `<div class="row" style="margin:4px 0"><span class="chip ${ready?"w":"b"}" style="min-width:auto;padding:0 8px;font-size:13px">${ready?"READY":"SPENT"}</span><span style="flex:1"><b>${esc(n)}</b> — ${esc(FOCUS_DICE[n]?(FOCUS_FX[n]||n):FOCUS_FX[n]||n)}</span>
         ${ready?(["+1 action","Dash +2","-1 die / Move 1"].includes(n)&&act?`<button class="sm" data-spend="${i}">Use now</button>`:""):`<button class="sm ${can?"on":""}" data-ref="${i}" ${can?"":"disabled"}>Refresh · ${cost} action${cost>1?"s":""}</button>`}</div>`; }).join("")}
     <h3>Abilities</h3>${ab.map(a=>`<div style="margin:5px 0"><b>${esc(a.name)}</b> <span class="tag ${a.cls}">${esc(a.state)}</span><div class="muted">${esc(a.how)}</div></div>`).join("")}
@@ -2505,7 +2540,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="4.0";
+const APP_VERSION="4.4";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
