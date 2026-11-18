@@ -280,6 +280,7 @@ nav.hud button{flex:0 0 64px!important;max-width:64px!important}
 nav.hud .turnbtn{flex:0 0 74px!important;max-width:74px!important;margin:6px 4px!important;border-radius:14px!important;box-shadow:0 0 0 1px #7ff0a8,0 4px 12px #0008!important;border-width:1px!important}
 nav.hud .turnbtn .ic{font-size:18px!important} nav.hud .turnbtn b{font-size:13px!important;max-width:68px!important}
 #qbar{left:50%!important;right:auto!important;transform:translateX(-50%);width:min(520px,94vw);padding:10px 14px!important;font-size:15px;justify-content:center;flex-wrap:wrap;-webkit-mask-image:none!important;mask-image:none!important}
+.rx-tok{border:1px solid #2a3732;border-radius:12px;padding:8px 10px;margin:8px 0;background:#141b18}
 .tp-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tp-acts button{flex:1 1 auto}
 </style>
 </head>
@@ -2082,10 +2083,43 @@ function guardMoveTo(g,s,mode,step){ const from=sq(g.r,g.c); commit(st=>{ const 
 function enemyAsk(title,text,buttons){ return new Promise(res=>{ const box=document.getElementById("rollbox");
   box.innerHTML=`<div class="rb-title">${esc(title)}</div><div style="margin:6px 0 10px">${text}</div><div class="row">${buttons.map((b,i)=>`<button class="${i===0?"on":"sm"}" data-ea="${i}" style="${i===0?"flex:1":""}">${esc(b)}</button>`).join("")}</div>`;
   box.style.display="block"; box.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>{ box.style.display="none"; res(+b.dataset.ea); }); }); }
+// Guard Reaction pop-up: the board shows what's on the guard's square, you pick what your Reaction card says, the board does it
+const tokName=t=>t.type==="attn"?`${t.owner}'s ${t.mode==="alert"?"! (alert)":"? (investigate)"}`:t.type==="ko"?`KO guard ${t.stars===1?"★":"★★"}`:"Dead guard";
+function reactionPanel(g){ return new Promise(res=>{
+  const box=document.getElementById("rollbox"); const done=[];
+  const fx=(label,fn)=>({label,fn});
+  const draw=()=>{ g=P(g.id); if(!g){ box.style.display="none"; res(0); return; }
+    const toks=tokenAt(g.r,g.c), pls=S.st.pieces.filter(isPlayer);
+    const opts=t=>{ const o=[];
+      if(t.type==="attn"){ o.push(fx(t.mode==="alert"?"Flip to ? (investigate)":"Flip to ! (alert)",()=>commit(s=>{ const q=s.pieces.find(x=>x.id===t.id); q.mode=q.mode==="alert"?"q":"alert"; },`Reaction: ${tokName(t)} flipped to ${t.mode==="alert"?"?":"!"}`)));
+        pls.forEach(pl=>o.push(fx(`Move it under ${nameOf(pl)}`,()=>commit(s=>{ const q=s.pieces.find(x=>x.id===t.id); q.r=pl.r; q.c=pl.c; },`Reaction: ${t.owner}'s token moved under ${nameOf(pl)} at ${sq(pl.r,pl.c)}`))));
+        o.push(fx("Remove it from the map",()=>commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==t.id); },`Reaction: ${tokName(t)} removed from the map`))); }
+      if(t.type==="ko"){ o.push(fx(t.stars===1?"Wake him up (becomes a guard)":"Stir him (★★ → ★)",()=>{ if((t.stars||2)>1) commit(s=>{ s.pieces.find(x=>x.id===t.id).stars=1; },`Reaction: KO guard at ${sq(t.r,t.c)} stirs → ★`); else wakeGuard(t); }));
+        o.push(fx("Wake him up now",()=>wakeGuard(t))); }
+      if(t.type==="dead"){ o.push(fx("Man down! Remove the body",()=>commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==t.id); },`Reaction: dead guard at ${sq(t.r,t.c)} removed — man down`))); }
+      return o; };
+    const gOpts=[...[0,1,2,3].map(d=>fx(`Face ${DIRN[d]}`,()=>{ guardFace(g,d,"reaction"); })), fx("Turn around",()=>guardFace(g,(g.facing+2)%4,"reaction")),
+      fx("Radio-In (refill this zone's barracks)",async()=>{ const z=zoneOfPiece(g); await radioIn([z]); }),
+      fx("Reveal a Guard Order card → bottom",()=>burnCard("Guard Reaction")),
+      fx("Every player in this zone gets a ? under them",()=>{ S.st.pieces.filter(isPlayer).filter(p=>sameZone(p,g)).forEach(p=>playerToken(p,"q")); })];
+    const items=[]; let html=`<div class="rb-title">⚠ Guard Reaction — ${esc(nameOf(g))} at ${sq(g.r,g.c)}</div>
+      <p class="muted">Draw the top Guard Reaction card. Resolve it for each token on his square, top to bottom, by tapping what the card says. Stop if the card moves the guard.</p>`;
+    toks.forEach(t=>{ html+=`<div class="rx-tok"><b>${esc(tokName(t))}</b><div class="row" style="margin:4px 0">`+opts(t).map(o_=>{ items.push(o_); return `<button class="sm" data-rx="${items.length-1}">${esc(o_.label)}</button>`; }).join("")+`</div></div>`; });
+    if(!toks.length) html+=`<div class="muted">No tokens left on his square.</div>`;
+    html+=`<div class="rx-tok"><b>The guard</b> <span class="muted">facing ${DIRN[g.facing]}</span><div class="row" style="margin:4px 0">`+gOpts.map(o_=>{ items.push(o_); return `<button class="sm" data-rx="${items.length-1}">${esc(o_.label)}</button>`; }).join("")+`</div></div>`;
+    if(done.length) html+=`<div class="rb-plan"><span class="muted">Done so far:</span>${done.map(d=>`<div>✓ ${esc(d)}</div>`).join("")}</div>`;
+    html+=`<div class="row"><button class="on" id="rx-ok" style="flex:1">✓ Reaction done — continue</button><button class="sm" id="rx-undo" ${done.length?"":"disabled"}>↶</button><button class="sm danger" id="rx-stop">Stop guards</button></div>`;
+    box.innerHTML=html; box.style.display="block";
+    box.querySelectorAll("[data-rx]").forEach(b=>b.onclick=async()=>{ const it=items[+b.dataset.rx]; S.rxUndo=(S.rxUndo||[]); S.rxUndo.push(snapshot()); await it.fn(); done.push(it.label); draw(); });
+    box.querySelector("#rx-undo").onclick=()=>{ const sn=(S.rxUndo||[]).pop(); if(sn){ S.st=JSON.parse(sn); S.st.ver++; persist(); net.sendState(); afterReplace(); done.pop(); } draw(); };
+    box.querySelector("#rx-ok").onclick=()=>{ box.style.display="none"; S.rxUndo=[]; res(0); };
+    box.querySelector("#rx-stop").onclick=()=>{ box.style.display="none"; S.rxUndo=[]; res(1); };
+  };
+  draw(); }); }
 async function guardReaction(g){
   const toks=tokenAt(g.r,g.c); if(!toks.length) return;
   addLog(`${nameOf(g)} is on ${toks.map(t=>t.type==="attn"?`${t.owner}'s ${t.mode==="alert"?"!":"?"}`:t.type==="ko"?"a KO guard":"a dead guard").join(" and ")} → REACTION`); refresh();
-  const a=await enemyAsk(`⚠ ${nameOf(g)} reacts at ${sq(g.r,g.c)}`,`Draw the top <b>Guard Reaction</b> card and resolve it for ${esc(toks.map(t=>t.type==="attn"?t.owner+"'s "+(t.mode==="alert"?"!":"?"):t.type==="ko"?"KO guard":"dead guard").join(", "))}, top to bottom. Move tokens/guards on this board to match, then continue.`,["Done — continue","Stop the enemy phase"]);
+  const a=await reactionPanel(g);
   if(a===1) EN.stop=true; }
 async function guardAttack(g){
   const seen=playersSeenBy(g); if(!seen.length) return false;
@@ -2698,7 +2732,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="5.1";
+const APP_VERSION="5.2";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
