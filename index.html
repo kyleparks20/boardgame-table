@@ -288,7 +288,8 @@ nav.hud .turnbtn .ic{font-size:18px!important} nav.hud .turnbtn b{font-size:13px
 .spec{font-size:13.5px;padding:6px 9px;margin:4px 0;border-radius:9px;background:#2a2412;border:1px solid #5a4a1e;color:#f0e2bf}
 .gm{font-size:12px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:8px;border:2px solid #2e7d4f;color:#9fe0b5}.gm.alert{border-color:#ff3b2f;color:#ff8a7a}.gm.investigate{border-color:#3d9bff;color:#9cc8ff}
 body.modal::after{content:"";position:fixed;inset:0;background:#0009;z-index:59}
-body.modal #rollbox{z-index:61!important}
+body.modal #rollbox{z-index:64!important}
+#rollbox,#rollview,#revealview{z-index:64!important}
 header .hbtn{min-height:34px!important;padding:3px 10px!important;font-size:12.5px!important;white-space:nowrap}
 @media (max-width:420px){ header .hbtn{padding:3px 7px!important;font-size:11.5px!important} }
 #mapfocus{position:absolute;left:8px;bottom:52px;z-index:5;min-height:36px!important;padding:4px 10px!important;font-size:13px;background:#141a18cc;box-shadow:0 3px 10px #0007;border-color:#2a3732;transition:bottom .15s}
@@ -469,7 +470,9 @@ const TYPES = {
   box:{name:"Box",short:"▢",kind:"figure",color:"#a37b4a"},
   door:{name:"Locked door",short:"🔒",kind:"token",color:"#7a2a2a"},
   terminal:{name:"Terminal",short:"T",kind:"token",color:"#3aa7a0"},
-  marker:{name:"Marker",short:"•",kind:"token",color:"#888"}
+  marker:{name:"Marker",short:"•",kind:"token",color:"#888"},
+  secdoor:{name:"Security door",short:"⇆",kind:"token",color:"#c9a227"},
+  hidden:{name:"Face-down token",short:"?",kind:"token",color:"#8f8a2c"}
 };
 // ---------- character dashboards (from the Colonel's photos of the game pieces) ----------
 // fcost = action cost to refresh each Focus token (same order as TYPES.focus). null = not confirmed yet.
@@ -605,13 +608,14 @@ const LAYOUTS = {
     walls:[ ...[3,4,5,6,7,8,9,10,11,12,14,15].map(c=>"h:1,"+c), "h:2,13","h:2,14", ...[13,14,15].map(c=>"h:3,"+c), "h:2,7","h:2,8","v:3,6","v:3,8", "v:4,6","v:5,6","v:6,6","v:4,8","v:5,8","v:6,8","h:6,7",
       ...[6,7,8,9,11].map(c=>"h:7,"+c), ...[8,9,10,11,13,14,15].map(r=>"v:"+r+",5"),
       ...[8,9,10,11,12,14,15].map(r=>"v:"+r+",11"), ...[6,8,9,10,11].map(c=>"h:15,"+c),
+      "v:2,2",                                                 // C2 | D2
       "v:8,1","v:9,1",                                        // top-left room: right wall on rows 8-9 (open to C7)
       ...[0,1,2,4,5].map(c=>"h:9,"+c),                       // top wall of both lower rooms (rows 9/10, A-F)
       "v:10,2","v:11,2","v:13,2",                              // B room right wall, doorway C12|D12
       ...[0,1,2,4,5].map(c=>"h:13,"+c),
       "v:17,0","v:18,0","v:19,0","v:17,3","v:18,3","v:19,3","h:16,1","h:16,3" ],   // bottom-left booths: walled, open only at C16→C17                      // bottom of the rooms, opening D13/D14 to the row-14 corridor
     arrows:{"1,1":1,"1,2":1,"2,1":0,"7,0":1,"12,0":1},   // 0 up, 1 right, 2 down, 3 left
-    marks:{"1,1":"radio"}, counts:{"2,2":5},
+    marks:{"1,1":"radio"}, counts:{"2,2":5}, cornerX:["12,6","13,11","15,7"],
     pieces:[ {type:"snake",r:19,c:6},
       {type:"guard",r:1,c:9,facing:1},{type:"guard",r:4,c:6,facing:2},{type:"guard",r:5,c:15,facing:2},{type:"guard",r:9,c:2,facing:1},
       {type:"camera",r:3,c:12,fg:2,fo:3},{type:"camera",r:10,c:2,fg:2,fo:3},{type:"camera",r:2,c:6,fg:1,fo:2},
@@ -782,7 +786,7 @@ function buildPreset(name){
   L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
   (L.walls||[]).forEach(w=>st.walls[w]=1);
   st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{}); st.counts=Object.assign({},L.counts||{});
-  ["zones","shafts","lift","rules","liftNeeds","liftGuard","reinforce","aloneHp","tripwire","bossPath","noActions","crates","special","bossStage","failOn","hostage","noFire","switchboard","s6"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
+  ["cornerX","zones","shafts","lift","rules","liftNeeds","liftGuard","reinforce","aloneHp","tripwire","bossPath","noActions","crates","special","bossStage","failOn","hostage","noFire","switchboard","s6"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
   if(L.defeat) st.defeat=Object.assign({count:0},L.defeat);
   L.pieces.forEach(p=>{ const q=Object.assign({id:st.nextId++},p); initPiece(q,st); st.pieces.push(q); });
   return st;
@@ -847,6 +851,7 @@ function afterReplace(){ if(S.sel && !P(S.sel)) S.sel=null; persist(); refresh()
 function refresh(){ if(S.sim) return; try{ fxSync(); revealSync(); }catch(e){} render(); renderSide(); renderQbar(); renderZonebar(); renderTurnPanel(); try{ renderScreen(); }catch(e){ console.error(e); } if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
 
 // ---------- rules ----------
+function isCorner(r,c){ return S.st.cells[key(r,c)]==="corner"||(S.st.cornerX||[]).includes(key(r,c)); }
 function blocked(r,c){
   const t=S.st.cells[key(r,c)];
   if(t==="obstacle"||t==="void") return true;
@@ -855,7 +860,7 @@ function blocked(r,c){
 }
 function shaftAt(r,c){ const sh=S.st.shafts||{}; return Object.keys(sh).find(k=>r>=sh[k].r&&r<sh[k].r+2&&c>=sh[k].c&&c<sh[k].c+2); }
 function onLift(r,c){ return !!S.st.shafts && !!S.st.lift && shaftAt(r,c)===S.st.lift; }
-function zoneOf(r){ return (S.st.zones||[]).find(z=>r>=z.r0&&r<=z.r1); }
+function zoneOf(r,c){ return (S.st.zones||[]).find(z=>r>=z.r0&&r<=z.r1&&(c==null||z.c0==null||(c>=z.c0&&c<=z.c1))); }
 function wall(t,r,c){ return !!S.st.walls[t+":"+r+","+c]; } // h = bottom edge of (r,c); v = right edge
 function facingOf(p){ return p.type==="camera" ? (S.st.cam==="green" ? p.fg : p.fo) : p.facing; }
 // Rulebook LOS: a guard/camera sees every square in front of it (the rows or columns it faces) as long as
@@ -906,11 +911,12 @@ function fitView(){
 }
 function fitZone(z){
   if(!z){ fitView(); return; } const w=stage.clientWidth, h=stage.clientHeight, pad=12, top=84, bot=60, bw=boardW(), y0=M+z.r0*CS, zh=(z.r1-z.r0+1)*CS;
-  const zz=Math.max(0.2, Math.min((w-pad*2)/bw, (h-top-bot)/zh)); /* zone view */
-  S.view={z:zz, x:(w-bw*zz)/2, y:top+((h-top-bot)-zh*zz)/2-y0*zz}; S.zoneView=z.name; render(); renderZonebar(); }
+  const hasC=z.c0!=null, x0=hasC?M+z.c0*CS:0, zw=hasC?(z.c1-z.c0+1)*CS:bw;
+  const zz=Math.max(0.2, Math.min((w-pad*2)/zw, (h-top-bot)/zh)); /* zone view */
+  S.view={z:zz, x:(w-zw*zz)/2-x0*zz, y:top+((h-top-bot)-zh*zz)/2-y0*zz}; S.zoneView=z.name; render(); renderZonebar(); }
 function renderZonebar(){ const el=document.getElementById("zonebar"); if(!el) return; const zs=S.st.zones||[];
   if(!zs.length){ el.innerHTML=""; return; }
-  const here=n=>S.st.pieces.filter(p=>isPlayer(p)&&zoneOf(p.r)&&zoneOf(p.r).name===n).map(p=>p.label[0]).join("");
+  const here=n=>S.st.pieces.filter(p=>isPlayer(p)&&zoneOf(p.r,p.c)&&zoneOf(p.r,p.c).name===n).map(p=>p.label[0]).join("");
   el.innerHTML=zs.map(z=>`<button data-zone="${esc(z.name)}" class="${S.zoneView===z.name?"on":""}">▣ ${esc(z.name)}${here(z.name)?` · ${here(z.name)}`:""}</button>`).join("")+`<button data-zone="" class="${!S.zoneView?"on":""}">▦ All</button>`;
   el.querySelectorAll("[data-zone]").forEach(b=>b.onclick=()=>{ const z=zs.find(x=>x.name===b.dataset.zone); S.zoneView=z?z.name:null; if(z) fitZone(z); else { fitView(); renderZonebar(); } }); }
 function zoomAt(f, cx, cy){
@@ -948,7 +954,7 @@ function render(){
     if(t==="exit"){ ctx.save(); ctx.beginPath(); ctx.rect(x,y,CS,CS); ctx.clip(); ctx.strokeStyle="#d4b20f"; ctx.lineWidth=5;
       for(let i=-CS;i<CS*2;i+=CS/3){ ctx.beginPath(); ctx.moveTo(x+i,y); ctx.lineTo(x+i+CS,y+CS); ctx.stroke(); } ctx.restore();
       ctx.fillStyle="#000c"; ctx.fillRect(x,y+CS*.3,CS,CS*.4); ctx.fillStyle="#f2d23a"; ctx.font="bold 11px system-ui"; ctx.fillText("EXIT",x+CS/2,y+CS/2); }
-    if(t==="corner"){ ctx.fillStyle="#cfd8d3aa"; ctx.font="20px system-ui"; ctx.fillText("⇄",x+CS/2,y+CS/2+1); }
+    if(t==="corner"||(st.cornerX||[]).includes(k)){ ctx.fillStyle="#cfd8d3aa"; ctx.font="20px system-ui"; ctx.fillText("⇄",x+CS/2,y+CS/2+1); }
     if(t==="stairsv"){ ctx.strokeStyle="#55615b"; ctx.lineWidth=1; for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(x+i*CS/5,y+3); ctx.lineTo(x+i*CS/5,y+CS-3); ctx.stroke(); } }
     if(t==="stairs"){ ctx.strokeStyle="#55615b"; ctx.lineWidth=1; for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(x+3,y+i*CS/5); ctx.lineTo(x+CS-3,y+i*CS/5); ctx.stroke(); } }
     if(t==="barracks"){ const isB=(rr,cc)=>st.cells[key(rr,cc)]==="barracks"; ctx.strokeStyle="#7fd39a99"; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.beginPath();
@@ -995,6 +1001,8 @@ function render(){
   for(const k in (st.arrows||{})){ const [r,c]=k.split(",").map(Number), d=st.arrows[k], cx=c*CS+CS/2, cy=r*CS+CS/2-2, a=[-Math.PI/2,0,Math.PI/2,Math.PI][d];
     ctx.save(); ctx.translate(cx,cy); ctx.rotate(a); ctx.strokeStyle="#e8efe9"; ctx.lineWidth=3.5; ctx.lineCap="round"; ctx.lineJoin="round";
     ctx.beginPath(); ctx.moveTo(-5,-9); ctx.lineTo(5,0); ctx.lineTo(-5,9); ctx.stroke(); ctx.restore(); }
+  for(const k in (st.marks||{})){ if(st.marks[k]!=="start") continue; const [r,c]=k.split(",").map(Number), x=c*CS, y=r*CS;
+    ctx.fillStyle="rgba(208,40,28,0.28)"; ctx.beginPath(); ctx.arc(x+CS/2,y+CS/2,CS*0.36,0,7); ctx.fill(); ctx.fillStyle="#ff8a7a"; ctx.font="bold 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("✱",x+CS/2,y+CS/2); }
   for(const k in (st.marks||{})){ if(st.marks[k]!=="radio") continue; const [r,c]=k.split(",").map(Number), x=c*CS, y=r*CS;
     ctx.fillStyle="#3fbf63"; ctx.fillRect(x+4,y+6,8,12); ctx.fillRect(x+7,y+2,2,5); ctx.fillStyle="#0b0f0e"; ctx.fillRect(x+5.5,y+8,5,3); }
   for(const k in st.walls){ const [t,rc]=k.split(":"), [r,c]=rc.split(",").map(Number); ctx.beginPath();
@@ -1034,7 +1042,7 @@ function wedge(x,y,f,color){ // facing pointer on the square edge
 function drawPiece(p,x,y,spotted,orderNo){
   const T=TYPES[p.type], cx=x+CS/2, cy=y+CS/2;
   ctx.textAlign="center"; ctx.textBaseline="middle";
-  if(p.type==="item"){ drawItem(p,x,y); return; } if(p.type==="hidden"){ drawHidden(p,x,y); return; } if(p.size){ drawTank(p); return; } if(p.boxed){ drawBoxOver(p,x,y); if(S.sel===p.id){ ctx.strokeStyle="#5fd38a"; ctx.lineWidth=2.5; ctx.setLineDash([5,3]); ctx.strokeRect(x+1.5,y+1.5,CS-3,CS-3); ctx.setLineDash([]); } return; }
+  if(p.type==="item"){ drawItem(p,x,y); return; } if(p.type==="hidden"){ drawHidden(p,x,y); return; } if(p.type==="secdoor"){ drawSecDoor(p,x,y); return; } if(p.size){ drawTank(p); return; } if(p.boxed){ drawBoxOver(p,x,y); if(S.sel===p.id){ ctx.strokeStyle="#5fd38a"; ctx.lineWidth=2.5; ctx.setLineDash([5,3]); ctx.strokeRect(x+1.5,y+1.5,CS-3,CS-3); ctx.setLineDash([]); } return; }
   ctx.textAlign="center"; ctx.textBaseline="middle";
   if(p.type==="camera"){
     const f=facingOf(p), col=S.st.cam==="green"?"#3fbf63":"#e07b2a";
@@ -1076,8 +1084,8 @@ function drawPiece(p,x,y,spotted,orderNo){
     if(T.kind==="guard"){ const md=guardModes()[p.id]||"patrol", mc=md==="alert"?"#ff3b2f":"#3d9bff";
       ctx.save(); ctx.shadowColor=mc; ctx.shadowBlur=md==="alert"?10:5; ctx.strokeStyle=mc; ctx.lineWidth=md==="alert"?3.5:2.5; rr(x+5,y+5,CS-10,CS-10,7); ctx.stroke(); ctx.restore();
       if(S.moveBadge&&S.moveBadge.id===p.id){ ctx.fillStyle=mc; rr(x+CS/2-15,y-12,30,15,5); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="bold 10px system-ui"; ctx.fillText(S.moveBadge.text,x+CS/2,y-4.5); }
-      ctx.fillStyle=T.color; rr(x+8,y+8,CS-16,CS-16,5); ctx.fill(); ctx.stroke();
-      ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText(p.label||"G",cx,cy); }
+      ctx.fillStyle=p.vr?"#8e1f1f":T.color; rr(x+8,y+8,CS-16,CS-16,5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText(p.vr?(VR_BOSSES[p.vr]||{}).short||"V":(p.label||"G"),cx,cy); if(p.vr) nameTag(`VR ${p.label} ${Math.max(0,p.hp-(p.dmg||0))}/${p.hp}`,x,y,"#5e130b"); }
     else if(T.kind==="boss"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.moveTo(cx,y+3); ctx.lineTo(x+CS-3,cy); ctx.lineTo(cx,y+CS-3); ctx.lineTo(x+3,cy); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle="#fff"; ctx.font="bold 13px system-ui"; ctx.fillText("B",cx,cy); nameTag(p.label||"Boss",x,y,"#5e130b"); }
     else if(T.kind==="player"){ ctx.fillStyle=T.color; ctx.beginPath(); ctx.arc(cx,cy,13,0,7); ctx.fill(); ctx.stroke();
@@ -1150,7 +1158,8 @@ function endPtr(ev){
     if(p && d.moved && h.ok && (h.r!==p.r||h.c!==p.c)){ const from=sq(p.r,p.c);
       if(isPlayer(p) && S.st.phase==="Player" && S.st.rules!==false && !S.handMode){
         const dist=Math.abs(h.r-p.r)+Math.abs(h.c-p.c);
-        (async()=>{ S.dropMove=true; try{ const msg=await runAction(`${dist===1?"sneak":"dash"} ${p.label} ${sq(h.r,h.c)}`); toast(msg); }catch(e){ toast("✗ "+(e.message||e)); render(); } finally{ S.dropMove=false; } })();
+        const via=dist===2?[0,1,2,3].map(d=>({r:p.r+DR[d],c:p.c+DC[d]})).find(s=>inBounds(s.r,s.c)&&!stepProblem(p,p.r,p.c,s.r,s.c)&&figureAt(s.r,s.c,p.id)&&playerLandings(p,p.r,p.c,s.r,s.c).some(o=>o.r===h.r&&o.c===h.c)):null;
+        (async()=>{ S.dropMove=true; try{ const msg=await runAction(via?`sneak ${p.label} ${sq(via.r,via.c)} ${sq(h.r,h.c)}`:`${dist===1?"sneak":"dash"} ${p.label} ${sq(h.r,h.c)}`); toast(msg); }catch(e){ toast("✗ "+(e.message||e)); render(); } finally{ S.dropMove=false; } })();
       } else {
         commit(st=>{ const q=st.pieces.find(x=>x.id===d.id); q.r=h.r; q.c=h.c; }, `${nameOf(p)} ${from} → ${sq(h.r,h.c)}`);
         if(p.type==="guard"||p.type==="boss") autoSpot(P(p.id));
@@ -1221,11 +1230,15 @@ function flipToken(p){
 // ---------- piece actions (shared by the quick bar and the Piece panel) ----------
 // Stage rule: guards defeated in a counted zone leave no token and add to the objective counter
 function downGuard(st,p,type){ st.pieces=st.pieces.filter(x=>x.id!==p.id);
-  const d=st.defeat, z=(st.zones||[]).find(z=>p.r>=z.r0&&p.r<=z.r1);
+  const d=st.defeat, z=zoneOf(p.r,p.c);
   if(d && z && z.name===d.zone){ d.count=(d.count||0)+1; return ` — counted as defeated (${d.count}/${d.goal})`; }
   st.pieces.push(type==="ko"?{id:st.nextId++,type:"ko",r:p.r,c:p.c,stars:2,from:p.label}:{id:st.nextId++,type:"dead",r:p.r,c:p.c,from:p.label}); return ""; }
 function hurtBase(p, n, ko){
   const T=TYPES[p.type], nm=nameOf(p);
+  if(p.type==="guard"&&p.vr){ const dmg=(p.dmg||0)+Math.max(0,n);
+    if(n>0&&S.st.phase==="Player") S.vrLastHit={id:p.id};
+    if(dmg>=p.hp){ commit(st=>{ st.pieces.find(x=>x.id===p.id).dmg=dmg; }, `${nm} takes ${n} damage${ko?" (KO counts as normal damage)":""} — ${dmg}/${p.hp}`); if(p.vr==="liquid") vrFoxdie(P(p.id),n); else vrDefeat(P(p.id)); return; }
+    commit(st=>{ st.pieces.find(x=>x.id===p.id).dmg=dmg; }, `${nm} takes ${n} damage${ko?" (KO counts as normal damage)":""} — ${dmg}/${p.hp}`); return; }
   if(p.type==="guard"){
     const dmg=ko?(p.dmg||0):Math.max(0,(p.dmg||0)+n), kod=ko?Math.max(0,(p.kod||0)+n):(p.kod||0), hp=p.hp||2;
     if(dmg>=hp){ let x_=""; commit(st=>{ x_=downGuard(st,p,"dead"); S.sel=null; }, `${nm} takes ${n} damage and is killed at ${sq(p.r,p.c)}`); addLog(x_?`${nm}${x_}`:`${nm} → dead guard token`); return; }
@@ -1397,6 +1410,8 @@ function renderQbar(){
       ...(has("disguise")&&!p.disguised&&body?[act("Disguise",`disguise ${p.label}`)]:[]),
       ...(has("hack")&&S.st.pieces.some(x=>x.type==="terminal"&&Math.abs(x.r-p.r)+Math.abs(x.c-p.c)<=1)?[act("Hack",`hack ${p.label}`)]:[]),
       ...(eqAct("ration")&&p.dmg?[act("Rations",`ration ${p.label}`)]:[]),
+      ...(p.type==="otacon"&&S.st.sys&&hackedTermFor(p)?[act("System Search",`search ${p.label}`),...(S.st.sys.hand.length?[act("Access Systems",`access ${p.label}`)]:[])]:[]),
+      ...(S.st.pieces.some(x=>x.type==="secdoor")&&secAt(p)?[act("⇆ Security door",`interact ${p.label}`)]:[]),
       ...(S.st.shafts&&(onLift(p.r,p.c)||Object.keys(S.st.shafts).some(k=>k!==S.st.lift&&[0,1].some(dr=>[0,1].some(dc=>{ const sh=S.st.shafts[k]; return Math.abs(sh.r+dr-p.r)+Math.abs(sh.c+dc-p.c)===1; }))))?[act(onLift(p.r,p.c)?"Ride elevator":"Call elevator",`elevator ${p.label}`)]:[]),
       ...shootActs(p,act), ...equipActs(p,act),
       {label:`★ Focus & abilities`,run:()=>focusPanel(p)}, ...(has("knock")?[act("Knock",`knock ${p.label}`)]:[]), act("✓ End turn",`end ${p.label}`), ...acts.filter(a=>!/dmg|token|Seen|attention|Rations|Disguise/i.test(a.label))];
@@ -1864,7 +1879,10 @@ function boardText(who, quick){
       const vs=S.st.pieces.filter(isViewer).filter(v=>los(v,me.r,me.c)&&!me.disguised);
       L.push(vs.length?`DANGER: you are in sight of ${vs.map(v=>v.type==="camera"?"camera "+sq(v.r,v.c):nameOf(v)).join(", ")} right now.`:"You are not in any guard's or camera's sight right now.");
       L.push(""); } }
-  if(st.zones) L.push("ZONES: "+st.zones.map(z=>`${z.name} = rows ${z.r0+(st.rowStart??1)}–${z.r1+(st.rowStart??1)}`).join(" · ")+(st.shafts?` · ELEVATOR is at the ${st.lift} shaft (${Object.entries(st.shafts).map(([k,v])=>`${k} shaft ${sq(v.r,v.c)}–${sq(v.r+1,v.c+1)}`).join(", ")}; an empty shaft can't be entered)`:""));
+  if(st.vrMission){ L.push(`VR MISSION: objectives collected ${st.vrObj||0}/${st.vrNeed} — then any player on the Exit wins. Face-down tokens: ${st.pieces.filter(x=>x.type==="hidden"&&!x.up&&x.deck!=="hazard").map(x=>"objective "+sq(x.r,x.c)).join(", ")||"none"}; traps ${st.pieces.filter(x=>x.type==="hidden"&&!x.up&&x.deck==="hazard").map(x=>sq(x.r,x.c)).join(", ")||"none"} (they flip when a player enters their LOS). Security doors: ${st.pieces.filter(x=>x.type==="secdoor").map(x=>x.color+" "+sq(x.r,x.c)).join(", ")||"none"} (interact on one → come out at its partner).`);
+    const vb=vrBoss(); if(vb) L.push(`VR BOSS ${vb.label} at ${sq(vb.r,vb.c)} · ${Math.max(0,vb.hp-(vb.dmg||0))}/${vb.hp} health · Defense ${vb.def}${vb.skulls?" · skulls "+vb.skulls:""} · abilities: ${VR_BOSSES[vb.vr].abil.map(a=>a[0]).join(", ")}`);
+    if(st.sys) L.push(`OTACON SYSTEM CARDS: ${st.sys.hand.map(h=>SYS(h.id).n+" ["+SYS(h.id).slots.map((s,i)=>h.dice[i]!=null?h.dice[i]:"_"+s).join(" ")+"]").join(" · ")||"none"} · deck ${st.sys.draw.length}`); }
+  if(st.zones) L.push("ZONES: "+st.zones.map(z=>`${z.name} = rows ${z.r0+(st.rowStart??1)}–${z.r1+(st.rowStart??1)}${z.c0!=null?`, columns ${colName(z.c0)}–${colName(z.c1)}`:""}`).join(" · ")+(st.shafts?` · ELEVATOR is at the ${st.lift} shaft (${Object.entries(st.shafts).map(([k,v])=>`${k} shaft ${sq(v.r,v.c)}–${sq(v.r+1,v.c+1)}`).join(", ")}; an empty shaft can't be entered)`:""));
   if(st.shafts&&!st.zones) L.push(`ELEVATOR: ${st.lift?"down at the shaft "+Object.values(st.shafts).map(v=>sq(v.r,v.c)+"–"+sq(v.r+1,v.c+1)).join(""):"not here yet — the shaft "+Object.values(st.shafts).map(v=>sq(v.r,v.c)+"–"+sq(v.r+1,v.c+1)).join("")+" can't be entered"}${st.liftNeeds&&!liftReady()?` (call it with Interact next to the shaft once Event ${st.liftNeeds} is collected)`:""}`);
   if(st.defeat) L.push(`OBJECTIVE COUNTER: ${st.defeat.count||0}/${st.defeat.goal} guards defeated in the ${st.defeat.zone}`);
   { const sk=(st.run&&st.run.key)||st.stageKey, O=sk&&OBJ[sk];
@@ -1993,12 +2011,21 @@ function execCmd(line){
 const ACT={sneak:1,dash:1,hth:1,combo:2,takedown:2,knock:1,interact:1,drag:1,shoot:1,ration:1,slash:1,stealth:1,recharge:2,hack:1,search:1,access:1,disguise:2};
 const ACT_NAME={hth:"Hand-to-Hand",combo:"Combo Attack",takedown:"Silent Takedown",disguise:"Gain Disguise",hack:"Hack Terminal",search:"System Search",access:"Access Systems",slash:"Slash",stealth:"Activate Stealth",recharge:"Recharge"};
 const isPlayer=p=>p&&TYPES[p.type].kind==="player";
-const blocksFig=p=>{ const k=TYPES[p.type].kind; return k!=="token"; };
+const blocksFig=p=>{ const k=TYPES[p.type].kind; return k!=="token"&&k!=="camera"; };
 function tt(p){ S.st.tt=S.st.tt||{}; return S.st.tt[p.id]||(S.st.tt[p.id]={used:0,noisy:0,bonus:0,done:false,hurt:[]}); }
 function actionsLeft(p){ const t=tt(p); return 4+(t.bonus||0)-(t.used||0); }
 function wallBetween(r,c,r2,c2){ if(r2===r-1) return wall("h",r2,c); if(r2===r+1) return wall("h",r,c); if(c2===c-1) return wall("v",r,c2); if(c2===c+1) return wall("v",r,c); return true; }
 function figureAt_old(r,c,except){ return S.st.pieces.find(p=>p.r===r&&p.c===c&&p.id!==except&&blocksFig(p)); }
 // a player moving into an occupied square jumps the line of figures (1 space); returns {r,c,over:[figures]} or a reason
+function playerLandings(p,r,c,r2,c2){ const d0=[0,1,2,3].find(d=>r+DR[d]===r2&&c+DC[d]===c2); const first=figureAt(r2,c2,p.id); if(!first||first.size) return [];
+  const par=new Map([[key(r2,c2),null]]), fig=new Map([[key(r2,c2),first]]), q=[{r:r2,c:c2}], out=[];
+  while(q.length){ const s=q.shift();
+    for(let e=0;e<4;e++){ const r3=s.r+DR[e], c3=s.c+DC[e], k3=key(r3,c3); if((r3===r&&c3===c)||!inBounds(r3,c3)||par.has(k3)) continue;
+      if(wallBetween(s.r,s.c,r3,c3)||blocked(r3,c3)||inTrip(r3,c3)) continue; const f=figureAt(r3,c3,p.id); par.set(k3,key(s.r,s.c));
+      if(f){ if(!f.size){ fig.set(k3,f); q.push({r:r3,c:c3}); } continue; }
+      const over=[]; let k=key(s.r,s.c); while(k){ over.unshift(fig.get(k)); k=par.get(k); }
+      out.push({r:r3,c:c3,over,straight:e===d0&&(s.r-r)*DC[d0]===0&&(s.c-c)*DR[d0]===0}); } }
+  return out.sort((a,b)=>(b.straight-a.straight)||a.over.length-b.over.length); }
 function playerLeap(p,r,c,r2,c2){ const dr=r2-r, dc=c2-c, over=[]; let rr=r2, cc=c2, pr=r, pc=c;
   while(true){ if(rr<0||cc<0||rr>=S.st.rows||cc>=S.st.cols) return "no space to land after the leapfrog";
     if(wallBetween(pr,pc,rr,cc)) return `a wall between ${sq(pr,pc)} and ${sq(rr,cc)}`; if(blocked(rr,cc)) return `${sq(rr,cc)} is an obstacle or no-go square`;
@@ -2018,7 +2045,8 @@ function statusInfo(){
   return {level: al.length?"alert":q.length?"caution":"clear", al, q};
 }
 const sleep=ms=>new Promise(r=>setTimeout(r,S.sim?0:ms));
-function useAction(p,kind,extra){ const t=tt(p), cost=ACT[kind]||1;
+function actCost(p,kind){ const t=tt(p); return (ACT[kind]||1)+(t.markDeath&&(kind==="sneak"||kind==="dash")?1:0); }
+function useAction(p,kind,extra){ const t=tt(p), cost=actCost(p,kind);
   if(S.st.failed) return "the stage has failed — restart or undo from the Turn panel";
   if(!isMine(p)) return `${nameOf(p)} is played by ${seatLabel(p)}`;
   if(S.st.phase!=="Player") return "it's the guards' phase — players act in the players' phase";
@@ -2028,21 +2056,28 @@ function useAction(p,kind,extra){ const t=tt(p), cost=ACT[kind]||1;
   if(t.done) return `${nameOf(p)} already ended this turn`;
   if(actionsLeft(p)<cost) return `${nameOf(p)} has ${actionsLeft(p)} action${actionsLeft(p)===1?"":"s"} left and ${kind} costs ${cost}`;
   return null; }
-function spend(p,kind,noisy){ if(!flow().active) startTurn(p); commit(st=>{ const t=st.tt[p.id]; t.used+=ACT[kind]||1; if(noisy) t.noisy++; }); }
+function spend(p,kind,noisy){ if(!flow().active) startTurn(p); const cost=actCost(p,kind); commit(st=>{ const t=st.tt[p.id]; t.used+=cost; if(noisy) t.noisy++; }); }
 // one move action (sneak = 1 square, dash = 1–2 squares); path = list of {r,c}
 async function doMove(p,kind,path){
   const err=useAction(p,kind); if(err) throw err;
   if(!path.length) throw "no squares given";
-  if(kind==="sneak"&&path.length!==1) throw "Sneak moves exactly 1 square (use dash for 2)";
   const dashMax=2+((tt(p).dashBonus)||0);
-  if(kind==="dash"&&path.length>dashMax) throw `Dash moves at most ${dashMax} squares — use another action for more`;
+  if(kind==="sneak"&&path.length>2) throw "Sneak moves exactly 1 square (use dash for 2)";
   let r=p.r,c=p.c; const leapt=[]; path=path.map(s=>({...s}));
-  for(const s of path){ const why=stepProblem(p,r,c,s.r,s.c); if(why) throw `can't ${kind} to ${sq(s.r,s.c)}: ${why}`;
-    if(figureAt(s.r,s.c,p.id)){ const L=playerLeap(p,r,c,s.r,s.c); if(typeof L==="string") throw `can't leapfrog at ${sq(s.r,s.c)}: ${L}`; s.r=L.r; s.c=L.c; s.leap=L.over; leapt.push(...L.over); }
-    r=s.r; c=s.c; }
+  { const out=[]; for(let i=0;i<path.length;i++){ const s=path[i], why=stepProblem(p,r,c,s.r,s.c); if(why) throw `can't ${kind} to ${sq(s.r,s.c)}: ${why}`;
+      if(figureAt(s.r,s.c,p.id)){ const opts=playerLandings(p,r,c,s.r,s.c); if(!opts.length){ const L=playerLeap(p,r,c,s.r,s.c); throw `can't leapfrog at ${sq(s.r,s.c)}: ${typeof L==="string"?L:"no empty space to land on"}`; }
+        const nx=path[i+1]; let L=nx&&opts.find(o=>o.r===nx.r&&o.c===nx.c); if(L) i++;
+        else if(opts.length===1||opts[0].straight) L=opts[0];
+        else { const pick=await pickSquare(`Leapfrog: where does ${nameOf(p)} land?`,(rr,cc)=>opts.some(o=>o.r===rr&&o.c===cc)); if(!pick) throw "cancelled"; L=opts.find(o=>o.r===pick.r&&o.c===pick.c); }
+        out.push({r:L.r,c:L.c,leap:L.over}); leapt.push(...L.over); }
+      else out.push(s);
+      r=out[out.length-1].r; c=out[out.length-1].c; }
+    path=out; }
+  if(kind==="sneak"&&path.length!==1) throw "Sneak moves exactly 1 square (use dash for 2)";
+  if(kind==="dash"&&path.length>dashMax) throw `Dash moves at most ${dashMax} squares — use another action for more`;
   if(p.boxed){ const vis=[{r:p.r,c:p.c},...path].some(s=>S.st.pieces.filter(isViewer).some(v=>los(v,s.r,s.c))), lf=leapt.some(f=>f.type==="guard"||f.type==="boss");
     if(vis||lf){ upd(p,q=>{ delete q.boxed; },`${nameOf(p)} drops the box — ${lf?"leapfrogged a guard":"moved into sight"}`); p=P(p.id); } }
-  await trapCheck(p,path);
+  vrNoteSight(p); await trapCheck(p,path);
   { const t=tt(p); if(t.lockProg) commit(st=>{ delete st.tt[p.id].lockProg; }, `${nameOf(p)} moves away from the lock — progress lost`); }
   // seen at the start or anywhere along the way?
   const seenBy=new Set(); [{r:p.r,c:p.c},...path].forEach(s=>viewersSeeing(s.r,s.c,p).forEach(v=>seenBy.add(v)));
@@ -2054,6 +2089,7 @@ async function doMove(p,kind,path){
     if(ev){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==ev.id); const q=st.pieces.find(x=>x.id===p.id); (q.carry=q.carry||[]).push(ev.label||"?"); }, `${nameOf(p)} collects Event ${ev.label} at ${sq(s.r,s.c)} — resolve it in the campaign book`); toast(`${nameOf(p)} collected ${ev.label} — check the campaign book`);
       if(S.st.liftNeeds&&ev.label===S.st.liftNeeds&&!S.st.lift&&S.st.shafts){ const k=Object.keys(S.st.shafts)[0]; placeLift(k,`Event ${ev.label} collected — the elevator comes down to the ${k} shaft`); toast("The elevator is coming down — with a guard on it"); } }
     if(ev) await stageEvent(P(p.id),ev.label||"");
+    vrCollect(P(p.id),s.r,s.c);
     await mineCheck(s.r,s.c,P(p.id)); if(!P(p.id)) break;
     if(await shock(P(p.id))) break;
     if(S.st.switchboard&&S.st.cells[key(s.r,s.c)]==="exit") setTimeout(()=>checkWin(P(p.id)),0);
@@ -2066,10 +2102,10 @@ async function doMove(p,kind,path){
     else for(const g of foes){ const r_=await rollPrompt({target:me,kind:"enemy",w:0,b:g.type==="boss"&&g.atk?g.atk:2,vs:defOf(me),why:`${nameOf(g)} attacks ${nameOf(me)} for leapfrogging him`});
       if(r_){ commit(()=>{}, `${nameOf(g)} ATTACKS ${nameOf(me)} (leapfrogged) → ${r_.hits} hit${r_.hits===1?"":"s"}`); if(r_.hits) hurt(P(me.id),r_.hits); } } refresh(); }
   if(S.trapHit){ S.trapHit=false; playerToken(me,"alert"); addLog(`${nameOf(me)} set off a laser sensor → !`); }
-  if(seenBy.size&&!await decide("👁 Spotted!",`${esc(nameOf(me))} is seen by ${[...seenBy].map(v=>v.type==="camera"?`camera ${sq(v.r,v.c)}`:esc(nameOf(v))).join(", ")} — their ! goes under them.`)) seenBy.clear();
   if(seenBy.size){ playerToken(me,"alert"); const names=[...seenBy].map(v=>v.type==="camera"?`camera ${sq(v.r,v.c)}`:nameOf(v)).join(", ");
     addLog(`${nameOf(me)} SEEN by ${names} → ! at ${sq(me.r,me.c)}`); toast(`Spotted by ${names}!`); refresh(); }
   if(me&&me.type==="meryl"&&P(me.id)&&P(me.id).disguised) await femaleGuard(me);
+  if(P(p.id)){ await vrAfterMove(P(p.id),path); await sysDisconnect(P(p.id)); if(S.st.vrMission&&S.st.cells[key(P(p.id).r,P(p.id).c)]==="exit") setTimeout(()=>checkWin(P(p.id)),0); }
   return `${kind} ${from} → ${path.map(s=>sq(s.r,s.c)).join(" → ")}${seenBy.size?" · SEEN → !":""} · ${actionsLeft(me)} action(s) left`;
 }
 function adjacentGuard(p,g){ return g && (g.type==="guard"||g.type==="boss") && Math.abs(g.r-p.r)+Math.abs(g.c-p.c)===1 && !wallBetween(p.r,p.c,g.r,g.c); }
@@ -2078,6 +2114,7 @@ async function doAttack(p,kind,g,note){
   if(!adjacentGuard(p,g)) throw `${g?nameOf(g):"that target"} isn't next to ${nameOf(p)} (or a wall is between them)`;
   if(kind==="takedown"){
     if(!charOf(p).actions.includes("takedown")) throw "only Snake can Silent Takedown";
+    if(g&&g.vr) throw "VR bosses can't be taken down silently";
     if(g.type!=="guard") throw "Silent Takedown only works on guards";
     const behind={r:g.r-DR[g.facing],c:g.c-DC[g.facing]};
     if(p.r!==behind.r||p.c!==behind.c) throw `Snake must be directly behind ${nameOf(g)} (at ${sq(behind.r,behind.c)})`;
@@ -2088,7 +2125,7 @@ async function doAttack(p,kind,g,note){
   if(!r) throw "attack cancelled";
   spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${kind==="combo"?"COMBO":"HAND-TO-HAND"} ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`);
   S.lastRoll=r;
-  applyHits(p,g,r,g.type==="guard");
+  applyHits(p,g,r,g.type==="guard"); await vrAfterAttacked(p,g,r);
   if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention`); refresh(); }
   return `${kind}: ${r.hits} hit(s)${P(g.id)?` — ${nameOf(g)} still standing`:` — ${nameOf(g)} is down`}`;
 }
@@ -2122,7 +2159,7 @@ async function doShoot_old(p,g,note,wname,extra){
   const r=await rollPrompt({by:p,tgt:g,kind:"weapon",w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name} (LOUD)`,note}); if(!r) throw "shot cancelled";
   spend(p,"shoot",false);
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id), qe=q.equip[ei]; if(E.charges!=null) qe.ch=Math.max(0,(qe.ch||0)-(E.boost?boost:1)); }, `${nameOf(p)} SHOOT ${nameOf(g)} with ${E.name}${boost?` (+${boost} charge)`:""} → ${r.hits} hit${r.hits===1?"":"s"} (LOUD)`); S.lastRoll=r;
-  applyHits(p,g,r,false);
+  applyHits(p,g,r,false); await vrAfterAttacked(p,g,r);
   playerToken(P(p.id),"q"); addLog(`${nameOf(p)}'s shot is LOUD → attention token under ${nameOf(p)} at ${sq(p.r,p.c)} (? side if it wasn't on the map; a ! stays a !)`);
   if(r.bang) addLog(`The white "!" also draws attention here — the token is already under ${nameOf(p)}, so nothing more happens`); refresh();
   return `shoot: ${r.hits} hit(s), attention token placed (loud)`;
@@ -2135,7 +2172,7 @@ async function doSlash(p,note,extra){
   if(!tg.length) throw "no adjacent figures to slash";
   spend(p,"slash",false); if(boost) commit(st=>{ st.pieces.find(x=>x.id===p.id).equip[ei].ch--; });
   const out=[]; for(const g of tg){ const r=await rollPrompt({by:p,tgt:g,kind:"weapon",w:1+boost,b:0,vs:defOf(g),why:`${nameOf(p)} SLASH ${nameOf(g)}`,note}); if(!r) break;
-    commit(()=>{}, `${nameOf(p)} SLASH ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`); S.lastRoll=r; applyHits(p,g,r,false); out.push(`${nameOf(g)} ${r.hits}`);
+    commit(()=>{}, `${nameOf(p)} SLASH ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`); S.lastRoll=r; applyHits(p,g,r,false); await vrAfterAttacked(p,g,r); out.push(`${nameOf(g)} ${r.hits}`);
     if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention`); } }
   refresh(); return "slash: "+out.join(", ");
 }
@@ -2145,6 +2182,7 @@ async function doEquipActBase(p,kind,arg){
     spend(p,kind,false); upd(p,q=>{ q.equip[ei].ch--; q.stealth=true; },`${nameOf(p)} ACTIVATES STEALTH — no ! from line of sight until the end of the turn`); return "stealth on"; }
   if(kind==="recharge"){ const ei=findEquip(p,E=>E.recharge); if(ei<0) throw "needs ADV Stealth Camouflage"; if((p.equip[ei].ch||0)>0) throw "Recharge only works when the card has no charge";
     spend(p,kind,false); upd(p,q=>{ q.equip[ei].ch=1; },`${nameOf(p)} RECHARGES the ADV Stealth Camouflage`); return "recharged 1"; }
+  if((kind==="search"||kind==="access")&&S.st.sys) return kind==="search"?await sysSearch(p):await sysAccess(p);
   if(kind==="hack"||kind==="access"||kind==="search"){
     if(kind!=="search"){ const r=await rollPrompt({by:p,kind,w:0,b:kind==="hack"?4:1,vs:null,why:`${nameOf(p)} ${ACT_NAME[kind]}${arg?" — "+arg:""}`,note:p.type==="otacon"&&kind!=="search"?"Hacker: Otacon may roll up to +2 black — roll them from the Dice tab if you want them":""}); if(!r) throw "cancelled"; S.lastRoll=r; }
     spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${ACT_NAME[kind].toUpperCase()}${arg?" "+arg:""} at ${sq(p.r,p.c)}`);
@@ -2211,7 +2249,7 @@ async function doDrag(p,bodySq,toSq,dropSq){
   if(seen&&await decide("👁 Spotted!",`${esc(nameOf(me))} is seen while dragging the body — their ! goes under them.`)){ playerToken(P(me.id),"alert"); addLog(`${nameOf(me)} SEEN while dragging → !`); refresh(); }
   return `drag — moved to ${sq(me.r,me.c)}, body at ${sq(drop.r,drop.c)} (noisy)`;
 }
-function doFocus(p,what,mode){ if(S.st.noFocus) throw "no Focus tokens in this stage";
+async function doFocus(p,what,mode){ if(S.st.noFocus) throw "no Focus tokens in this stage";
   const T=TYPES[p.type]; const i=T.focus.findIndex(n=>n.toLowerCase().replace(/\s/g,"").startsWith(what.toLowerCase().replace(/\s/g,"")));
   if(i<0) throw `${nameOf(p)} has no focus token "${what}" (has: ${T.focus.join(", ")})`;
   if(mode==="refresh"){ const cost=fcostOf(p,i); const err=useAction(p,"focus"); if(err) throw err;
@@ -2220,15 +2258,23 @@ function doFocus(p,what,mode){ if(S.st.noFocus) throw "no Focus tokens in this s
     commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.focus[i]=true; st.tt[p.id].used+=cost; }, `${nameOf(p)} FOCUS refreshes ${T.focus[i]} (${cost} action)`); return `refreshed ${T.focus[i]}`; }
   if(!p.focus[i]) throw `${T.focus[i]} is already spent`;
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.focus[i]=false; if(/\+1 action/i.test(T.focus[i])) st.tt[p.id].bonus=(st.tt[p.id].bonus||0)+1; if(/dash \+2/i.test(T.focus[i])) st.tt[p.id].dashBonus=2; }, `${nameOf(p)} spends focus: ${T.focus[i]}`);
-  if(/move 1/i.test(T.focus[i])) return `spent ${T.focus[i]} — next move: "focusmove ${nameOf(p)} <square>"`;
+  if(/move 1/i.test(T.focus[i])){ if(!S.scriptRunning&&!S.aiRunning){ closeAll(); const s=await pickSquare(`${nameOf(p)}: move 1 space (Focus)`,(rr,cc)=>!stepProblem(p,p.r,p.c,rr,cc)&&!figureAt(rr,cc,p.id)); if(s) return await focusMove(P(p.id),sq(s.r,s.c));
+      return `spent ${T.focus[i]} — move with "focusmove ${nameOf(p)} <square>"`; } return `spent ${T.focus[i]} — next move: "focusmove ${nameOf(p)} <square>"`; }
   return `spent ${T.focus[i]}`;
 }
 async function focusMove(p,to){ const s=parseSq(to); if(!s) throw "bad square"; const why=stepProblem(p,p.r,p.c,s.r,s.c); if(why) throw why;
   const seen=[{r:p.r,c:p.c},s].some(x=>viewersSeeing(x.r,x.c,p).length); const from=sq(p.r,p.c);
-  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=s.r; q.c=s.c; }, `${nameOf(p)} ${from} FOCUS-MOVE ${to}`);
-  if(seen){ playerToken(P(p.id),"alert"); addLog(`${nameOf(p)} SEEN → !`); refresh(); } return "focus move"; }
+  vrNoteSight(p); await trapCheck(p,[s]);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=s.r; q.c=s.c; }, `${nameOf(p)} ${from} FOCUS-MOVE ${sq(s.r,s.c)}`);
+  { const ev=S.st.pieces.find(x=>x.type==="event"&&x.r===s.r&&x.c===s.c); if(ev){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==ev.id); const q=st.pieces.find(x=>x.id===p.id); (q.carry=q.carry||[]).push(ev.label||"?"); }, `${nameOf(p)} collects Event ${ev.label} at ${sq(s.r,s.c)}`); await stageEvent(P(p.id),ev.label||""); } }
+  vrCollect(P(p.id),s.r,s.c); await mineCheck(s.r,s.c,P(p.id));
+  if(S.trapHit){ S.trapHit=false; seen||(playerToken(P(p.id),"alert"), addLog(`${nameOf(p)} set off a laser sensor → !`)); }
+  if(seen){ playerToken(P(p.id),"alert"); addLog(`${nameOf(p)} SEEN → !`); refresh(); }
+  if(P(p.id)){ await vrAfterMove(P(p.id),[s]); await sysDisconnect(P(p.id)); if(S.st.cells[key(s.r,s.c)]==="exit") setTimeout(()=>checkWin(P(p.id)),0); }
+  return "focus move"; }
 async function endTurn(p,opts){
   const t=tt(p); if(t.done) throw `${nameOf(p)} already ended this turn`;
+  if(t.lockProg){ commit(st=>{ delete st.tt[p.id].lockProg; }, `${nameOf(p)}'s turn ends — the unfinished lock combo resets`); }
   const out=[];
   const guardInZone=S.st.pieces.some(g=>g.type==="guard"&&sameZone(g,P(p.id)));
   if(t.noisy&&!guardInZone){ addLog(`${nameOf(p)} noise check skipped — no guard in this zone`); out.push("no guard in zone — no noise check"); }
@@ -2293,7 +2339,7 @@ async function runAction_(line,note){
   throw `unknown action "${cmd}"`;
 }
 // Disguised Meryl loses the disguise when she does anything but Sneak/Dash/Focus in a guard's or camera's LOS
-async function afterAct(p,kind,msg){ let q=P(p.id);
+async function afterAct(p,kind,msg){ let q=P(p.id); if(q&&kind!=="end") await vrAfterAction(q,kind); q=P(p.id);
   if(q&&q.boxed&&!["sneak","dash","focus","focusmove","hide","medicine","pentazemin"].includes(kind)){ upd(q,x=>{ delete x.boxed; },`${nameOf(q)} leaves the box to ${ACT_NAME[kind]||kind}`); q=P(p.id); msg+=" · out of the box"; }
   if(q&&q.disguised&&!["sneak","dash","focus","focusmove"].includes(kind)){ const vs=S.st.pieces.filter(isViewer).filter(v=>los(v,q.r,q.c));
     if(vs.length){ upd(q,x=>{ x.disguised=false; },`Meryl's disguise is blown — ${ACT_NAME[kind]||kind} in LOS of ${vs.map(v=>v.type==="camera"?"camera "+sq(v.r,v.c):nameOf(v)).join(", ")}`); msg+=" · disguise lost"; } }
@@ -2302,10 +2348,10 @@ const ACTION_CMDS=/^(toss|plant|detonate|launch|hide|usekey|telepathy|scout|scan
 
 // ---------- enemy phase automation (guard AI following the rulebook's Enemy Phase) ----------
 const EN={ busy:false, stop:false, last:null };
-const inZone=(z,r)=>!z||(r>=z.r0&&r<=z.r1);
+const inZone=(z,r,c)=>!z||(r>=z.r0&&r<=z.r1&&(c==null||z.c0==null||(c>=z.c0&&c<=z.c1)));
 function zonesAll(){ return S.st.zones&&S.st.zones.length?S.st.zones:[null]; }
-function zoneActive(z){ return S.st.pieces.some(p=>(isPlayer(p)||p.type==="attn")&&inZone(z,p.r)); }
-function zoneOfPiece(p){ return zonesAll().find(z=>inZone(z,p.r)); }
+function zoneActive(z){ return S.st.pieces.some(p=>(isPlayer(p)||p.type==="attn")&&inZone(z,p.r,p.c)); }
+function zoneOfPiece(p){ return zonesAll().find(z=>inZone(z,p.r,p.c)); }
 const sameZone=(a,b)=>zoneOfPiece(a)===zoneOfPiece(b);
 const inBounds=(r,c)=>r>=0&&c>=0&&r<S.st.rows&&c<S.st.cols;
 // all legal landing squares when a guard at (r,c) moves in direction d into one or more guards:
@@ -2339,7 +2385,7 @@ function guardStep(g,r,c,d,{ignore,arrow}={}){
   return side.find(x=>x.d===(arrow==="L"?left:right))||side[0];
 }
 function guardModes(){ const st=S.st; if(S._gm&&S._gm.ver===st.ver) return S._gm.m; const m={};
-  try{ for(const g of st.pieces.filter(p=>p.type==="guard")){ const z=zoneOfPiece(g), zp=st.pieces.filter(p=>inZone(z,p.r));
+  try{ for(const g of st.pieces.filter(p=>p.type==="guard")){ const z=zoneOfPiece(g), zp=st.pieces.filter(p=>inZone(z,p.r,p.c));
       if(zp.some(p=>p.type==="attn"&&p.mode==="alert")){ m[g.id]="alert"; continue; }
       const qs=zp.filter(p=>p.type==="attn"&&p.mode!=="alert"), guards=zp.filter(p=>p.type==="guard"), L=(a,t)=>{ const pth=guardPath(a,t.r,t.c); return pth?pth.length:Infinity; };
       if(qs.some(t=>{ const d=L(g,t); return d<Infinity&&guards.every(o=>o.id===g.id||L(o,t)>=d); })){ m[g.id]="investigate"; continue; }
@@ -2366,7 +2412,7 @@ function guardPath(g,tr,tc){
 const tokenAt=(r,c)=>S.st.pieces.filter(p=>p.r===r&&p.c===c&&(p.type==="attn"||p.type==="ko"||p.type==="dead"));
 function playersSeenBy(g){ return S.st.pieces.filter(p=>isPlayer(p)&&!p.disguised&&!p.stealth&&!p.boxed&&los(g,p.r,p.c)); }
 function guardFace(g,d,why){ if(g.facing===d) return; commit(st=>{ st.pieces.find(x=>x.id===g.id).facing=d; }, `${nameOf(g)} faces ${DIRN[d]}${why?" ("+why+")":""}`); }
-function guardMoveTo(g,s,mode,step){ const from=sq(g.r,g.c); if(step){ S.moveBadge={id:g.id,text:step}; } if(s.leap) toast(`${nameOf(g)} leapfrogs — 2 squares, counts as 1 space`); commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=s.r; q.c=s.c; q.facing=s.d; }, `${nameOf(g)} ${from} ${mode}${s.leap?" (leapfrog)":""} ${sq(s.r,s.c)}${step?` · step ${step}`:""}${s.leap?" — jumped a guard: 2 squares, counts as 1 space":""}`); }
+function guardMoveTo(g,s,mode,step){ const from=sq(g.r,g.c); if(EN.moved) EN.moved[g.id]=(EN.moved[g.id]||0)+1; if(step){ S.moveBadge={id:g.id,text:step}; } if(s.leap) toast(`${nameOf(g)} leapfrogs — 2 squares, counts as 1 space`); commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=s.r; q.c=s.c; q.facing=s.d; }, `${nameOf(g)} ${from} ${mode}${s.leap?" (leapfrog)":""} ${sq(s.r,s.c)}${step?` · step ${step}`:""}${s.leap?" — jumped a guard: 2 squares, counts as 1 space":""}`); }
 function enemyAsk(title,text,buttons){ modalOn(); return new Promise(res0=>{ const res=v=>{ modalOff(); res0(v); }; const box=document.getElementById("rollbox");
   box.innerHTML=`<div class="rb-title">${esc(title)}</div><div style="margin:6px 0 10px">${text}</div><div class="row">${buttons.map((b,i)=>`<button class="${i===0?"on":"sm"}" data-ea="${i}" style="${i===0?"flex:1":""}">${esc(b)}</button>`).join("")}</div>`;
   box.style.display="block"; box.querySelectorAll("[data-ea]").forEach(b=>b.onclick=()=>{ box.style.display="none"; res(+b.dataset.ea); }); }); }
@@ -2414,6 +2460,7 @@ async function guardReaction_old(g){
 async function guardAttack(g){
   const seen=playersSeenBy(g); if(!seen.length) return false;
   seen.forEach(pl=>{ const t=S.st.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===(pl.label||"").toLowerCase()); if(!(t&&t.mode==="alert"&&t.r===pl.r&&t.c===pl.c)) playerToken(pl,"alert"); });
+  if(isVrBoss(g)) return await vrBossAttack(g,seen);
   const dist=pl=>{ const p=guardPath(g,pl.r,pl.c); return p?p.length:99; }; const tgt=seen.sort((a,b)=>dist(a)-dist(b))[0];
   const nb=g.type==="boss"&&g.atk?g.atk:2;
   addLog(`${nameOf(g)} sees ${seen.map(nameOf).join(", ")} → ! and attacks ${nameOf(tgt)}`); refresh();
@@ -2425,12 +2472,17 @@ async function guardAttack(g){
 function newPathFacing(g,arrow){ const L=(g.facing+3)%4, Rr=(g.facing+1)%4, ok=d=>!!guardStep(g,g.r,g.c,d);
   if(ok(L)&&ok(Rr)) return arrow==="L"?L:Rr; if(ok(L)) return L; if(ok(Rr)) return Rr;
   for(let i=1;i<4;i++){ const d=(g.facing+(arrow==="L"?-i:i)+8)%4; if(ok(d)) return d; } return null; }
-async function activateGuard(gid,card){
+async function activateGuard(gid,card){ const g0=P(gid); if(!g0) return;
+  EN.activating=gid; (EN.moved=EN.moved||{})[gid]=0; (EN.attacked=EN.attacked||{})[gid]=false;
+  if(isVrBoss(g0)) await vrStartActivation(g0);
+  try{ await activateGuardCore(gid,card); } finally { EN.activating=null; }
+  if(isVrBoss(P(gid))) await vrEndActivation(P(gid)); }
+async function activateGuardCore(gid,card){
   let g=P(gid); if(!g) return;
   // already on a token, or already sees a player
   if(tokenAt(g.r,g.c).length){ if(await guardAttack(g)){} await guardReaction(P(gid)); return; }
   if(await guardAttack(g)) return;
-  const z=zoneOfPiece(g), zp=S.st.pieces.filter(p=>inZone(z,p.r));
+  const z=zoneOfPiece(g), zp=S.st.pieces.filter(p=>inZone(z,p.r,p.c));
   const alerts=zp.filter(p=>p.type==="attn"&&p.mode==="alert"), qs=zp.filter(p=>p.type==="attn"&&p.mode!=="alert");
   let mode="PATROL", target=null, n=card.blue;
   const pl=(t)=>{ const p=guardPath(g,t.r,t.c); return p?p.length:Infinity; };
@@ -2441,8 +2493,10 @@ async function activateGuard(gid,card){
     if(mine.length){ mode="INVESTIGATE"; target=mine.sort((a,b)=>pl(a)-pl(b))[0]; }
     else { const cams=zp.filter(p=>p.type==="camera"); const bodies=zp.filter(p=>(p.type==="ko"||p.type==="dead")&&(los(g,p.r,p.c)||cams.some(c=>los(c,p.r,p.c))));
       if(bodies.length){ mode="INVESTIGATE"; target=bodies.sort((a,b)=>pl(a)-pl(b))[0]; } } }
+  if(mode==="PATROL"&&g.vr==="mantis"){ const pls=S.st.pieces.filter(p=>isPlayer(p)&&!p.disguised).sort((a,b)=>pl(a)-pl(b)); if(pls.length&&pl(pls[0])<Infinity){ mode="ESP"; target=pls[0]; n=3; addLog(`ESP: ${g.label} senses ${nameOf(target)} and closes in`); } }
+  n+=vrMoveBonus(g); if(vrMoveBonus(g)) addLog(`Pursuit: ${g.label} moves +${vrMoveBonus(g)}`);
   if(mode==="PATROL"&&qs.length&&!await explain("patrolnotnear",`There is a ? in this zone, but ${esc(nameOf(g))} isn't the nearest guard to it, so he patrols.`)) return;
-  addLog(`${nameOf(g)} — ${mode} (${mode==="ALERT"?"red":"blue"} number)${target?` toward ${target.type==="attn"?target.owner+"'s "+(target.mode==="alert"?"!":"?"):target.type==="ko"?"KO guard":"dead guard"} at ${sq(target.r,target.c)}`:""} · moves ${n}`); refresh();
+  addLog(`${nameOf(g)} — ${mode} (${mode==="ALERT"?"red":mode==="ESP"?"ESP":"blue"} number)${target?` toward ${target.type==="attn"?target.owner+"'s "+(target.mode==="alert"?"!":"?"):isPlayer(target)?nameOf(target):target.type==="ko"?"KO guard":"dead guard"} at ${sq(target.r,target.c)}`:""} · moves ${n}`); refresh();
   if(target){
     const path=guardPath(g,target.r,target.c);
     if(!path){ if(await fallback(`${nameOf(g)} can't reach his target`,`move toward the ${target.type==="attn"?(target.mode==="alert"?"!":"?"):"body"} at ${sq(target.r,target.c)}`,"there is no open path to it","he stays where he is and his activation ends",15)) addLog(`${nameOf(g)} has no path — stays put`); return; }
@@ -2472,7 +2526,7 @@ async function activateGuard(gid,card){
     if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
     if(tokenAt(g.r,g.c).length){ await guardReaction(g); await noWallFacing(gid,card); return; } }
   g=P(gid); if(!g) return; if(playersSeenBy(g).length){ await guardAttack(g); return; }
-  if(S.st.cells[key(g.r,g.c)]==="corner"){ const d=newPathFacing(g,card.arrow); if(d!=null&&d!==g.facing) guardFace(g,d,"ended on a corner icon"); }
+  if(isCorner(g.r,g.c)){ const d=newPathFacing(g,card.arrow); if(d!=null&&d!==g.facing) guardFace(g,d,"ended on a corner icon"); }
   else { const r2=g.r+DR[g.facing], c2=g.c+DC[g.facing];   // only real obstacles/walls count here — a figure in front is not an obstacle
     if(!inBounds(r2,c2)||wallBetween(g.r,g.c,r2,c2)||blocked(r2,c2)){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"faces an obstacle"); } }
   await guardAttack(P(gid));
@@ -2483,9 +2537,9 @@ function spawnFacing(st,r,c){ const a=(st.arrows||{})[key(r,c)]; if(a!=null) ret
 function burnCard(why){ if(vdeckOn()){ burnVirtual(why); return; } commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `${why} → reveal the top Guard Order card and put it on the bottom (if it's GAME OVER, the stage fails)`); }
 async function radioIn(zones){ const st=S.st;
     for(const z of zones){
-      const counts=Object.entries(st.counts||{}).filter(([k])=>inZone(z,+k.split(",")[0])), radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0]));
+      const counts=Object.entries(st.counts||{}).filter(([k])=>inZone(z,+k.split(",")[0],+k.split(",")[1])), radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0],+k.split(",")[1]));
       if(!counts.length||!radios.length) continue;
-      const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).length;
+      const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r,p.c)).length;
       while(have<want){ const [r,c]=radios[0].split(",").map(Number); let spot=null;
         const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
         if(free(r,c)) spot={r,c}; else { for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; } }
@@ -2495,15 +2549,15 @@ async function radioIn(zones){ const st=S.st;
 async function guardActionSection(card){
   const st=S.st, zones=zonesAll().filter(zoneActive);
   if(card.action==="waken"){
-    for(const k of st.pieces.filter(p=>p.type==="ko"&&!p.roped&&zones.some(z=>inZone(z,p.r)))){
+    for(const k of st.pieces.filter(p=>p.type==="ko"&&!p.roped&&zones.some(z=>inZone(z,p.r,p.c)))){
       if((k.stars||2)>1) commit(s=>{ s.pieces.find(x=>x.id===k.id).stars=1; }, `Waken: KO token at ${sq(k.r,k.c)} → ★`);
       else { commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==k.id); s.pieces.push({id:s.nextId++,type:"guard",r:k.r,c:k.c,label:k.from||("G"+s.guardNo++),facing:spawnFacing(s,k.r,k.c),hp:2,dmg:0,kod:0}); }, `Waken: ${k.from||"guard"} gets up at ${sq(k.r,k.c)} — players may change his facing`); } } }
-  if(card.action==="radio") await radioIn(zones);
+  if(card.action==="radio"){ if(await sysCancelRadio()) addLog("Disable Security: the Radio-In is cancelled"); else await radioIn(zones); }
   if(false){
     for(const z of zones){
-      const counts=Object.entries(st.counts||{}).filter(([k])=>inZone(z,+k.split(",")[0])), radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0]));
+      const counts=Object.entries(st.counts||{}).filter(([k])=>inZone(z,+k.split(",")[0],+k.split(",")[1])), radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0],+k.split(",")[1]));
       if(!counts.length||!radios.length) continue;
-      const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).length;
+      const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r,p.c)).length;
       while(have<want){ const [r,c]=radios[0].split(",").map(Number); let spot=null;
         const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
         if(free(r,c)) spot={r,c}; else { for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; } }
@@ -2512,7 +2566,7 @@ async function guardActionSection(card){
         have++; await sleep(250); } } }
   if(card.action==="lost"){ const n=Math.floor(st.pieces.filter(p=>p.type==="dead").length/3); for(let i=0;i<n;i++) burnCard("Lost Contact (3 dead guards)"); if(!n) addLog("Lost Contact: fewer than 3 dead guard tokens — nothing happens"); }
   if(card.action==="stay"){
-    for(const pl of st.pieces.filter(isPlayer).filter(p=>zones.some(z=>inZone(z,p.r)))){
+    for(const pl of st.pieces.filter(isPlayer).filter(p=>zones.some(z=>inZone(z,p.r,p.c)))){
       const near=st.pieces.some(g=>g.type==="guard"&&pathDist(g,pl)<=2);
       const al=st.pieces.some(x=>x.type==="attn"&&x.mode==="alert"&&(x.owner||"").toLowerCase()===(pl.label||"").toLowerCase());
       if(near&&!al){ playerToken(pl,"q"); addLog(`Stay Alert: ${nameOf(pl)} is within 2 of a guard → ? under ${nameOf(pl)}`); } } }
@@ -2528,8 +2582,8 @@ async function runEnemyPhase(card){
     if(S.st.reinforce){ const z=(S.st.zones||[]).find(z=>z.name===S.st.reinforce); if(z&&zoneActive(z)){ addLog(`Reinforcements: extra Radio-In in the ${z.name}`); await radioIn([z]); } }
     await guardActionSection(card); if(EN.stop) return;
     if(card.cam&&S.st.pieces.some(p=>p.type==="camera")){ commit(s=>{ s.cam=s.cam==="green"?"orange":"green"; }, `Cameras flip to ${S.st.cam==="green"?"orange":"green"}`); await autoSpot(); await sleep(300); }
-    const zs=zonesAll().filter(zoneActive).sort((a,b)=>a&&b?(S.st.priority[0]==="T"?a.r0-b.r0:b.r0-a.r0):0), ord=activationOrder();
-    for(const z of zs){ const gs=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).sort((a,b)=>ord[a.id]-ord[b.id]).map(p=>p.id);
+    const zs=zonesAll().filter(zoneActive).sort((a,b)=>a&&b?((S.st.priority[0]==="T"?a.r0-b.r0:b.r0-a.r0)||((S.st.priority[1]==="L"?1:-1)*((a.c0||0)-(b.c0||0)))):0), ord=activationOrder();
+    for(const z of zs){ const gs=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r,p.c)).sort((a,b)=>ord[a.id]-ord[b.id]).map(p=>p.id);
       for(const id of gs){ if(EN.stop) break; if(!P(id)) continue; if(P(id).noAct===S.st.round){ addLog(`${nameOf(P(id))} just arrived — he doesn't activate this turn`); continue; } S.sel=id; refresh(); await activateGuard(id,card); boxCheck(P(id)); { const m=S.st.pieces.find(x=>x.type==="meryl"&&x.disguised); if(m) await femaleGuard(m); } await sleep(250); S.moveBadge=null; } }
     S.moveBadge=null;
     S.sel=null; addLog(EN.stop?"Enemy phase stopped by the players":"Enemy phase done — check the board, then start the next round"); toast(EN.stop?"Enemy phase stopped":"Guards done");
@@ -2998,7 +3052,9 @@ function focusPanel(p){ if(busyModal()) return; p=P(p.id); const box=document.ge
   box.style.display="block";
   box.querySelector("#fp-x").onclick=()=>{ box.style.display="none"; };
   box.querySelectorAll("[data-ref]").forEach(b=>b.onclick=async()=>{ try{ toast(await runAction(`focus ${p.label} refresh ${T.focus[+b.dataset.ref]}`)); }catch(e){ toast("✗ "+(e.message||e)); } focusPanel(p); });
-  box.querySelectorAll("[data-spend]").forEach(b=>b.onclick=async()=>{ try{ toast(await runAction(`focus ${p.label} ${T.focus[+b.dataset.spend]}`)); }catch(e){ toast("✗ "+(e.message||e)); } focusPanel(p); });
+  box.querySelectorAll("[data-spend]").forEach(b=>b.onclick=async()=>{ const fn=T.focus[+b.dataset.spend];
+    if(/move 1/i.test(fn)){ box.style.display="none"; modalOff(); try{ toast(await runAction(`focus ${p.label} ${fn}`)); }catch(e){ toast("✗ "+(e.message||e)); } refresh(); return; }
+    try{ toast(await runAction(`focus ${p.label} ${fn}`)); }catch(e){ toast("✗ "+(e.message||e)); } focusPanel(p); });
 }
 function abilityStatus(p){ const used=t=>!onceRound(p,t), r=(name,state,cls,how)=>({name,state,cls,how});
   if(p.type==="snake") return [
@@ -3096,7 +3152,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="8.4";
+const APP_VERSION="8.9";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3192,6 +3248,22 @@ setInterval(()=>{ if(!(net.dc&&net.dc.readyState==="open")) return; net.raw({t:"
 // CAMPAIGN MODE: lobby → missions → briefing → play → action report
 // =====================================================================
 const CAMPAIGN=["stage1","stage2","stage3","stage4","stage5","stage6"], CLASSIFIED=2;          // built missions, plus classified placeholders after them
+LAYOUTS.vr01={
+    vr:true, name:"VR 01 · Recon", note:"VR Mission · 1–4 players, any characters · collect objectives, then reach the Exit",
+    rowStart:1, priority:"TL", blue:14, red:7, failOn:["gameover","kia"],
+    vrNeed:{1:2,2:3,3:5,4:6}, trapFaces:["sensor","sensor","camera","camera","blank"],
+    setupNote:"Each player picks a starting space (★) in the Cargo Dock. Drag your figure to a different ★ before your first move if you like.",
+    zones:[{name:"Cargo Dock",r0:0,r1:7,c0:0,c1:9},{name:"Armory",r0:0,r1:7,c0:10,c1:19},{name:"Prison Cells",r0:8,r1:15,c0:5,c1:14}],
+    map:[".+..xxxxxx...+..+...", "..#+..+.......BB....", "E..+BB.##.....BB....", "###.BB.##.++.+..++.+", "###+..+..+....##....", "###...+##...........", "#..+...##...........", "#.#...+....+.++.++..", "xxxxx..........xxxxx", "xxxxx..+....+..xxxxx", "xxxxx..++++.+..xxxxx", "xxxxx..+#.BB...xxxxx", "xxxxx..+#.BB+..xxxxx", "xxxxx...++..++.xxxxx", "xxxxx.......+..xxxxx", "xxxxx..........xxxxx"],
+    walls:["h:0,11", "h:0,12", "h:0,14", "h:0,15", "h:0,17", "h:0,18", "h:1,4", "h:1,5", "h:10,10", "h:10,11", "h:10,13", "h:10,14", "h:10,5", "h:10,6", "h:11,5", "h:11,6", "h:12,10", "h:12,11", "h:12,13", "h:12,14", "h:13,10", "h:13,11", "h:13,14", "h:13,5", "h:13,6", "h:13,7", "h:2,0", "h:2,12", "h:2,15", "h:2,18", "h:3,11", "h:3,12", "h:3,17", "h:3,18", "h:3,4", "h:3,5", "h:4,14", "h:4,15", "h:4,4", "h:4,5", "h:6,12", "h:6,15", "h:6,18", "h:6,4", "h:6,5", "h:7,10", "h:7,11", "h:7,12", "h:7,13", "h:7,14", "h:7,5", "h:7,6", "h:7,7", "h:7,8", "h:7,9", "h:9,11", "h:9,9", "v:1,0", "v:1,10", "v:1,12", "v:1,13", "v:1,15", "v:1,16", "v:1,18", "v:1,9", "v:10,12", "v:10,6", "v:11,11", "v:11,12", "v:11,9", "v:12,11", "v:13,6", "v:14,12", "v:14,8", "v:14,9", "v:15,11", "v:15,12", "v:15,8", "v:15,9", "v:2,0", "v:2,10", "v:2,12", "v:2,13", "v:2,15", "v:2,16", "v:2,18", "v:2,3", "v:2,9", "v:3,3", "v:3,5", "v:3,9", "v:4,10", "v:4,12", "v:4,16", "v:4,18", "v:4,9", "v:5,10", "v:5,12", "v:5,13", "v:5,15", "v:5,16", "v:5,18", "v:5,3", "v:5,9", "v:6,10", "v:6,12", "v:6,13", "v:6,15", "v:6,16", "v:6,18", "v:6,3", "v:6,5", "v:6,9", "v:7,9", "v:8,11", "v:8,12", "v:8,6", "v:8,7", "v:8,9", "v:9,11", "v:9,7", "v:9,9"],
+    arrows:{"2,4": 1, "2,5": 1, "3,4": 0, "5,4": 1, "1,11": 2, "1,14": 2, "2,14": 2, "1,15": 3, "1,17": 2, "4,11": 2, "5,14": 2, "4,17": 2, "9,5": 1, "8,8": 2, "8,10": 2, "9,14": 3, "11,11": 2, "12,10": 3, "12,11": 3, "12,14": 3, "12,5": 1, "14,10": 1, "15,8": 0, "15,13": 0}, marks:{"2,4": "radio", "1,14": "radio", "12,11": "radio", "0,0": "start", "0,1": "start", "0,2": "start", "1,1": "start"}, counts:{"3,5": 3, "2,15": 3, "11,10": 3},
+    rules:["Collect objectives: walk onto a face-down green ? (2 with 1 player, 3 with 2, 5 with 3, 6 with 4), then any player reaches the Exit.",
+      "Grey ? tokens are traps: they see in every direction and flip when a player enters their line of sight — laser sensor, camera or nothing.",
+      "Level 4 doors: unlocking either one flips both into a red pair of Security Doors.",
+      "Security Doors (matching coloured tokens): Interact on one to come out on its partner.",
+      "VR Boss variant (optional, picked in the briefing): replaces the guard marked ✱ in the Prison Cells and adds 3 blue Guard Order cards."],
+    pieces:[{type:"snake",r:0,c:0},{type:"meryl",r:0,c:1},{type:"otacon",r:0,c:2},{type:"fox",r:1,c:1},{type:"guard",r:1,c:9,facing:2},{type:"guard",r:4,c:5,facing:1},{type:"guard",r:7,c:8,facing:3},{type:"guard",r:0,c:11,facing:1},{type:"guard",r:2,c:16,facing:2},{type:"guard",r:6,c:19,facing:0},{type:"guard",r:10,c:14,facing:0},{type:"guard",r:14,c:11,facing:1},{type:"guard",r:12,c:9,facing:0,vrSpot:true},{type:"hidden",deck:"obj",r:6,c:5},{type:"hidden",deck:"obj",r:1,c:12},{type:"hidden",deck:"obj",r:1,c:18},{type:"hidden",deck:"obj",r:4,c:18},{type:"hidden",deck:"obj",r:5,c:15},{type:"hidden",deck:"obj",r:8,c:11},{type:"hidden",deck:"obj",r:15,c:6},{type:"hidden",deck:"obj",r:15,c:14},{type:"hidden",deck:"hazard",r:2,c:12},{type:"hidden",deck:"hazard",r:2,c:18},{type:"hidden",deck:"hazard",r:6,c:18},{type:"hidden",deck:"hazard",r:9,c:11},{type:"hidden",deck:"hazard",r:14,c:5},{type:"door",r:4,c:9,level:4,facing:1,pair:"lv4",secColor:"red",combo:[5,5,1,1]},{type:"door",r:4,c:10,level:4,facing:3,pair:"lv4",secColor:"red",combo:[5,5,1,1]},{type:"door",r:5,c:6,level:5,facing:3},{type:"door",r:7,c:14,level:2,facing:0,combo:[6,1]},{type:"door",r:13,c:13,level:3,facing:2,combo:[6,2,1]},{type:"terminal",r:6,c:12,level:5,combo:[6,6,6,6]},{type:"terminal",r:13,c:6,level:2,combo:[5,3]},{type:"terminal",r:11,c:14,level:3,combo:[4,3,2]},{type:"terminal",r:15,c:11,level:4,combo:[4,3,2,1]},{type:"secdoor",r:7,c:7,pair:"yel",color:"yellow"},{type:"secdoor",r:8,c:7,pair:"yel",color:"yellow"},{type:"secdoor",r:7,c:12,pair:"org",color:"orange"},{type:"secdoor",r:8,c:12,pair:"org",color:"orange"}]
+};
 const REWARDS={
   stage1:[],
   stage2:[{id:"s2a",label:"Equipment #001",k:"pistol45",when:"clear the stage"},{id:"s2b",label:"Equipment #002",k:"rations",when:"clear the stage"},
@@ -3201,6 +3273,7 @@ const REWARDS={
   stage4:[{id:"s4a",label:"Equipment #006",k:"rations006",when:"defeat Ocelot"}],
   stage5:[{id:"s5a",label:"Equipment #007",k:"grenade",when:"defeat the Tank"}],
   stage6:[{id:"s6a",label:"Equipment #009",k:"nikita",when:"clear the stage"},{id:"s6b",label:"Equipment #010",k:"boxA",when:"a player has Event C",test:st=>has(st,"C")}]};
+const WIN_VR={vr01:{how:"Collect the objectives (2/3/5/6 by player count), then any player reaches the Exit.",vrExit:true}};
 const WIN={
   stage1:{how:"Collect Event A, then ride the elevator out with no red ! on the map."},
   stage2:{how:"Collect Event A, then end a turn on an Exit square.",exitNeeds:"A"},
@@ -3222,7 +3295,13 @@ const OBJ={
     special:["Boss stage: no guards. Players go, then the Tank plays its Boss card.","Only Missiles, Mines and Grenades hurt the Tank.","Everyone has the Grenades card (2 grenades); crates refill it.","Runover: the Tank deals 1 damage each time it enters your space."]},
   stage6:{objs:[{t:"1 · Destroy the Switchboard in B2 (move a missile into its space)",k:"required",done:st=>!!(st.switchboard&&st.switchboard.destroyed)},{t:"2 · Then any player reaches the B2 Exit",k:"required",done:st=>!!st.report&&st.report.result==="cleared"},{t:"Event B — Nikita Special Action card",k:"optional",done:st=>has(st,"B")},{t:"Event C — on your dashboard (unlocks #010)",k:"optional",done:st=>has(st,"C")}],
     special:["No Fire Zone: no guns, missiles or explosives on the L1 / Truck tiles.","Elevator: 3 shafts (L1, B1, B2) — Interact on it to ride, next to a shaft to call it. Starts at L1.","After Event A: B2 grates are electrified (2 damage, pushed back) until the Switchboard is destroyed, and B2 is full of poison gas — end your turn only in the yellow-bordered areas (Gas Mask ignores it).","Event B gives the Nikita Special Action card: unlimited missiles, one on the map at a time, no equipment slot."]}};
+const VR_BOSS_REW=Object.keys(VR_BOSSES_LITE()).map(b=>({id:"vrb_"+b,label:"VR boss reward",k:VR_BOSSES_LITE()[b],boss:b,when:"clear a VR mission and defeat VR "+b[0].toUpperCase()+b.slice(1),test:st=>st.vrBossDown===b}));
+function VR_BOSSES_LITE(){ return {liquid:"assault",mantis:"gasmask",ocelot:"timebomb",raven:"boxB",wolf:"pentazemin"}; }
 const has=(st,ev)=>(st.stats&&st.stats.objectives||[]).includes(ev)||st.pieces.some(p=>isPlayer(p)&&(p.carry||[]).includes(ev));
+Object.assign(WIN,WIN_VR);
+OBJ.vr01={objs:[{t:"Collect the objectives",k:"required",done:st=>(st.vrObj||0)>=(st.vrNeed||99),prog:st=>`${st.vrObj||0}/${st.vrNeed||"?"}`},{t:"Then any player reaches the Exit",k:"required",done:st=>!!st.report&&st.report.result==="cleared"},{t:"VR Boss variant: defeat the VR boss",k:"optional",done:st=>!!st.vrBossDown}],
+  special:["Walk onto a face-down green ? to collect it: 2 objectives with 1 player, 3 with 2, 5 with 3, 6 with 4.","Grey ? traps see in every direction and flip when a player comes into their sight: laser sensor (your ! goes down), camera, or nothing.","Unlock either Level 4 door and both flip into a red pair of Security Doors.","Security Doors: Interact on a coloured door token to come out on the token of the same colour.","Fail: the Game Over card, or any player Killed in Action."]};
+REWARDS.vr01=[{id:"vr01a",label:"Equipment #024",k:"pistolSup",when:"clear VR 01"},...VR_BOSS_REW];
 function objectivesHtml(k,st,live){ const O=OBJ[k]; if(!O) return ""; const tag={required:"REQUIRED",optional:"OPTIONAL",either:"REQUIRED · EITHER"};
   return `<div class="sh2">Objectives</div>`+O.objs.map(o=>{ const d=live&&o.done(st); return `<div class="obj ${o.k} ${d?"done":""}"><span class="ob-box">${d?"✓":""}</span><span style="flex:1">${esc(o.t)}${live&&o.prog&&o.prog(st)?` <b>${o.prog(st)}</b>`:""}</span><span class="ob-tag ${o.k}">${tag[o.k]}</span></div>`; }).join("")
     +`<div class="sh2">Special rules <span class="muted" style="text-transform:none;letter-spacing:0">— these override the normal rules</span></div>`+O.special.map(r=>`<div class="spec">★ ${esc(r)}</div>`).join(""); }
@@ -3273,8 +3352,9 @@ function loadCampaign(id){ const sv=camps()[id]; if(!sv) return; commit(s=>{ Obj
 function allChars(k){ const L=LAYOUTS[k]; return L.pieces.filter(p=>TYPES[p.type].kind==="player").map(p=>p.type); }
 // characters going in = the filled runner lists, in order (Snake, then Meryl, …); the roster on the page decides which
 function charsOf(k){ const L=LAYOUTS[k], all=allChars(k), br=S.st.brief; if(!br||br.key!==k||!br.queues) return L.roster&&br&&br.key===k&&br.players?(L.roster[br.players]||all):all;
+  if(L.vr){ const pick=all.filter(t=>((br.queues||{})[TYPES[t].name]||[]).length); return pick.length?pick:all.slice(0,1); }
   const n=activeCount(k,br); return L.roster?(L.roster[n]||all.slice(0,n)):all.slice(0,Math.max(1,n)); }
-function activeCount(k,br){ let n=0; for(const t of allChars(k)){ if(((br.queues||{})[TYPES[t].name]||[]).length) n++; else break; } return n; }
+function activeCount(k,br){ let n=0; if(LAYOUTS[k].vr) return allChars(k).filter(t=>((br.queues||{})[TYPES[t].name]||[]).length).length; for(const t of allChars(k)){ if(((br.queues||{})[TYPES[t].name]||[]).length) n++; else break; } return n; }
 function queueOf(lab){ return ((S.st.brief||{}).queues||{})[lab]||[]; }
 function isPlayerHere(){ if(!inRoom()) return true; const q=(S.st.brief||{}).queues||{}; return Object.values(q).some(a=>a.some(r=>r.id===room.me)); }
 // build a briefing's lists from a flat order of people: person 1 → first character, person 2 → second, … (wrapping); spectators stay spectators
@@ -3293,7 +3373,7 @@ function canEditSeat(lab){ if(!inRoom()) return true; const s_=queueOf(lab)[0]; 
 function launchMission(k,runIdx){
   const camp=S.st.camp, br=S.st.brief||{}, chars=charsOf(k), solo=chars.length===1, run=S.st.run&&S.st.run.key===k?S.st.run:null;
   const idx=0;
-  const n=buildPreset(k); n.camp=camp; n.brief=br; n.stats=newStats(); n.screen="play";
+  const n=buildPreset(k); n.camp=camp; n.brief=br; n.stats=newStats(); n.screen="play"; vrSetup(n,k,chars);
   { const L_=LAYOUTS[k]; if(br.key===k&&chars.length<allChars(k).length){ const keepT=chars, gone=n.pieces.filter(p=>TYPES[p.type].kind==="player"&&!keepT.includes(p.type)).map(p=>p.label);
       n.pieces=n.pieces.filter(p=>!(TYPES[p.type].kind==="player"&&!keepT.includes(p.type))&&!(p.type==="attn"&&gone.includes(p.owner)));
       const ah=n.aloneHp, z=ah&&(n.zones||[]).find(z=>z.name===ah.zone); if(z&&chars.length===1) n.pieces.forEach(p=>{ if(p.type==="guard"&&p.r>=z.r0&&p.r<=z.r1) p.hp=ah.hp; }); }
@@ -3317,11 +3397,13 @@ function finishMissionBase(result,why){
     earned:result==="cleared"?(REWARDS[k]||[]).filter(r=>!r.test||r.test(st)).map(r=>r.id):[]};
   commit(s=>{ const c=s.camp; (c.runs[k]=c.runs[k]||[]).push(rep); const b=c.best[k];
     rep.best=!b||runScore(rep)>runScore(b); if(rep.best) c.best[k]=rep;
-    if(result==="cleared"){ const nx=CAMPAIGN[CAMPAIGN.indexOf(k)+1]; if(nx&&!c.unlocked.includes(nx)){ c.unlocked.push(nx); rep.newMission=nx; } c.earned=[...new Set([...(c.earned||[]),...rep.earned])]; }
+    rep.vrBoss=st.vrBoss||null;
+    if(result==="cleared"){ const nx=CAMPAIGN.includes(k)?CAMPAIGN[CAMPAIGN.indexOf(k)+1]:null; if(nx&&!c.unlocked.includes(nx)){ c.unlocked.push(nx); rep.newMission=nx; } c.earned=[...new Set([...(c.earned||[]),...rep.earned])]; }
     s.report=rep; s.screen="report"; if(result!=="cleared") s.failed=why; },
     result==="cleared"?`★ MISSION COMPLETE — ${st.stage}`:`✖ ${result==="kia"?"KILLED IN ACTION":"MISSION FAILED"} — ${why}`);
   EN.stop=true; closeAll(); setTimeout(clearModal,50); }
 function checkWin(p){ const st=S.st, k=st.run&&st.run.key, W=k&&WIN[k]; if(!W||st.report) return;
+  if(W.vrExit&&p&&st.cells[key(p.r,p.c)]==="exit"){ if((st.vrObj||0)>=(st.vrNeed||99)) return finishMission("cleared",`${nameOf(p)} reached the Exit with ${st.vrObj} objective${st.vrObj===1?"":"s"}`); toast(`Exit reached — but you need ${st.vrNeed} objectives (you have ${st.vrObj||0})`); return; }
   if(W.defeat&&st.defeat&&st.defeat.count>=st.defeat.goal) return finishMission("cleared",`${st.defeat.count} guards defeated in the ${st.defeat.zone}`);
   if(W.exitSwitch&&p&&st.cells[key(p.r,p.c)]==="exit"&&st.switchboard&&st.switchboard.destroyed) return finishMission("cleared",`${nameOf(p)} reached the Exit after the Switchboard was destroyed`);
   if(W.exitNeeds&&p&&st.cells[key(p.r,p.c)]==="exit"&&st.pieces.some(q=>isPlayer(q)&&(q.carry||[]).includes(W.exitNeeds))) return finishMission("cleared",`${nameOf(p)} reached the Exit with Event ${W.exitNeeds}`); }
@@ -3354,9 +3436,14 @@ function renderScreen(){
         if(!open) return `<div class="mcard locked"><div class="blur"><b>${esc(L.name)}</b><div>${esc(L.note)}</div></div><div class="lock">🔒 Clear the previous mission</div></div>`;
         return `<div class="mcard ${b&&b.result==="cleared"?"done":""}" data-brief="${key_}"><div class="mnum">${String(i+1).padStart(2,"0")}</div><div style="flex:1"><b>${esc(L.name)}</b><div class="muted">${esc(WIN[key_].how)}</div>
           ${b?`<div class="mbest">${b.result==="cleared"?"✓ Cleared":"✖ Not cleared yet"} · best run: ${b.rounds} rounds · spotted ${b.stats.spotted}× · ${b.team.map(t=>esc(t.by)).join(", ")}</div>`:`<div class="mbest new">New mission</div>`}</div><span class="go">▶</span></div>`; }).join("")}
-      ${[...Array(CLASSIFIED)].map((_,i)=>nextMissionLocked(CAMPAIGN.length+i)).join("")}`; }
+      ${[...Array(CLASSIFIED)].map((_,i)=>nextMissionLocked(CAMPAIGN.length+i)).join("")}
+      <div class="sh" style="margin-top:14px">VR Missions</div><p class="muted" style="margin-top:-4px">Stand-alone and replayable · any characters · 1–4 players. Optional VR bosses unlock extra equipment.</p>
+      ${VR_MISSIONS.map(key_=>{ const L=LAYOUTS[key_], b=c.best[key_], bosses=Object.keys(VR_BOSSES).filter(x=>(c.earned||[]).includes("vrb_"+x));
+        return `<div class="mcard ${b&&b.result==="cleared"?"done":""}" data-brief="${key_}"><div class="mnum">VR</div><div style="flex:1"><b>${esc(L.name)}</b><div class="muted">${esc(WIN[key_].how)}</div>
+          ${b?`<div class="mbest">${b.result==="cleared"?"✓ Cleared":"✖ Not cleared yet"} · best run: ${b.rounds} rounds · spotted ${b.stats.spotted}×</div>`:`<div class="mbest new">New VR mission</div>`}${bosses.length?`<div class="muted">Bosses beaten: ${bosses.map(x=>VR_BOSSES[x].name).join(", ")}</div>`:""}</div><span class="go">▶</span></div>`; }).join("")}
+      ${[...Array(VR_TOTAL-VR_MISSIONS.length)].map((_,i)=>`<div class="mcard locked"><div class="blur"><b>VR ${String(VR_MISSIONS.length+i+1).padStart(2,"0")}</b><div>Not added yet</div></div><div class="lock">🔒 Coming soon</div></div>`).join("")}`; }
   if(k==="memory"){ const c=camp, earned=new Set(c.earned||[]);
-    const locked=CAMPAIGN.flatMap(key_=>(REWARDS[key_]||[]).filter(r=>!earned.has(r.id)).map(r=>({...r,stage:LAYOUTS[key_].name})));
+    const locked=[...CAMPAIGN,...VR_MISSIONS].flatMap(key_=>(REWARDS[key_]||[]).filter(r=>!earned.has(r.id)&&!(r.boss&&key_!==VR_MISSIONS[0])).map(r=>({...r,stage:r.boss?"VR boss: "+VR_BOSSES[r.boss].name:LAYOUTS[key_].name})));
     h=`<div class="topbar">${back("missions","← Missions")}<div class="ttl">Memory Box</div><span></span></div>
       <div class="scard"><div class="row" style="margin:0"><span style="flex:1"><span class="muted">Campaign code</span><br><b class="code" style="font-size:20px">${esc(c.code||"")}</b></span><button class="sm" id="mem-code">📋 Copy</button></div>
         <p class="muted">The whole group shares this Memory Box. Play solo or together — whatever anyone unlocks lands here for everyone. On another phone: Lobby → Join a campaign → this code.</p></div>
@@ -3370,9 +3457,12 @@ function renderScreen(){
     const n=activeCount(key_,br), chars=charsOf(key_), spect=br.spect||[], nm=id=>(ps.find(p=>p.id===id)||{name:"(left the room)"}).name, me=id=>id===myId()?" (me)":"";
     h=`<div class="topbar">${back("missions","← Missions")}<div class="ttl">Briefing</div><span></span></div>
       <div class="brief"><div class="bt">${esc(L.name)}</div>${objectivesHtml(key_,st,false)}</div>
+      ${L.vr?`<div class="sh">VR Boss variant</div><div class="scard"><p class="muted" style="margin-top:0">Optional: swap the ✱ guard in the Prison Cells for a VR boss (+3 blue Guard Order cards). Clear the stage and defeat the boss to unlock that boss's equipment.</p>
+        <div class="row">${[["","No boss"],...Object.entries(VR_BOSSES).map(([k_,B])=>[k_,B.name])].map(([k_,lab])=>`<button class="sm ${(br.vrBoss||"")===k_?"on":""}" data-vrboss="${k_}">${esc(lab)}</button>`).join("")}</div>
+        ${br.vrBoss&&VR_BOSSES[br.vrBoss]?`<div class="muted" style="margin-top:6px"><b style="color:var(--text)">${VR_BOSSES[br.vrBoss].name}</b> · Defense ${VR_BOSSES[br.vrBoss].def} · 2 black · health ${VR_BOSSES[br.vrBoss].hp.map((v,i)=>`${i+1}P ${v}`).join(" / ")}${VR_BOSSES[br.vrBoss].abil.map(([a,t])=>`<div>▸ <b>${esc(a)}</b> — ${esc(t)}</div>`).join("")}</div>`:""}</div>`:""}
       <div class="sh">Who's going in</div>
-      <p class="muted">Put people in a character's runner list to play them, or in Spectators to watch. Characters fill in order${use.length>1?` — ${use.map(t=>TYPES[t].name).join(", then ")}`:""}. The top of each list plays this run; after each run the lists move down one, and wrap back to the top.</p>
-      ${use.map((t,ci)=>{ const lab=TYPES[t].name, q=(br.queues||{})[lab]||[], locked=ci>0&&!((br.queues||{})[TYPES[use[ci-1]].name]||[]).length, going=ci<n;
+      <p class="muted">Put people in a character's runner list to play them, or in Spectators to watch. ${L.vr?"VR mission: pick any characters you like (1–4 players).":`Characters fill in order${use.length>1?` — ${use.map(t=>TYPES[t].name).join(", then ")}`:""}.`} The top of each list plays this run; after each run the lists move down one, and wrap back to the top.</p>
+      ${use.map((t,ci)=>{ const lab=TYPES[t].name, q=(br.queues||{})[lab]||[], locked=!L.vr&&ci>0&&!((br.queues||{})[TYPES[use[ci-1]].name]||[]).length, going=L.vr?!!q.length:ci<n;
         return `<div class="scard ${locked?"dim":""}"><div class="row" style="margin:0"><span class="sw" style="background:${TYPES[t].color}">${TYPES[t].short}</span><b>${lab}</b><span class="muted" style="margin-left:auto">${going?`goes in · ${esc(q[0].name)} first`:locked?`add someone to ${TYPES[use[ci-1]].name} first`:"not going in — nobody listed"}</span></div>
           ${q.map((r,i)=>`<div class="row"><b style="min-width:22px">${i+1}.</b><span style="flex:1">${esc(r.name)}${me(r.id)}</span><input type="text" placeholder="playing for… (e.g. Muse)" data-qproxy="${esc(lab)}|${i}" value="${esc(r.proxy||"")}" style="width:42%"><button class="sm" data-qup="${esc(lab)}|${i}" ${i?"":"disabled"}>↑</button><button class="sm" data-qx="${esc(lab)}|${i}">✕</button></div>`).join("")}
           ${locked?"":`<div class="row">${ps.filter(p=>!q.some(r=>r.id===p.id)).map(p=>`<button class="sm" data-qadd="${esc(lab)}" data-pid="${p.id}" data-pn="${esc(p.name)}">＋ ${esc(p.name)}${p.me?" (me)":""}</button>`).join("")||`<span class="muted">Everyone is in this list.</span>`}</div>`}</div>`; }).join("")}
@@ -3394,7 +3484,7 @@ function renderScreen(){
           <div class="sh2">${lab}'s own gear</div><div class="row">${C.start.length?C.start.map(k=>chip(`start:${t}:${k}`,EQUIP[k].name)).join(""):`<span class="muted">None</span>`}</div>
           <div class="sh2">Shared pool</div><div class="row">${camp.memory.length?camp.memory.map(m=>chip(m.id,(EQUIP[m.k]||{name:m.k}).name)).join(""):`<span class="muted">Nothing unlocked yet</span>`}</div></div>`; }).join("")+
       `<div class="row" style="margin-top:14px"><button class="on big" id="b-start">▶ Start mission</button></div>`; }
-  if(k==="report"){ const r=st.report, L=LAYOUTS[r.key], br=st.brief||{key:r.key}, nx=CAMPAIGN[CAMPAIGN.indexOf(r.key)+1], canNx=r.result==="cleared"&&nx&&(camp.unlocked||[]).includes(nx), nextL=br.queues?nextRunLabel(br):"", sameL=br.queues?sameRunLabel(br):"", mine=isPlayerHere(), dis=mine?"":"disabled";
+  if(k==="report"){ const r=st.report, L=LAYOUTS[r.key], br=st.brief||{key:r.key}, nx=CAMPAIGN[CAMPAIGN.indexOf(r.key)+1], canNx=r.result==="cleared"&&CAMPAIGN.includes(r.key)&&nx&&(camp.unlocked||[]).includes(nx), nextL=br.queues?nextRunLabel(br):"", sameL=br.queues?sameRunLabel(br):"", mine=isPlayerHere(), dis=mine?"":"disabled";
     const S_=r.stats, stat=(n,v,bad)=>`<div class="stat ${bad&&v?"bad":""}"><b>${v}</b><span>${n}</span></div>`;
     h=`<div class="rep ${r.result}"><div class="rep-h">${r.result==="cleared"?"MISSION COMPLETE":r.result==="kia"?"KILLED IN ACTION":"MISSION FAILED"}</div>
         <div class="rep-s">${esc(L.name)} · run ${r.attempt}</div><div class="muted">${esc(r.why)}</div>${r.perfect?`<div class="pill">★★ PERFECT RUN — every objective</div>`:""}${r.best?`<div class="pill">★ Best run for this mission</div>`:""}</div>
@@ -3404,7 +3494,7 @@ function renderScreen(){
       <div class="sh">Objectives grabbed</div><div>${S_.objectives.length?S_.objectives.map(o=>`<span class="pill">Event ${esc(o)}</span>`).join(" "):`<span class="muted">None</span>`}</div>
       ${r.result==="cleared"?`<div class="sh">Unlocked</div>
         ${r.newMission?`<div class="eq"><b>New mission:</b> ${esc(LAYOUTS[r.newMission].name)}</div>`:""}
-        ${(REWARDS[r.key]||[]).map(w=>{ const got=r.earned.includes(w.id), rec=camp.memory.find(m=>m.slot===w.id);
+        ${(REWARDS[r.key]||[]).filter(w=>!w.boss||w.boss===r.vrBoss).map(w=>{ const got=r.earned.includes(w.id), rec=camp.memory.find(m=>m.slot===w.id);
           return got?`<div class="eq"><b>${esc(w.label)}</b> ${rec?`→ ${esc((EQUIP[rec.k]||{name:rec.k}).name)} <span class="muted">in your Memory Box</span>`:`<button class="sm on" data-rec="${w.id}">Record which card it is</button><div class="muted">Check the campaign book for the card, then record it so it goes in your Memory Box.</div>`}</div>`
             :`<div class="eq locked"><div class="blur"><b>${esc(w.label)} · ??????</b></div><div class="muted">Not earned this run${w.when?` — ${esc(w.when)}`:""}</div></div>`; }).join("")}
         ${!(REWARDS[r.key]||[]).length&&!r.newMission?`<div class="muted">This stage has no equipment rewards.</div>`:""}`:""}
@@ -3412,10 +3502,13 @@ function renderScreen(){
       ${canNx?`<div class="row" style="margin-top:14px"><button class="on big" id="r-nextm" ${dis}>▶ Next mission: ${esc(LAYOUTS[nx].name)}</button></div>`:""}
       <div class="row" ${canNx?"":`style="margin-top:14px"`}><button class="${canNx?"sm":"on big"}" id="r-next" ${dis} style="flex:1">${nextL&&nextL!==sameL?`▶ Next runner: ${esc(nextL)}`:"↻ Play it again"}</button></div>
       <div class="row">${nextL&&nextL!==sameL?`<button class="sm" id="r-retry" ${dis} style="flex:1">↻ Same runner again (${esc(sameL)})</button>`:""}<button class="sm" data-go="missions" ${dis} style="flex:1">Missions</button></div>
-      ${r.result!=="cleared"?`<div class="row"><button class="sm" id="r-undo" ${dis} style="flex:1">↶ That was a mistake — undo it</button></div>`:""}`; }
+      ${r.result!=="cleared"?`<div class="row"><button class="sm" id="r-undo" ${dis} style="flex:1">↶ That was a mistake — undo it</button></div>`:""}
+      <div class="row"><button class="sm" id="r-ai" style="flex:1">🤖 Copy results for AI</button></div>`; }
   el.innerHTML=`<div class="swrap">${h}</div>`;
   const q=s_=>el.querySelector(s_), on=(s_,f)=>{ const b=q(s_); if(b) b.onclick=f; }, all=(s_,f)=>el.querySelectorAll(s_).forEach(b=>b.onclick=()=>f(b));
   all("[data-go]",b=>setScreen(b.dataset.go));
+  all("[data-vrboss]",b=>commit(s=>{ s.brief.vrBoss=b.dataset.vrboss||null; }, b.dataset.vrboss?`VR Boss variant: ${VR_BOSSES[b.dataset.vrboss].name}`:"VR Boss variant off"));
+  on("#r-ai",()=>copyText(reportForAI(),"Results copied — paste them to Claude or Muse"));
   const nm=q("#l-name"); if(nm) nm.onchange=e=>{ S.me=e.target.value.trim()||"Player"; saveLS("st-name",S.me); room.hello(); renderScreen(); };
   on("#l-create",()=>{ room.join(room.newCode(),true); setTimeout(renderScreen,400); });
   on("#l-join",()=>{ const c=q("#l-code").value.trim(); if(c){ room.join(c,false); setTimeout(renderScreen,600); } });
@@ -3426,7 +3519,7 @@ function renderScreen(){
     if(!b.dataset.armed){ b.dataset.armed=1; b.textContent="Delete?"; alertMsg(`Tap Delete? again to remove “${nm}” from this phone. Missions, runs and its Memory Box go with it.`); setTimeout(()=>{ if(b.isConnected){ delete b.dataset.armed; b.textContent="🗑"; } },4000); return; }
     deleteCampaign(id); });
   all("[data-brief]",b=>{ const k_=b.dataset.brief; setScreen("briefing",{brief:(S.st.brief&&S.st.brief.key===k_&&S.st.brief.queues)?S.st.brief:newBrief(k_)}); });
-  const qsplit=v=>{ const [lab,i]=v.split("|"); return [lab,+i]; }, fixGaps=s=>{ const k_=s.brief.key, use=allChars(k_); let gap=false; use.forEach(t=>{ const lab=TYPES[t].name; s.brief.queues[lab]=s.brief.queues[lab]||[]; if(gap) s.brief.queues[lab]=[]; if(!s.brief.queues[lab].length) gap=true; }); s.brief.seats={}; };
+  const qsplit=v=>{ const [lab,i]=v.split("|"); return [lab,+i]; }, fixGaps=s=>{ const k_=s.brief.key, use=allChars(k_); let gap=false; if(LAYOUTS[k_].vr) return; use.forEach(t=>{ const lab=TYPES[t].name; s.brief.queues[lab]=s.brief.queues[lab]||[]; if(gap) s.brief.queues[lab]=[]; if(!s.brief.queues[lab].length) gap=true; }); s.brief.seats={}; };
   all("[data-qadd]",b=>commit(s=>{ const lab=b.dataset.qadd; (s.brief.queues[lab]=s.brief.queues[lab]||[]).push({id:b.dataset.pid,name:b.dataset.pn}); s.brief.spect=(s.brief.spect||[]).filter(x=>x!==b.dataset.pid); fixGaps(s); }));
   all("[data-qx]",b=>commit(s=>{ const [lab,i]=qsplit(b.dataset.qx); s.brief.queues[lab].splice(i,1); fixGaps(s); }));
   all("[data-qup]",b=>commit(s=>{ const [lab,i]=qsplit(b.dataset.qup), a=s.brief.queues[lab]; [a[i-1],a[i]]=[a[i],a[i-1]]; }));
@@ -3674,6 +3767,9 @@ function drawItem(p,x,y){ const cx=x+CS/2, cy=y+CS/2; ctx.save(); ctx.translate(
   const lab={c4:"C-4",timebomb:"BOMB",claymore:"MINE",missile:"MISSILE",rope:"ROPE",grenade:"GRENADE"}[k]||"ITEM"; nameTag(lab+(p.owner?" · "+p.owner[0]:""),x,y,"#000c"); }
 // hidden ? tokens: face down until something flips them
 const HIDDEN_FACES={check:{t:"✓",c:"#3fbf63",n:"Objective ✓"},x:{t:"✗",c:"#e0533f",n:"Nothing (✗)"},camera:{t:"◉",c:"#e07b2a",n:"Camera"},laser:{t:"≋",c:"#ff3b2f",n:"Laser barrier"},blank:{t:"·",c:"#888",n:"Empty"},sensor:{t:"✷",c:"#ff3b2f",n:"Laser sensor trap"}};
+const SECCOL={yellow:"#e3c42b",orange:"#e3862b",red:"#d0402b"};
+function drawSecDoor(p,x,y){ const cx=x+CS/2, cy=y+CS/2, col=SECCOL[p.color]||p.color||"#c9a227"; ctx.fillStyle="#1b1f1e"; rr(x+5,y+5,CS-10,CS-10,5); ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=2.5; ctx.stroke();
+  ctx.fillStyle=col; ctx.fillRect(x+9,y+CS-13,CS-18,5); ctx.fillStyle="#eee"; ctx.font="bold 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⇆",cx,cy-2); }
 function drawHidden(p,x,y){ const cx=x+CS/2, cy=y+CS/2;
   if(!p.up){ const olive=p.deck!=="hazard"; ctx.fillStyle=olive?"#8f8a2c":"#b8b8b8"; rr(x+6,y+8,CS-12,CS-14,4); ctx.fill(); ctx.fillStyle=olive?"#77721f":"#9a9a9a"; ctx.fillRect(x+6,y+5,12,5);
     ctx.fillStyle=olive?"#fff":"#c0392b"; ctx.font="bold 18px system-ui"; ctx.fillText("?",cx,cy+2); return; }
@@ -3741,8 +3837,8 @@ async function explain(kind,detail){ if(S.sim||EXPLAIN_OFF.includes(kind)||(S.st
       <div class="row"><button class="on" id="ex-go" style="flex:1">▶ Continue</button><button class="sm" id="ex-hand">✋ Do it by hand</button></div>`;
     box.style.display="block"; const done=v=>{ if(box.querySelector("#ex-off").checked) commit(s=>{ s.noExplain=[...(s.noExplain||[]),kind]; }); box.style.display="none"; modalOff(); if(!v){ addLog(`${E.t} — done by hand`); handMode(true,E.t); } res(v); };
     box.querySelector("#ex-go").onclick=()=>done(true); box.querySelector("#ex-hand").onclick=()=>done(false); }); }
-function guardsLeft(){ return 12-S.st.pieces.filter(p=>p.type==="guard").length; }
-async function spawnGuardAt(z,why){ const st=S.st; const radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0]));
+function guardsLeft(){ return 12-S.st.pieces.filter(p=>p.type==="guard"&&!p.vr).length; }
+async function spawnGuardAt(z,why){ const st=S.st; const radios=Object.keys(st.marks||{}).filter(k=>st.marks[k]==="radio"&&inZone(z,+k.split(",")[0],+k.split(",")[1]));
   if(!radios.length){ addLog(`${why}: no barracks in ${z?z.name:"this map"} — nothing spawns`); return; }
   const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
   const [r,c]=radios[0].split(",").map(Number); let spot=free(r,c)?{r,c}:null;
@@ -3776,7 +3872,7 @@ async function autoReaction(g0,card){ const gid=g0.id;
     else if(code==="wake"){ commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==tok.id); const ng={id:s.nextId++,type:"guard",r:tok.r,c:tok.c,label:tok.from||("G"+s.guardNo++),facing:g.facing,hp:2,dmg:0,kod:0,noAct:s.round}; s.pieces.push(ng); }, `Reaction: wake up! The KO guard at ${sq(tok.r,tok.c)} is back on his feet (he doesn't activate this turn)`);
       const ng=S.st.pieces.find(x=>x.type==="guard"&&x.r===tok.r&&x.c===tok.c&&x.id!==gid); if(ng&&ng.r===g.r&&ng.c===g.c){ const d=[0,1,2,3].find(d=>{ const r2=g.r+DR[d],c2=g.c+DC[d]; return inBounds(r2,c2)&&!blocked(r2,c2)&&!wallBetween(g.r,g.c,r2,c2)&&!figureAt(r2,c2); }); if(d!=null) commit(s=>{ const q=s.pieces.find(x=>x.id===ng.id); q.r=g.r+DR[d]; q.c=g.c+DC[d]; }); } }
     else if(code==="mandown"){ remove("man down"); burnCard("Reaction: man down"); }
-    else if(code==="who"){ remove(); const zs=zonesAll(), cnt=z_=>S.st.pieces.filter(p=>isPlayer(p)&&inZone(z_,p.r)).length; let best=z; zs.forEach(z_=>{ if(cnt(z_)>cnt(best)) best=z_; }); await spawnGuardAt(best,"Reaction: who could have done this"); }
+    else if(code==="who"){ remove(); const zs=zonesAll(), cnt=z_=>S.st.pieces.filter(p=>isPlayer(p)&&inZone(z_,p.r,p.c)).length; let best=z; zs.forEach(z_=>{ if(cnt(z_)>cnt(best)) best=z_; }); await spawnGuardAt(best,"Reaction: who could have done this"); }
     else if(code==="reinforce"){ remove(); for(const z_ of zonesAll().filter(zoneActive)) await spawnGuardAt(z_,"Reaction: send reinforcements"); }
     await sleep(250); refresh(); } }
 
@@ -3791,13 +3887,14 @@ async function femaleGuard(m){ m=P(m.id); if(!m||!m.disguised) return;
   const r=await rollPrompt({by:m,kind:"female",w:2,b:0,vs:null,why:`"A female guard?" — ${gs.map(nameOf).join(", ")} looks Meryl over (a ! blows her cover)`});
   if(!r) return; if(r.bang){ playerToken(P(m.id),"q"); addLog(`"A female guard?" — ${nameOf(gs[0])} sees through it: Meryl draws attention`); } else addLog(`"A female guard?" — the guard doesn't notice anything odd`); refresh(); }
 
+async function revealTrap(t,why){ const F=HIDDEN_FACES[t.face]||{}; upd(t,q=>{ q.up=true; },`Trap token at ${sq(t.r,t.c)} flips: ${F.n||"?"}${why?" ("+why+")":""}`); addFx(t.r,t.c,"zap",0.5);
+  if(t.face==="camera"){ const f=camFacing(t.r,t.c); commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==t.id); s.pieces.push({id:s.nextId++,type:"camera",r:t.r,c:t.c,fg:f.fg,fo:f.fo}); }, `A camera is revealed at ${sq(t.r,t.c)} — its cones face away from the walls (change them on the piece if your token differs)`); }
+  else if(t.face==="blank"){ commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==t.id); }, `The trap at ${sq(t.r,t.c)} was empty — removed`); } }
 async function trapCheck(p,path){ const sqs=[{r:p.r,c:p.c},...path];
   for(const t of S.st.pieces.filter(x=>x.type==="hidden"&&x.deck==="hazard")){
-    if(!t.up&&sqs.some(s=>lineClear(t,s))){ const F=HIDDEN_FACES[t.face]||{}; upd(t,q=>{ q.up=true; },`Trap token at ${sq(t.r,t.c)} flips: ${F.n||"?"}`);
-      if(t.face==="camera"){ const d=[0,1,2,3].find(d=>{ const r2=t.r+DR[d],c2=t.c+DC[d]; return inBounds(r2,c2)&&!wallBetween(t.r,t.c,r2,c2)&&!blocked(r2,c2); })??2;
-        commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==t.id); const cam={id:s.nextId++,type:"camera",r:t.r,c:t.c,fg:d,fo:d}; s.pieces.push(cam); }, `A camera is revealed at ${sq(t.r,t.c)}`); } } }
+    if(!t.up&&sqs.some(s=>los(t,s.r,s.c))) await revealTrap(t,`${nameOf(p)} came into its sight`); }
   for(const t of S.st.pieces.filter(x=>x.type==="hidden"&&x.up&&(x.face==="sensor"||x.face==="laser"))){
-    if(sqs.some(s=>lineClear(t,s))&&!hasEq(p,E=>/Ignore Laser Sensor/.test(E.passive||""))){ if(await decide("🔴 Laser sensor!",`${esc(nameOf(p))} crosses the sensor at ${sq(t.r,t.c)} — their ! goes under them after the move.`)) S.trapHit=true; } } }
+    if(sqs.slice(1).some(s=>los(t,s.r,s.c))&&!hasEq(p,E=>/Ignore Laser Sensor/.test(E.passive||""))){ S.trapHit=true; } } }
 // ---------- explosives & mines ----------
 // ---------- every automatic effect can be done by hand instead ----------
 function handModeBase(on,why){ S.handMode=!!on; let b=document.getElementById("handbar"); if(!b){ b=document.createElement("div"); b.id="handbar"; document.body.appendChild(b); }
@@ -3818,7 +3915,7 @@ async function blastDamage(r,c,rad,n,why,src){ const hit=figsNear(r,c,rad); addF
   if(!hit.length) addLog(`${why}: the blast at ${sq(r,c)} catches nobody`);
   for(const f of hit){ if(f.size&&f.boss==="tank"){ const on=tankCells(f).some(t=>t.r===r&&t.c===c); if(on&&src==="grenade"){ tankGrenade(f,r,c); continue; } }
     addLog(`${why}: ${nameOf(f)} takes ${n} damage`); hurt(P(f.id),n); } }
-async function alertFromBlast(owner,r,c){ if(!owner) return; const z=zoneOf(r)||null; const guards=S.st.pieces.some(g=>g.type==="guard"&&(!z||inZone(z,g.r)));
+async function alertFromBlast(owner,r,c){ if(!owner) return; const z=zoneOf(r,c)||null; const guards=S.st.pieces.some(g=>g.type==="guard"&&(!z||inZone(z,g.r,g.c)));
   const tok=S.st.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===(owner.label||"").toLowerCase()&&x.mode==="alert");
   if(guards&&!tok){ commit(s=>{ const t=s.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===(owner.label||"").toLowerCase()); if(t){ t.mode="alert"; t.r=r; t.c=c; } else { const n={id:s.nextId++,type:"attn",r,c,owner:owner.label,mode:"alert"}; s.pieces.push(n); } }, `The blast alerts the guards — ${owner.label}'s ! goes to ${sq(r,c)}`); } }
 async function mineCheck(r,c,mover){ for(const m of S.st.pieces.filter(x=>x.type==="item"&&x.r===r&&x.c===c)){
@@ -3888,7 +3985,7 @@ const EQ_CMDS={
     spend(p,"hide",false); upd(p,q=>{ q.boxed=k; },`${nameOf(p)} HIDES in the cardboard box — guards and cameras treat them like a guard`); return "in the box"; },
   async usekey(p,args){ const k=args[0]||((p.equip||[]).find(e=>EQUIP[e.k].keyLv)||{}).k, E=EQUIP[k]; if(!E||!E.keyLv) throw `${nameOf(p)} has no card key`;
     const door=S.st.pieces.find(x=>x.type==="door"&&!x.open&&dist(x,p)<=1&&(x.level||2)<=E.keyLv); if(!door) throw `no locked door up to Level ${E.keyLv} on or next to ${nameOf(p)}`;
-    const err=useAction(p,"usekey"); if(err) throw err; spend(p,"usekey",false); upd(door,q=>{ q.open=true; },`${nameOf(p)} uses ${E.name} — the Level ${door.level} door at ${sq(door.r,door.c)} opens`); discardEq(p,k,"used"); return "door open"; },
+    const err=useAction(p,"usekey"); if(err) throw err; spend(p,"usekey",false); upd(door,q=>{ q.open=true; },`${nameOf(p)} uses ${E.name} — the Level ${door.level} door at ${sq(door.r,door.c)} opens`); doorOpened(P(door.id)); discardEq(p,k,"used"); return "door open"; },
   async telepathy(p){ if(eqIndex(p,"gasmask")<0) throw "needs the Gas Mask"; const err=useAction(p,"telepathy"); if(err) throw err;
     const opts=[]; if(S.st.vdeck&&S.st.vdeck.draw.length) opts.push("Guard Order deck"); if(S.st.rdeck) opts.push("Guard Reaction deck"); if(!opts.length) throw "no deck to peek at";
     spend(p,"telepathy",false); const i=await enemyAsk("Residual Telepathy","Peek at the top card of which deck? It goes back on top.",opts);
@@ -3973,7 +4070,7 @@ async function doShoot(p,g,note,wname,extra){
     note:[note,trip?`⚠ This shot crosses the trip wires — every "!" rolled deals 1 damage to ${S.st.hostage.name}`:""].filter(Boolean).join(" · ")}); if(!r) throw "shot cancelled";
   spend(p,"shoot",false); if(cost>1) commit(st=>{ st.tt[p.id].used+=cost-1; });
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id), qe=q.equip[ei]; if(E.charges!=null&&!(inf&&!E.boost)) qe.ch=Math.max(0,(qe.ch||0)-(E.boost?boost:1)); }, `${nameOf(p)} SHOOT ${nameOf(g)} with ${E.name}${boost?` (+${boost} charge)`:""}${inf&&E.charges!=null?" (Bandana: no ammo used)":""} → ${r.hits} hit${r.hits===1?"":"s"}${loud?" (LOUD)":""}`); S.lastRoll=r;
-  applyHits(p,g,r,false);
+  applyHits(p,g,r,false); await vrAfterAttacked(p,g,r);
   if(trip&&r.bang) await hostageHit(r.bang,`${nameOf(p)}'s shot across the trip wires`);
   if(loud){ playerToken(P(p.id),"alert"); addLog(`${nameOf(p)}'s shot is LOUD → ! under ${nameOf(p)}`); }
   else if(r.bang&&!S.st.bossStage){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention (the shot itself was suppressed)`); }
@@ -4130,6 +4227,18 @@ function shootActs(p,act){ if(p.type==="otacon") return []; const out=[];
     S.st.pieces.filter(g=>(g.type==="guard"||g.type==="boss")&&!g.size&&lineClear(p,g)).forEach(g=>out.push(act(`🔫 ${E.name.replace(/ \(.*\)/,"")} → ${g.label}${E.cost>1?" (2)":""}`,`shoot ${p.label} ${g.label} ${e.k}`))); });
   return out; }
 // campaign rewards that name their card go straight into the Memory Box
+function reportForAI(){ const st=S.st, r=st.report; if(!r) return ""; const L=LAYOUTS[r.key]||{name:r.key}, S_=r.stats||{}, camp=st.camp||{memory:[]}, br=st.brief||{};
+  const who=Object.entries(br.queues||{}).filter(([,q])=>q&&q.length).map(([lab,q])=>`${lab}: ${q[0].name}${q[0].proxy?" (playing for "+q[0].proxy+")":""}`);
+  const O=OBJ[r.key]; let objs=[]; try{ objs=O?O.objs.map(o=>`  [${o.done(st)?"x":" "}] ${o.t}${o.k&&o.k!=="required"?" ("+o.k+")":""}`):[]; }catch(e){}
+  const rw=(REWARDS[r.key]||[]).map(w=>`  ${r.earned.includes(w.id)?"UNLOCKED":"missed"}: ${w.label}${w.k&&EQUIP[w.k]&&r.earned.includes(w.id)?" "+EQUIP[w.k].name:""}${w.when?" ("+w.when+")":""}`);
+  const L_=[`SNEAKING TABLE — STAGE REPORT`,`Campaign: ${camp.name||"?"}`,`Mission: ${L.name} · run ${r.attempt}`,
+    `Result: ${r.result==="cleared"?"MISSION COMPLETE":r.result==="kia"?"KILLED IN ACTION":"MISSION FAILED"} — ${r.why||""}${r.perfect?" · PERFECT RUN":""}${r.best?" · best run so far":""}`,
+    who.length?`Runners: ${who.join(" · ")}`:"",
+    `Rounds: ${r.rounds} · spotted ${S_.spotted||0} · guards KO'd ${S_.ko||0} · guards killed ${S_.kills||0} · damage taken ${S_.dmg||0} · noise ${S_.noise||0} · guard cards ${S_.cards||0}`,
+    `Events grabbed: ${(S_.objectives||[]).join(", ")||"none"}`, objs.length?"Objectives:\n"+objs.join("\n"):"", rw.length?"Rewards:\n"+rw.join("\n"):"Rewards: none for this stage",
+    `Memory Box now: ${(camp.memory||[]).map(m=>(EQUIP[m.k]||{name:m.k}).name).join(", ")||"empty"}`,
+    `Last moves:\n${(st.log||[]).slice(0,12).reverse().map(l=>"  - "+l.m).join("\n")}`];
+  return L_.filter(Boolean).join("\n"); }
 function finishMission(result,why){ finishMissionBase(result,why); const st=S.st, rep=st.report; if(!rep||result!=="cleared"||!st.camp) return;
   { const O=OBJ[rep.key]; let perf=false; try{ perf=!!O&&O.objs.every(o=>o.done(S.st)); }catch(e){} if(perf) commit(s=>{ s.report.perfect=true; const L=s.camp.runs[rep.key]; if(L&&L.length) L[L.length-1].perfect=true; }, "★★ Perfect run — every objective done"); }
   const add=(REWARDS[rep.key]||[]).filter(w=>w.k&&rep.earned.includes(w.id)&&!st.camp.memory.some(m=>m.slot===w.id||m.k===w.k));
@@ -4268,9 +4377,72 @@ function keepPopup(lock,dice,combo){ return new Promise(res=>{ modalOn(); const 
     box.querySelector("#kp-go").onclick=()=>{ box.style.display="none"; modalOff(); res(re); };
     box.querySelector("#kp-x").onclick=()=>{ box.style.display="none"; modalOff(); res(null); }; };
   draw(); }); }
+// ---------- lock / terminal panel: needed dice, slots, roll → place dice (or use Focus) → roll again ----------
+async function lockPanelRoll(p,lock,kind,note,combo){ const isTerm=lock.type==="terminal", C=charOf(p)||{interact:{w:1,b:2}};
+  const base=isTerm?{w:0,b:4}:{w:C.interact.w,b:C.interact.b}, t=tt(p);
+  let prog=t.lockProg&&t.lockProg.id===lock.id&&t.lockProg.slots?JSON.parse(JSON.stringify(t.lockProg)):{id:lock.id,slots:combo.map(()=>null),rolls:0,extra:{w:0,b:0}};
+  prog.extra=prog.extra||{w:0,b:0};
+  let rolled=[], pick=null, hacker=0, firstPaid=false; const o={by:p,kind:isTerm?"hack":"interact",vs:null,why:`${nameOf(p)} — Lv${lock.level} ${isTerm?"terminal":"door"}`,_rid:Math.random().toString(36).slice(2,9)};
+  const save=()=>commit(st=>{ st.tt[p.id].lockProg=JSON.parse(JSON.stringify(prog)); });
+  const done=()=>prog.slots.every(v=>v!=null);
+  const pool=()=>{ const kept=prog.slots.filter(Boolean); let w=base.w-kept.filter(d=>d.k==="w").length, b=base.b-kept.filter(d=>d.k==="b").length;
+    // the dice you roll = your dice minus the ones already locked in (a kept die of the other colour still counts against the total)
+    while(w+b>base.w+base.b-kept.length){ if(b>0) b--; else w--; } return {w:Math.max(0,w)+prog.extra.w,b:Math.max(0,b)+prog.extra.b+(isTerm&&p.type==="otacon"?hacker:0)}; };
+  const openSlot=v=>prog.slots.findIndex((s,i)=>s==null&&combo[i]===v);
+  S.curRoll=o; modalOn();
+  return await new Promise(res0=>{ const box=document.getElementById("rollbox");
+    const finish=v=>{ box.style.display="none"; clearDice(); shareRoll(o,null,"close"); modalOff(); res0(v); };
+    const draw=()=>{ const src=rolled.length?focusSources(P(p.id),rolled):[], d=pick!=null?rolled[pick]:null, pl=pool(), left=actionsLeft(P(p.id))-(firstPaid?0:0);
+      const perOpts=d?src.filter(s_=>s_.fx.per&&(!s_.fx.dieKind||s_.fx.dieKind===d.k)&&(!s_.blackOnly||d.k==="b")&&!(Array.isArray(s_.fx.per)&&d.v==="!")&&!(s_.onceDie&&d[s_.onceDie])):[];
+      box.innerHTML=`<div class="rb-title">${isTerm?"💻":"🔒"} ${isTerm?"Hack":"Unlock"} the Lv${lock.level} ${isTerm?"terminal":"door"}</div>
+        <div class="muted">Needs: <b style="color:var(--text);font-size:18px">${combo.map(v=>DIEF[v]||v).join(" ")}</b> (${combo.join(", ")})</div>
+        <div class="rb-dice" style="margin:8px 0">${combo.map((v,i)=>{ const s=prog.slots[i]; return `<div class="chip ${s?(s.k==="w"?"w":"b"):""}" style="${s?"":"background:#000;border:2px dashed #3a4a44;color:#3a4a44"}">${s?s.v:v}</div>`; }).join("")}</div>
+        ${rolled.length?`<div class="sh2">Your roll — tap a die</div><div class="rb-dice">${rolled.map((d,i)=>`<button class="chip ${d.k==="w"?"w":"b"} ${d.v==="!"?"bang":""} ${pick===i?"pk":""} ${d.used?"dim":""}" data-d="${i}" ${d.used?"disabled":""}>${d.v}</button>`).join("")}</div>`:""}
+        ${d?`<div class="rb-focus"><b>Die ${pick+1} (${d.k==="w"?"white":"black"} ${d.v}):</b>
+            ${openSlot(d.v)>=0?`<div class="row" style="margin:4px 0"><button class="on sm" data-use="1">✓ Use it for the combo</button></div>`:`<div class="muted">It doesn't match an empty slot.</div>`}
+            ${perOpts.map(s_=>{ const vals=(s_.fx.per==="re"||s_.fx.per==="rm")?[s_.fx.per]:s_.fx.per; return `<div class="opt"><div class="opt-src"><span class="ftok">${esc(s_.n)}</span> ${s_.pl.id===p.id?"your Focus token":esc(nameOf(s_.pl))+"'s token — "+esc(s_.why)}</div><div class="row" style="margin:3px 0">${vals.filter(v=>v!=="rm").map(v=>`<button class="sm" data-f="${src.indexOf(s_)}" data-v="${v}">${v==="re"?"Reroll it":(v>0?"+":"−")+Math.abs(v)+" → "+(d.v+(+v))}</button>`).join("")}</div></div>`; }).join("")}
+            <div class="row" style="margin:4px 0"><button class="sm" data-x="1">Don't use it</button></div></div>`:""}
+        ${done()?`<div class="pill" style="margin:6px 0">✓ Every slot is filled</div>`:""}
+        ${(()=>{ if(done()) return ""; const empty=prog.slots.filter(s=>s==null).length, n=pl.w+pl.b, adds=focusSources(P(p.id),[{k:"w"},{k:"b"}]).filter(s_=>s_.fx.add&&(!s_.blackOnly||s_.fx.add==="b"));
+          return (n<empty?`<div class="muted" style="color:#e0a040;margin:4px 0">You have ${n} dice for ${empty} empty slots — you'll need extra dice (a +1 die Focus token) to finish this.</div>`:"")
+            +(adds.length?`<div class="rb-focus"><b>Add a die to your rolls:</b>${adds.map(s_=>`<div class="row" style="margin:3px 0"><button class="sm" data-add="${adds.indexOf(s_)}">+1 ${s_.fx.add==="w"?"white":"black"}</button><span class="muted">${esc(s_.n)} · ${s_.pl.id===p.id?"your token":esc(nameOf(s_.pl))+"'s"}</span></div>`).join("")}</div>`:""); })()}
+        ${isTerm&&p.type==="otacon"&&!done()?`<div class="row" style="margin:6px 0"><span class="muted" style="flex:1">Hacker: +${hacker} black on the next roll</span><button class="sm" data-hk="-1" ${hacker?"":"disabled"}>−</button><button class="sm" data-hk="1" ${hacker>=2?"disabled":""}>＋</button></div>`:""}
+        <div class="row" style="margin-top:8px">${done()?`<button class="on" id="lk-ok" style="flex:1">🔓 ${isTerm?"Hacked!":"Unlocked!"}</button>`:`<button class="on" id="lk-roll" style="flex:1" ${(prog.rolls>0&&rolled.length===0&&false)||(firstPaid&&actionsLeft(P(p.id))<1)?"disabled":""}>🎲 ${prog.rolls?`Roll again (${pl.w+pl.b} dice · 1 action)`:`Roll ${pl.w+pl.b} dice`}</button><button class="sm" id="lk-hand">✋ Real dice</button>`}<button class="sm danger" id="lk-x">${prog.rolls?"Stop for now":"Cancel"}</button></div>
+        ${prog.rolls&&!done()?`<div class="muted" style="font-size:12px;margin-top:4px">Placed dice stay for the rest of this turn. Moving away or ending your turn loses them.</div>`:""}`;
+      box.style.display="block";
+      const q=s=>box.querySelector(s);
+      box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
+      box.querySelectorAll("[data-x]").forEach(b=>b.onclick=()=>{ rolled[pick].used=true; pick=null; draw(); });
+      box.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{ const adds=focusSources(P(p.id),[{k:"w"},{k:"b"}]).filter(s_=>s_.fx.add&&(!s_.blackOnly||s_.fx.add==="b")), s_=adds[+b.dataset.add];
+        if(s_.spend) s_.spend(); else commit(st=>{ st.pieces.find(x=>x.id===s_.pl.id).focus[s_.i]=false; }, `${nameOf(s_.pl)} spends Focus "${s_.n}" — +1 ${s_.fx.add==="w"?"white":"black"} die for the lock`); prog.extra[s_.fx.add]++; save(); draw(); });
+      box.querySelectorAll("[data-hk]").forEach(b=>b.onclick=()=>{ hacker=Math.max(0,Math.min(2,hacker+(+b.dataset.hk))); draw(); });
+      if(q("[data-use]")) q("[data-use]").onclick=()=>{ const d_=rolled[pick], i=openSlot(d_.v); prog.slots[i]={k:d_.k,v:d_.v}; d_.used=true; pick=null; save(); draw(); };
+      box.querySelectorAll("[data-f]").forEach(b=>b.onclick=async()=>{ const s_=src[+b.dataset.f], v=b.dataset.v, d_=rolled[pick];
+        if(s_.spend) s_.spend(); else commit(st=>{ st.pieces.find(x=>x.id===s_.pl.id).focus[s_.i]=false; }, `${nameOf(s_.pl)} spends Focus "${s_.n}" on the lock roll`); if(s_.onceDie) d_[s_.onceDie]=true;
+        if(v==="re"){ box.style.display="none"; const one=[{k:d_.k,v:null}]; await rollDice(one,null); d_.v=one[0].v; } else d_.v=d_.v+(+v); d_.mod=true; draw(); });
+      const doRoll=async(preset)=>{ if(prog.rolls>0||firstPaid){ const err=useAction(P(p.id),kind); if(err){ toast("✗ "+err); return; } }
+        const pl_=pool(); let ds=[...Array(pl_.w).fill("w"),...Array(pl_.b).fill("b")].map(k=>({k,v:null}));
+        if(!ds.length){ toast("No dice left to roll"); return; }
+        if(preset){ ds=preset; addLog(`Real dice entered by hand: ${ds.map(d=>d.v).join(", ")}`); } else { box.style.display="none"; shareRoll(o,null,"air"); await rollDice(ds,null); }
+        spend(P(p.id),kind,false); firstPaid=true; prog.rolls++; rolled=ds; pick=null; hacker=0;
+        const bang=ds.filter(d=>d.v==="!").length; commit(()=>{}, `${nameOf(p)} ${isTerm?"HACK":"INTERACT"} Lv${lock.level} ${isTerm?"terminal":"door"}: rolled ${ds.map(d=>d.v).join(", ")}`);
+        if(bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention`); }
+        // dice that fit an empty slot drop straight in (tap one to undo isn't needed — you can still choose Focus on the rest)
+        shareRoll(o,ds,"rolled"); save(); draw(); };
+      if(q("#lk-roll")) q("#lk-roll").onclick=()=>doRoll(false);
+      if(q("#lk-hand")) q("#lk-hand").onclick=()=>{ const pl_=pool(), ds=[...Array(pl_.w).fill("w"),...Array(pl_.b).fill("b")].map(k=>({k,v:k==="w"?"!":1})), F={w:["!",2,3,4,5,6],b:[1,2,3,4,5,6]};
+        box.innerHTML=`<div class="rb-title">✋ Real dice</div><p class="muted">Roll your ${pl_.w?pl_.w+" white ":""}${pl_.b?pl_.b+" black ":""}dice, then tap each one here until it matches.</p><div class="rb-dice">${ds.map((d,i)=>`<button class="chip ${d.k==="w"?"w":"b"}" data-hv="${i}">${d.v}</button>`).join("")}</div>
+          <div class="row"><button class="on" id="lk-huse" style="flex:1">✓ Use these dice</button><button class="sm" id="lk-hback">Back</button></div>`;
+        box.querySelectorAll("[data-hv]").forEach(b=>b.onclick=()=>{ const d=ds[+b.dataset.hv], f=F[d.k]; d.v=f[(f.indexOf(d.v)+1)%f.length]; b.textContent=d.v; b.classList.toggle("bang",d.v==="!"); });
+        box.querySelector("#lk-huse").onclick=()=>doRoll(ds); box.querySelector("#lk-hback").onclick=()=>draw(); };
+      if(q("#lk-ok")) q("#lk-ok").onclick=()=>{ commit(st=>{ delete st.tt[p.id].lockProg; }); upd(lock,qq=>{ if(isTerm) qq.hacked=true; else qq.open=true; },`${nameOf(p)} ${isTerm?"HACKS the terminal":"UNLOCKS the door"} at ${sq(lock.r,lock.c)} — ${prog.slots.map(s=>s.v).join(", ")}`); if(!isTerm) doorOpened(P(lock.id)); finish(isTerm?"terminal hacked":"door unlocked"); };
+      q("#lk-x").onclick=()=>{ if(prog.rolls) save(); finish(prog.rolls?`progress kept for this turn: ${prog.slots.filter(Boolean).length}/${combo.length} placed`:"cancelled"); };
+    };
+    draw(); }); }
 async function lockRoll(p,lock,kind,note){ const isTerm=lock.type==="terminal", C=charOf(p)||{interact:{w:1,b:2}};
   if(!isTerm&&(lock.level||2)>=5&&!(lock.combo&&lock.combo.length)) throw `the Lv5 door shows no dice — it needs a card key or the mission's own way in`;
   let combo=lock.combo; if(!combo||!combo.length){ combo=await setComboPopup(lock); if(!combo) throw "cancelled"; lock=P(lock.id); }
+  if(!S.scriptRunning&&!S.aiRunning&&!window.__noLockPanel) return await lockPanelRoll(p,lock,kind,note,combo);
   const t=tt(p), prog=t.lockProg&&t.lockProg.id===lock.id?t.lockProg:null;
   let dice;
   if(prog){ const re=await keepPopup(lock,prog.dice,combo); if(!re) throw "cancelled";
@@ -4283,7 +4455,7 @@ async function lockRoll(p,lock,kind,note){ const isTerm=lock.type==="terminal", 
   const m=comboMatch(combo,dice);
   if(m.ok){ commit(st=>{ delete st.tt[p.id].lockProg; });
     const done=isTerm?`the terminal is HACKED`:`the door UNLOCKS`;
-    if(await decide(`🔓 ${isTerm?"Terminal hacked":"Door unlocked"}`,`The dice ${dice.map(d=>d.v).join(", ")} match ${comboText(combo)} — ${done}.`)) upd(lock,q=>{ if(isTerm) q.hacked=true; else q.open=true; },`${nameOf(p)} ${isTerm?"HACKS the terminal":"UNLOCKS the door"} at ${sq(lock.r,lock.c)}`);
+    if(await decide(`🔓 ${isTerm?"Terminal hacked":"Door unlocked"}`,`The dice ${dice.map(d=>d.v).join(", ")} match ${comboText(combo)} — ${done}.`)) { upd(lock,q=>{ if(isTerm) q.hacked=true; else q.open=true; },`${nameOf(p)} ${isTerm?"HACKS the terminal":"UNLOCKS the door"} at ${sq(lock.r,lock.c)}`); if(!isTerm) doorOpened(P(lock.id)); }
     return isTerm?"terminal hacked":"door unlocked"; }
   commit(st=>{ st.tt[p.id].lockProg={id:lock.id,dice:dice.map(d=>({k:d.k,v:d.v}))}; }, `${nameOf(p)} ${isTerm?"HACK":"INTERACT"} Lv${lock.level} ${isTerm?"terminal":"door"}: ${dice.map(d=>d.v).join(", ")} — still needs ${m.need.join(", ")}`);
   toast(`Not yet — still need ${m.need.join(", ")}. ${isTerm?"Hack":"Interact"} again (another action) to reroll any dice this turn.`);
@@ -4291,18 +4463,274 @@ async function lockRoll(p,lock,kind,note){ const isTerm=lock.type==="terminal", 
 async function doInteract(p,arg,note){
   const err=useAction(p,"interact"); if(err) throw err;
   const lock=S.st.pieces.find(x=>x.type==="door"&&!x.open&&dist(x,p)<=1&&!wallBetween(p.r,p.c,x.r,x.c));
-  if(!lock){ spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)} (no dice needed)`); return "interact — no dice needed"; }
+  if(!lock){ const sd=secAt(p); if(sd) return await useSecDoor(p,sd);
+    if(S.st.remoteInteract&&S.st.remoteInteract.startsWith(S.st.round+":")&&S.st.pieces.some(x=>x.type==="secdoor")){ const sds=S.st.pieces.filter(x=>x.type==="secdoor");
+      const s=await pickSquare("Remote Access: pick any security door to use",(r,c)=>sds.some(x=>x.r===r&&x.c===c)); if(s) return await useSecDoor(p,sds.find(x=>x.r===s.r&&x.c===s.c)); }
+    spend(p,"interact",false); commit(()=>{}, `${nameOf(p)} INTERACT${arg?" with "+arg:""} at ${sq(p.r,p.c)} (no dice needed)`); return "interact — no dice needed"; }
   return await lockRoll(p,lock,"interact",note); }
 async function doEquipAct(p,kind,arg){
   if(kind==="hack"){ const err=useAction(p,kind); if(err) throw err; const term=S.st.pieces.find(x=>x.type==="terminal"&&!x.hacked&&dist(x,p)<=1); if(!term) throw "no unhacked terminal on or next to Otacon"; return await lockRoll(p,term,"hack"); }
   return doEquipActBase(p,kind,arg); }
 
 // =====================================================================
+// VR MISSIONS — objective/trap tokens, security doors, Otacon's System deck, VR bosses
+// (card text below is a short paraphrase — the physical cards are the reference)
+// =====================================================================
+const VR_MISSIONS=["vr01"], VR_TOTAL=6;
+const isVR=k=>VR_MISSIONS.includes(k);
+const VR_BOSSES={
+  liquid:{name:"VR Liquid",short:"L",def:3,hp:[2,3,4,5],reward:"assault",codec:"02.05",
+    abil:[["Running Charge","On his activation, the moment he sees a player he rushes up to 2 spaces toward them along the shortest path, then attacks."],
+      ["One-Two Punch","+1 black die when he attacks from an adjacent space."],
+      ["Determined","After a player who can see him attacks him, he moves 2 spaces toward them (+1 per skull on his dashboard)."],
+      ["FOXDIE","Reaching his health doesn't drop him: roll 1 white per skull — a ! defeats him; otherwise his damage clears and he gains a skull."]]},
+  mantis:{name:"VR Mantis",short:"P",def:4,hp:[6,9,12,15],reward:"gasmask",codec:"02.12",
+    abil:[["ESP","Instead of a normal patrol he moves 3 spaces toward the nearest player."],
+      ["Puppeteer","At the start of his activation, each KO or dead token within 3 spaces becomes a guard facing him (they don't act this round)."],
+      ["Mind Control","If you roll a ! attacking him, you must attack the nearest player you can see with 1 white — or yourself if nobody is in sight."]]},
+  ocelot:{name:"VR Ocelot",short:"O",def:4,hp:[5,8,11,14],reward:"timebomb",codec:"02.10",
+    abil:[["Ricochet Shot","If he hasn't attacked by the end of his activation and a ! is within 6 spaces, he attacks the nearest player within 2 spaces of it — no LOS needed."],
+      ["Elusive","He can leapfrog players. After he's attacked he moves up to 6 spaces to the nearest space no player can see, then turns toward the attacker."]]},
+  raven:{name:"VR Raven",short:"R",def:4,hp:[6,10,14,18],reward:"boxB",codec:"02.07",
+    abil:[["Pursuit","+1 move for every 5 damage he has taken, and +1 more if a ! is in his zone."],
+      ["Chaingun","He attacks every player in his LOS; +1 black die if he moved 3 spaces or fewer."],
+      ["Retribution","When damaged he turns to face the attacker. A player who finishes an action in his LOS is attacked."],
+      ["Mark of Death","Roll a ! attacking him on your turn and your Sneak and Dash cost +1 for the rest of that turn."]]},
+  wolf:{name:"VR Wolf",short:"W",def:4,hp:[5,8,11,14],reward:"pentazemin",codec:"02.11",
+    abil:[["Elusive","She can leapfrog players. After she's attacked she moves up to 6 spaces to the nearest space no player can see, then turns toward the attacker."],
+      ["Sniper Shot","+1 black die against a player 4 or more spaces away."],
+      ["Overwatch","When a player moves into her LOS, she attacks them at once."]]}
+};
+const vrBoss=()=>S.st.pieces.find(p=>p.type==="guard"&&p.vr);
+const isVrBoss=p=>!!(p&&p.type==="guard"&&p.vr);
+function vrPlayers(){ return S.st.pieces.filter(isPlayer).length||1; }
+
+// ---------- launch: VR boss swap, trap/objective faces, System deck ----------
+function vrSetup(n,k,chars){ const L=LAYOUTS[k]; if(!L||!L.vr) return;
+  n.vrMission=k; n.vrObj=0; n.vrNeed=(L.vrNeed||{})[chars.length]||(L.vrNeed||{})[4]||1;
+  const bag=shuffle([...(L.trapFaces||["sensor","sensor","camera","blank","blank"])]);
+  n.pieces.filter(p=>p.type==="hidden"&&p.deck==="hazard").forEach((p,i)=>{ p.face=bag[i%bag.length]; p.up=false; });
+  n.pieces.filter(p=>p.type==="hidden"&&p.deck!=="hazard").forEach(p=>{ p.face=p.face||"check"; p.up=false; });
+  // door tokens: matching pairs go on doors between tiles (Lv2 5-1, Lv3 5-4-1, Lv4 5-5-1-1); the odd one out goes on room doors (Lv2 6-1, Lv3 6-2-1)
+  const DOORS={2:[[6,1]],3:[[6,2,1]],4:[[5,5,1,1]]};
+  n.pieces.filter(p=>p.type==="door"&&!p.combo&&DOORS[p.level]).forEach(p=>{ const o=DOORS[p.level]; p.combo=[...o[Math.floor(Math.random()*o.length)]]; });
+  const b=(S.st.brief||{}).vrBoss, spot=n.pieces.find(p=>p.vrSpot);
+  if(b&&VR_BOSSES[b]&&spot){ const B=VR_BOSSES[b], np=chars.length;
+    Object.assign(spot,{vr:b,label:B.name.replace(/^VR /,""),hp:B.hp[Math.min(4,Math.max(1,np))-1],def:B.def,dmg:0,kod:0,skulls:0}); n.vrBoss=b;
+    n.vb=(n.vb??n.blue)+3; n.blue=n.vb; }
+  if(chars.includes("otacon")) n.sys={draw:shuffle(SYSTEM_CARDS.map(c=>c.id)),hand:[]}; }
+
+// ---------- objective + trap tokens ----------
+function vrCollect(p,r,c){ const t=S.st.pieces.find(x=>x.type==="hidden"&&x.deck!=="hazard"&&x.r===r&&x.c===c); if(!t||!S.st.vrMission) return;
+  commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==t.id); st.vrObj=(st.vrObj||0)+1; (st.stats.objectives=st.stats.objectives||[]).push("obj"); },
+    `${nameOf(p)} collects an objective at ${sq(r,c)} — ${(S.st.vrObj||0)+1}/${S.st.vrNeed} collected`);
+  toast(`Objective ${S.st.vrObj}/${S.st.vrNeed}`); addFx(r,c,"zap",0.6); }
+function camFacing(r,c){ const open=[0,1,2,3].filter(d=>{ const r2=r+DR[d],c2=c+DC[d]; return inBounds(r2,c2)&&!wallBetween(r,c,r2,c2)&&!blocked(r2,c2); });
+  const fg=open[0]??2; const fo=open.find(d=>d!==fg)??fg; return {fg,fo}; }
+
+// ---------- security doors (paired tokens: Interact on one → move to its partner) ----------
+function secPartner(t){ return S.st.pieces.find(x=>x.type==="secdoor"&&x.id!==t.id&&x.pair===t.pair); }
+function secAt(p){ return S.st.pieces.find(x=>x.type==="secdoor"&&((x.r===p.r&&x.c===p.c)||(dist(x,p)===1&&!wallBetween(p.r,p.c,x.r,x.c)))); }
+async function useSecDoor(p,t){ const o=secPartner(t); if(!o) throw "this security door has no partner on the map";
+  let dst={r:o.r,c:o.c}; const occ=figureAt(o.r,o.c,p.id);
+  if(occ){ const free=[0,1,2,3].map(d=>({r:o.r+DR[d],c:o.c+DC[d]})).filter(s=>inBounds(s.r,s.c)&&!blocked(s.r,s.c)&&!figureAt(s.r,s.c,p.id)&&!wallBetween(o.r,o.c,s.r,s.c));
+    if(!free.length) throw `${nameOf(occ)} is standing on the other door and there's nowhere to land`; dst=free[0];
+    addLog(`${nameOf(p)} leapfrogs ${nameOf(occ)} coming through the door (Codec 04.07)`); }
+  spend(p,"interact",false);
+  commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.r=dst.r; q.c=dst.c; }, `${nameOf(p)} goes through the ${t.color||""} security door → ${sq(dst.r,dst.c)}`);
+  addFx(dst.r,dst.c,"zap",0.6); const me=P(p.id);
+  if(occ&&(occ.type==="guard")){ playerToken(me,"alert"); addLog(`${nameOf(me)} leapfrogged ${nameOf(occ)} → ! and he attacks`);
+    const r_=await rollPrompt({target:me,kind:"enemy",w:0,b:2,vs:defOf(me),why:`${nameOf(occ)} attacks ${nameOf(me)} for leapfrogging him`}); if(r_&&r_.hits) hurt(P(me.id),r_.hits); }
+  await trapCheck(me,[]); vrCollect(me,me.r,me.c); await vrAfterMove(me,[{r:me.r,c:me.c}]);
+  const seen=viewersSeeing(me.r,me.c,me); if(seen.length){ playerToken(me,"alert"); addLog(`${nameOf(me)} SEEN coming through the door → !`); }
+  checkWin(P(p.id)); return `through the security door → ${sq(dst.r,dst.c)}`; }
+// Lv4 locked doors in a pair flip to a red security-door pair when either is unlocked
+function doorOpened(lock){ if(!lock||!lock.pair) return; const mates=S.st.pieces.filter(x=>x.type==="door"&&x.pair===lock.pair);
+  commit(st=>{ mates.forEach(m=>{ const q=st.pieces.find(x=>x.id===m.id); if(!q) return; q.type="secdoor"; q.color=m.secColor||"red"; delete q.open; }); },
+    `Both Lv${lock.level} doors flip over — they're now a ${lock.secColor||"red"} pair of Security Doors (Interact on one to come out at the other)`); }
+
+// ---------- Otacon's System deck ----------
+const SYSTEM_CARDS=[
+  {id:"mis",n:"Misdirection",slots:[3,4,6],tiers:[[2,"Move an attention token no guard or camera can see, up to 4 spaces (not through obstacles or guards)",{fx:"mis",n:4}],[3,"…up to 7 spaces",{fx:"mis",n:7}],[4,"…up to 10 spaces",{fx:"mis",n:10}]]},
+  {id:"unl1",n:"Remote Unlock",slots:[1,2,4],tiers:[[2,"Unlock a level 2 door",{fx:"unlock",n:2}],[3,"Unlock a door up to level 3",{fx:"unlock",n:3}],[4,"Unlock a door up to level 4",{fx:"unlock",n:4}],[5,"Unlock a door up to level 5",{fx:"unlock",n:5}]]},
+  {id:"dis",n:"Disable Security",slots:[2,3,5],tiers:[[2,"Hold it: when a Guard Order card is revealed, discard this to cancel its Radio-In",{fx:"noradio"}],[2,"Remove 1 face-down trap token",{fx:"rmtrap",n:1}],[3,"Flip 2 face-down tokens (objective and/or trap)",{fx:"flip",n:2}],[4,"Remove 1 camera or laser sensor",{fx:"rmsec"}]]},
+  {id:"acc",n:"Remote Access",slots:[2,5,6],tiers:[[2,"Look at the top 2 Guard Order cards and put them back in any order",{fx:"peek"}],[2,"This turn, Interact with any unlocked interact icon from anywhere",{fx:"remote"}],[3,"Flip 2 face-down tokens (objective and/or trap)",{fx:"flip",n:2}],[4,"Remove 2 face-down tokens (objective and/or trap)",{fx:"rmhid",n:2}]]},
+  {id:"dst",n:"Distraction",slots:[4,6],tiers:[[2,"1 guard turns to face a new path",{fx:"turn",n:1}],[3,"2 guards turn to face a new path",{fx:"turn",n:2}],[4,"3 guards turn to face a new path",{fx:"turn",n:3}]]},
+  {id:"fal",n:"False Alarm",slots:[1,3,5],tiers:[[2,"If your attention token is off the map, place it (either side) on an empty space in your zone",{fx:"alarm"}],[4,"…on an empty space in any zone",{fx:"alarm",any:true}]]},
+  {id:"cnt",n:"Countdown Reset",slots:[2,4,6],tiers:[[2,"If the top Guard Order card is red, move 1 card from the bottom of the deck to the top",{fx:"reset",n:1}],[4,"…move 2 cards",{fx:"reset",n:2}],[5,"…move 3 cards",{fx:"reset",n:3}]]},
+  {id:"unl2",n:"Remote Unlock",slots:[1,2,4],tiers:[[2,"Unlock a level 2 door",{fx:"unlock",n:2}],[3,"Unlock a door up to level 3",{fx:"unlock",n:3}],[4,"Unlock a door up to level 4",{fx:"unlock",n:4}],[5,"Unlock a door up to level 5",{fx:"unlock",n:5}]]}];
+const SYS=id=>SYSTEM_CARDS.find(c=>c.id===id);
+function hackedTermFor(p){ return S.st.pieces.filter(x=>x.type==="terminal"&&x.hacked&&(dist(x,p)===0||(dist(x,p)===1&&!wallBetween(p.r,p.c,x.r,x.c)))).sort((a,b)=>(b.level||2)-(a.level||2))[0]; }
+function sysDiceOn(st){ return (st.sys?st.sys.hand:[]).reduce((a,h)=>a+h.dice.filter(v=>v!=null).length,0); }
+const sysFull=h=>h.dice.every(v=>v!=null);
+async function sysSearch(p){ const st=S.st; if(!st.sys) throw "no System deck in this mission";
+  const t=hackedTermFor(p); if(!t) throw "Otacon must be on or next to a HACKED terminal";
+  if(!st.sys.draw.length) throw "the System deck is empty";
+  spend(p,"search",false); const id=st.sys.draw[0];
+  commit(s=>{ s.sys.draw.shift(); s.sys.hand.push({id,dice:SYS(id).slots.map(()=>null)}); }, `${nameOf(p)} SYSTEM SEARCH → draws "${SYS(id).n}"`);
+  if(S.st.sys.hand.length>3){ const pick=await sysChoose("Too many System cards","Otacon can hold 3. Pick the one to put back:",S.st.sys.hand.map((h,i)=>[i,SYS(h.id).n]));
+    const i=pick==null?S.st.sys.hand.length-1:pick, back=S.st.sys.hand[i], where=await sysChoose("Put it back","Top or bottom of the System deck?",[["top","Top"],["bottom","Bottom"]]);
+    commit(s=>{ s.sys.hand.splice(i,1); if(where==="top") s.sys.draw.unshift(back.id); else s.sys.draw.push(back.id); }, `"${SYS(back.id).n}" goes back on the ${where==="top"?"top":"bottom"} of the System deck`); }
+  openSystem(p); return `drew ${SYS(id).n}`; }
+async function sysAccess(p){ const st=S.st; if(!st.sys||!st.sys.hand.length) throw "no System cards next to Otacon's dashboard — System Search first";
+  const t=hackedTermFor(p); if(!t) throw "Otacon must be on or next to a HACKED terminal";
+  const free=Math.max(0,4-sysDiceOn(st)); if(!free) throw "all 4 dice are on System cards — take some off in the System panel first";
+  const r=await rollPrompt({by:p,kind:"access",w:0,b:free,vs:null,why:`${nameOf(p)} Access Systems — ${free} black`,note:"Then put each die on an empty slot with the same number. Hacker: the dice box offers up to +2 black."}); if(!r) throw "cancelled";
+  spend(p,"access",false); commit(()=>{}, `${nameOf(p)} ACCESS SYSTEMS → ${r.dice.map(d=>d.v).join(", ")}`);
+  await sysAllocate(p,r.dice.map(d=>d.v)); openSystem(p); return "dice placed — resolve a full card from the System panel"; }
+function sysChoose(title,text,opts){ modalOn(); return new Promise(res0=>{ const res=v=>{ box.style.display="none"; modalOff(); res0(v); }; const box=document.getElementById("rollbox");
+  box.innerHTML=`<div class="rb-title">🖥 ${esc(title)}</div><p class="muted">${text}</p>${opts.map(([v,l],i)=>`<button class="sm" style="display:block;width:100%;margin:4px 0;text-align:left" data-o="${i}">${esc(l)}</button>`).join("")}<div class="row"><button class="sm" id="sc-x">Cancel</button></div>`;
+  box.style.display="block"; box.querySelectorAll("[data-o]").forEach(b=>b.onclick=()=>res(opts[+b.dataset.o][0])); box.querySelector("#sc-x").onclick=()=>res(null); }); }
+// put rolled dice on matching empty slots (tap a die, then a slot); unused dice are lost
+function sysAllocate(p,vals){ modalOn(); return new Promise(res0=>{ const box=document.getElementById("rollbox"); let pick=null; const left=[...vals];
+  const done=()=>{ box.style.display="none"; modalOff(); res0(); };
+  const draw=()=>{ const H=S.st.sys.hand;
+    box.innerHTML=`<div class="rb-title">🖥 Place your dice</div><p class="muted">Tap a die, then an empty slot showing the same number. Dice you don't place are lost.</p>
+      <div class="rb-dice">${left.map((v,i)=>`<button class="chip b ${pick===i?"pk":""}" data-d="${i}">${v}</button>`).join("")||`<span class="muted">All dice placed.</span>`}</div>
+      ${H.map((h,hi)=>{ const C=SYS(h.id); return `<div class="scard" style="margin:6px 0"><b>${esc(C.n)}</b> ${sysFull(h)?`<span class="pill">READY</span>`:""}<div class="row" style="margin:4px 0">${C.slots.map((s,si)=>{ const v=h.dice[si], can=pick!=null&&v==null&&left[pick]===s;
+        return `<button class="sm ${v!=null?"on":""}" ${can?"":"disabled"} data-s="${hi}|${si}" style="min-width:44px">${v!=null?"🎲"+v:"["+s+"]"}</button>`; }).join("")}</div></div>`; }).join("")}
+      <div class="row"><button class="on" id="sa-auto" style="flex:1">Auto-place</button><button class="sm" id="sa-ok">Done</button></div>`;
+    box.style.display="block";
+    box.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{ pick=pick===+b.dataset.d?null:+b.dataset.d; draw(); });
+    box.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{ const [hi,si]=b.dataset.s.split("|").map(Number), v=left[pick]; commit(s=>{ s.sys.hand[hi].dice[si]=v; }, `Die ${v} → "${SYS(S.st.sys.hand[hi].id).n}"`); left.splice(pick,1); pick=null; draw(); });
+    box.querySelector("#sa-auto").onclick=()=>{ for(let i=left.length-1;i>=0;i--){ const v=left[i]; const H2=S.st.sys.hand; let put=false;
+        for(let hi=0;hi<H2.length&&!put;hi++){ const C=SYS(H2[hi].id); for(let si=0;si<C.slots.length&&!put;si++) if(H2[hi].dice[si]==null&&C.slots[si]===v){ commit(s=>{ s.sys.hand[hi].dice[si]=v; }, `Die ${v} → "${C.n}"`); put=true; } }
+        if(put) left.splice(i,1); } pick=null; draw(); };
+    box.querySelector("#sa-ok").onclick=()=>{ if(left.length) addLog(`Unplaced dice lost: ${left.join(", ")}`); done(); }; };
+  draw(); }); }
+// System panel: see cards, take dice off, resolve a full card
+function openSystem(p){ p=p||S.st.pieces.find(x=>x.type==="otacon"); if(!p||!S.st.sys) return; modalOn(); const box=document.getElementById("rollbox");
+  const close=()=>{ box.style.display="none"; modalOff(); refresh(); };
+  const draw=()=>{ const H=S.st.sys.hand, t=hackedTermFor(P(p.id)), lv=t?(t.level||2):0;
+    box.innerHTML=`<div class="rb-title">🖥 Otacon's System cards</div>
+      <p class="muted">${t?`Connected to the Lv${lv} terminal at ${sq(t.r,t.c)} — you can resolve effects up to level ${lv}.`:"Not connected to a hacked terminal — move next to one to use these."} Deck: ${S.st.sys.draw.length} card${S.st.sys.draw.length===1?"":"s"} · dice on cards: ${sysDiceOn(S.st)}/4</p>
+      ${H.length?H.map((h,hi)=>{ const C=SYS(h.id), full=sysFull(h); return `<div class="scard" style="margin:6px 0"><b>${esc(C.n)}</b> ${full?`<span class="pill">READY</span>`:""}
+        <div class="row" style="margin:4px 0">${C.slots.map((s,si)=>`<button class="sm ${h.dice[si]!=null?"on":""}" data-off="${hi}|${si}" ${h.dice[si]==null?"disabled":""} style="min-width:44px" title="Tap to take the die off">${h.dice[si]!=null?"🎲"+h.dice[si]:"["+s+"]"}</button>`).join("")}</div>
+        ${C.tiers.map(([L,txt,fx],ti)=>`<div class="row" style="margin:2px 0;gap:6px"><button class="sm ${full&&lv>=L?"on":""}" ${full&&lv>=L?"":"disabled"} data-res="${hi}|${ti}" style="min-width:42px">[${L}]</button><span class="muted" style="flex:1">${esc(txt)}</span></div>`).join("")}</div>`; }).join(""):`<p class="muted">No System cards — use System Search next to a hacked terminal.</p>`}
+      <div class="row"><button class="on" id="sy-x" style="flex:1">Close</button></div>`;
+    box.style.display="block";
+    box.querySelectorAll("[data-off]").forEach(b=>b.onclick=()=>{ const [hi,si]=b.dataset.off.split("|").map(Number); commit(s=>{ s.sys.hand[hi].dice[si]=null; }, `A die is taken off "${SYS(S.st.sys.hand[hi].id).n}"`); draw(); });
+    box.querySelectorAll("[data-res]").forEach(b=>b.onclick=async()=>{ const [hi,ti]=b.dataset.res.split("|").map(Number); box.style.display="none"; modalOff();
+      try{ const out=await sysResolve(P(p.id),hi,ti); if(out) toast(out); }catch(e){ alertMsg("✗ "+(e.message||e)); } refresh(); });
+    box.querySelector("#sy-x").onclick=close; };
+  draw(); }
+function sysDone(hi,why){ const h=S.st.sys.hand[hi]; commit(s=>{ const x=s.sys.hand.splice(hi,1)[0]; s.sys.draw.push(x.id); }, `"${SYS(h.id).n}" resolved${why?" — "+why:""} → dice off, card to the bottom of the System deck`); }
+async function sysResolve(p,hi,ti){ const h=S.st.sys.hand[hi], C=SYS(h.id), [L,txt,fx]=C.tiers[ti], t=hackedTermFor(p);
+  if(!sysFull(h)) throw "fill every slot first"; if(!t||(t.level||2)<L) throw `needs a hacked terminal of level ${L}+ next to Otacon`;
+  if(fx.fx==="noradio"){ commit(s=>{ s.sys.hand[hi].hold="noradio"; }, `"${C.n}" is held ready — it can cancel the next Radio-In`); return "held — it pops up when a Radio-In card is revealed"; }
+  if(fx.fx==="unlock"){ const ds=S.st.pieces.filter(x=>x.type==="door"&&!x.open&&(x.level||2)<=fx.n); if(!ds.length) throw `no locked door of level ${fx.n} or lower`;
+    const s=await pickSquare(`Pick a locked door (Lv${fx.n} or lower) to unlock`,(r,c)=>ds.some(d=>d.r===r&&d.c===c)); if(!s) return;
+    const d=ds.find(x=>x.r===s.r&&x.c===s.c); upd(d,q=>{ q.open=true; },`Remote Unlock: the Lv${d.level} door at ${sq(d.r,d.c)} opens`); doorOpened(P(d.id)); sysDone(hi); return "door unlocked"; }
+  if(fx.fx==="mis"){ const vs=S.st.pieces.filter(isViewer), toks=S.st.pieces.filter(x=>x.type==="attn"&&!vs.some(v=>los(v,x.r,x.c))); if(!toks.length) throw "no attention token is out of every guard's and camera's sight";
+    const a=await pickSquare("Pick the attention token to move",(r,c)=>toks.some(x=>x.r===r&&x.c===c)); if(!a) return; const tok=toks.find(x=>x.r===a.r&&x.c===a.c);
+    const reach=sysReach(tok,fx.n); const b=await pickSquare(`Move it up to ${fx.n} spaces`,(r,c)=>reach.has(key(r,c))&&!(r===tok.r&&c===tok.c)); if(!b) return;
+    upd(tok,q=>{ q.r=b.r; q.c=b.c; },`Misdirection: ${tok.owner}'s ${tok.mode==="alert"?"!":"?"} moves ${sq(a.r,a.c)} → ${sq(b.r,b.c)}`); sysDone(hi); return "token moved"; }
+  if(fx.fx==="rmtrap"||fx.fx==="flip"||fx.fx==="rmhid"){ const pool=S.st.pieces.filter(x=>x.type==="hidden"&&!x.up&&(fx.fx!=="rmtrap"||x.deck==="hazard")); if(!pool.length) throw "no face-down tokens on the map";
+    const n=fx.n||1, picked=[]; for(let i=0;i<n&&picked.length<pool.length;i++){ const s=await pickSquare(`${fx.fx==="flip"?"Flip":"Remove"} a face-down token (${i+1}/${n})`,(r,c)=>pool.some(x=>x.r===r&&x.c===c&&!picked.includes(x.id))); if(!s) break; picked.push(pool.find(x=>x.r===s.r&&x.c===s.c&&!picked.includes(x.id)).id); }
+    if(!picked.length) return;
+    for(const id of picked){ const x=P(id); if(fx.fx==="flip"){ if(x.deck==="hazard") await revealTrap(x,"System card"); else upd(x,q=>{ q.up=true; },`Objective at ${sq(x.r,x.c)} flipped face up: ${(HIDDEN_FACES[x.face]||{}).n||"?"}`); }
+      else commit(s=>{ s.pieces=s.pieces.filter(q=>q.id!==id); }, `Face-down ${x.deck==="hazard"?"trap":"objective"} at ${sq(x.r,x.c)} removed`); }
+    sysDone(hi); return "done"; }
+  if(fx.fx==="rmsec"){ const pool=S.st.pieces.filter(x=>x.type==="camera"||(x.type==="hidden"&&x.up&&(x.face==="sensor"||x.face==="laser"))); if(!pool.length) throw "no camera or laser sensor on the map";
+    const s=await pickSquare("Pick a camera or laser sensor to remove",(r,c)=>pool.some(x=>x.r===r&&x.c===c)); if(!s) return; const x=pool.find(q=>q.r===s.r&&q.c===s.c);
+    commit(st=>{ st.pieces=st.pieces.filter(q=>q.id!==x.id); }, `Disable Security: the ${x.type==="camera"?"camera":"laser sensor"} at ${sq(x.r,x.c)} is switched off`); sysDone(hi); return "removed"; }
+  if(fx.fx==="peek"){ if(!vdeckOn()) throw "uses the on-screen Guard Order deck"; const top=S.st.vdeck.draw.slice(0,2); if(!top.length) throw "the deck is empty";
+    const order=await sysChoose("Remote Access — top of the Guard Order deck",`Top: <b>${esc(cardText(top[0]))}</b>${top[1]?`<br>Next: <b>${esc(cardText(top[1]))}</b>`:""}<br>Which order should they go back in?`,[["keep","Keep this order"],...(top[1]?[["swap","Swap them"]]:[])]);
+    if(order==="swap") commit(s=>{ const a=s.vdeck.draw[0]; s.vdeck.draw[0]=s.vdeck.draw[1]; s.vdeck.draw[1]=a; }, "Remote Access: the top two Guard Order cards are swapped"); else addLog("Remote Access: Otacon looks at the top two Guard Order cards");
+    sysDone(hi); return "peeked"; }
+  if(fx.fx==="remote"){ commit(s=>{ s.tt[p.id]=s.tt[p.id]||{}; s.remoteInteract=s.round+":"+p.id; }, `Remote Access: this turn ${nameOf(p)}'s team can Interact with any unlocked interact icon from anywhere`); sysDone(hi); return "remote interact on"; }
+  if(fx.fx==="turn"){ const gs=S.st.pieces.filter(x=>x.type==="guard"); if(!gs.length) throw "no guards on the map"; const picked=[];
+    for(let i=0;i<fx.n&&picked.length<gs.length;i++){ const s=await pickSquare(`Pick a guard to turn (${i+1}/${fx.n})`,(r,c)=>gs.some(g=>g.r===r&&g.c===c&&!picked.includes(g.id))); if(!s) break; const g=gs.find(x=>x.r===s.r&&x.c===s.c); picked.push(g.id);
+      const d=newPathFacing(g,"R"); if(d==null){ addLog(`${nameOf(g)} has no new path to turn to`); continue; } guardFace(P(g.id),d,"Distraction"); }
+    if(!picked.length) return; sysDone(hi); return "guards turned"; }
+  if(fx.fx==="alarm"){ const me=p, on=S.st.pieces.find(x=>x.type==="attn"&&(x.owner||"").toLowerCase()===(me.label||"").toLowerCase()); if(on) throw `${nameOf(me)}'s attention token is already on the map`;
+    const z=zoneOfPiece(me); const s=await pickSquare(fx.any?"Place your attention token in any zone":"Place your attention token in your zone",(r,c)=>S.st.cells[key(r,c)]!=="void"&&!blocked(r,c)&&!S.st.pieces.some(x=>x.r===r&&x.c===c)&&(fx.any||inZone(z,r,c))); if(!s) return;
+    const side=await sysChoose("False Alarm","Which side up?",[["q","? (investigate)"],["alert","! (alert)"]]); if(!side) return;
+    commit(st=>{ st.pieces.push({id:st.nextId++,type:"attn",r:s.r,c:s.c,mode:side,owner:me.label}); }, `False Alarm: ${nameOf(me)}'s ${side==="alert"?"!":"?"} is placed at ${sq(s.r,s.c)}`); sysDone(hi); return "placed"; }
+  if(fx.fx==="reset"){ if(!vdeckOn()) throw "uses the on-screen Guard Order deck"; const top=S.st.vdeck.draw[0]; if(!top||!(top.color==="red"||top.over)) throw "the top Guard Order card isn't red";
+    commit(s=>{ for(let i=0;i<fx.n&&s.vdeck.draw.length>1;i++) s.vdeck.draw.unshift(s.vdeck.draw.pop()); deckCounts(s); }, `Countdown Reset: ${fx.n} card${fx.n>1?"s":""} from the bottom of the Guard Order deck go on top`); sysDone(hi); return "deck reset"; }
+  throw "resolve this one by hand"; }
+function sysReach(from,n){ const out=new Set([key(from.r,from.c)]); let fr=[[from.r,from.c]];
+  for(let d=0;d<n;d++){ const nx=[]; for(const [r,c] of fr) for(let k=0;k<4;k++){ const r2=r+DR[k],c2=c+DC[k]; if(!inBounds(r2,c2)||out.has(key(r2,c2))||blocked(r2,c2)||wallBetween(r,c,r2,c2)||S.st.pieces.some(x=>x.type==="guard"&&x.r===r2&&x.c===c2)) continue; out.add(key(r2,c2)); nx.push([r2,c2]); } fr=nx; }
+  return out; }
+// Otacon walks away from every hacked terminal → all dice off, cards go back
+async function sysDisconnect(p){ if(!p||p.type!=="otacon"||!S.st.sys||!S.st.sys.hand.length||hackedTermFor(p)) return;
+  const where=await sysChoose("Disconnected","Otacon moved away from the hacked terminal — every die comes off and his System cards go back. Top or bottom of the deck?",[["bottom","Bottom"],["top","Top"]])||"bottom";
+  commit(s=>{ const ids=s.sys.hand.map(h=>h.id); s.sys.hand=[]; if(where==="top") s.sys.draw.unshift(...ids); else s.sys.draw.push(...ids); }, `Otacon disconnects — dice discarded, System cards back on the ${where} of the deck`); }
+// Disable Security held: cancel a Radio-In
+async function sysCancelRadio(){ const st=S.st; if(!st.sys) return false; const hi=st.sys.hand.findIndex(h=>h.hold==="noradio"&&sysFull(h)); if(hi<0) return false;
+  const ota=st.pieces.find(x=>x.type==="otacon"); if(!ota||!hackedTermFor(ota)) return false;
+  const v=await sysChoose("Disable Security","This Guard Order card has a Radio-In. Discard Disable Security to cancel it?",[["yes","Cancel the Radio-In"],["no","Let it happen"]]);
+  if(v!=="yes") return false; sysDone(hi,"Radio-In cancelled"); return true; }
+
+// ---------- VR boss behaviour ----------
+function bossDice(g,tgt,moved){ let b=2; const B=g.vr; if(B==="liquid"&&dist(g,tgt)===1&&!wallBetween(g.r,g.c,tgt.r,tgt.c)) b++;
+  if(B==="wolf"&&dist(g,tgt)>=4) b++; if(B==="raven"&&(moved||0)<=3) b++; return b; }
+function vrFoxdie(p,n){ // called when Liquid's damage reaches his health
+  return (async()=>{ const sk=(p.skulls||0); let r=null;
+    if(sk>0) r=await rollPrompt({target:null,kind:"foxdie",w:sk,b:0,vs:null,why:`FOXDIE — roll ${sk} white for ${p.label} (a ! defeats him)`,note:"Focus tokens can be used on this roll (Codec 02.04)"});
+    if(r&&r.bang){ vrDefeat(p,"FOXDIE takes hold"); return; }
+    commit(st=>{ const q=st.pieces.find(x=>x.id===p.id); q.dmg=0; q.skulls=(q.skulls||0)+1; }, `FOXDIE${sk?" — no !":""}: ${p.label} shrugs it off — damage cleared, ${(p.skulls||0)+1} skull${(p.skulls||0)+1>1?"s":""} on his dashboard`); })(); }
+function vrDefeat(p,why){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==p.id); st.vrBossDown=p.vr; }, `☠ ${p.label} is DEFEATED${why?" — "+why:""}`); addFx(p.r,p.c,"boom",1); toast(`${p.label} defeated!`); }
+// after a player attacks a VR boss (called from the attack actions)
+async function vrAfterAttacked(att,g,r){ g=P(g.id); if(!isVrBoss(g)||!att) return; const B=g.vr;
+  if(B==="mantis"&&r&&r.bang){ const pls=S.st.pieces.filter(x=>isPlayer(x)&&x.id!==att.id&&lineClear(att,x)).sort((a,b)=>dist(att,a)-dist(att,b)); const tg=pls[0]||att;
+    addLog(`Mind Control: ${nameOf(att)} rolled a ! — must attack ${tg.id===att.id?"themselves":nameOf(tg)} with 1 white`);
+    const rr=await rollPrompt({by:att,kind:"attack",w:1,b:0,vs:defOf(tg),why:`Mind Control — ${nameOf(att)} attacks ${tg.id===att.id?"themselves":nameOf(tg)}`}); if(rr&&rr.hits) hurt(P(tg.id),rr.hits); }
+  if(B==="raven"&&r&&r.bang&&S.st.phase==="Player"){ commit(st=>{ (st.tt[att.id]=st.tt[att.id]||{}).markDeath=true; }, `Mark of Death: ${nameOf(att)} rolled a ! — Sneak and Dash cost +1 for the rest of this turn`); }
+  g=P(g.id); if(!g) return;
+  if(B==="raven"&&r&&r.hits){ const d=faceToward(g,att); if(d!=null) guardFace(g,d,"Retribution"); }
+  if(B==="liquid"&&lineClear(att,g)){ await bossStepToward(g,att,2+(g.skulls||0),"Determined"); }
+  if(B==="ocelot"||B==="wolf"){ await bossElude(g,att); } }
+function faceToward(g,t){ const p=guardPath(g,t.r,t.c); if(p&&p.length) return p[0].d; if(t.r<g.r) return 0; if(t.r>g.r) return 2; if(t.c>g.c) return 1; return 3; }
+async function bossStepToward(g,t,n,why){ const path=guardPath(g,t.r,t.c)||[]; let moved=0;
+  for(const s of path){ if(moved>=n) break; if(s.r===t.r&&s.c===t.c) break; if(figureAt(s.r,s.c,g.id)) break; if(s.d!==P(g.id).facing) guardFace(P(g.id),s.d,why);
+    guardMoveTo(P(g.id),s,why,`${moved+1}/${n}`); moved++; await sleep(220); }
+  if(moved) addLog(`${why}: ${P(g.id).label} moves ${moved} toward ${nameOf(t)}`); return moved; }
+async function bossElude(g,att){ const pl=S.st.pieces.filter(isPlayer), unseen=(r,c)=>!pl.some(p=>lineClear(p,{r,c}));
+  const seen=new Map([[key(g.r,g.c),null]]); let fr=[{r:g.r,c:g.c}], found=null;
+  for(let d=0;d<6&&!found;d++){ const nx=[]; for(const s of fr) for(let k=0;k<4;k++){ const r2=s.r+DR[k],c2=s.c+DC[k], kk=key(r2,c2);
+      if(!inBounds(r2,c2)||seen.has(kk)||blocked(r2,c2)||wallBetween(s.r,s.c,r2,c2)) continue; const occ=figureAt(r2,c2,g.id); if(occ&&!isPlayer(occ)&&occ.type!=="guard") continue;
+      seen.set(kk,key(s.r,s.c)); nx.push({r:r2,c:c2}); if(!occ&&unseen(r2,c2)&&!found) found={r:r2,c:c2}; } fr=nx; }
+  if(!found){ addLog(`Elusive: ${g.label} has nowhere out of sight within 6`); const d=faceToward(g,att); if(d!=null) guardFace(g,d,"turns to the attacker"); return; }
+  commit(st=>{ const q=st.pieces.find(x=>x.id===g.id); q.r=found.r; q.c=found.c; }, `Elusive: ${g.label} slips away to ${sq(found.r,found.c)} — out of every player's sight`); await sleep(250);
+  const d=faceToward(P(g.id),att); if(d!=null) guardFace(P(g.id),d,"turns toward the attacker"); }
+// Mantis: Puppeteer at the start of his activation
+async function vrStartActivation(g){ if(!isVrBoss(g)) return; if(g.vr==="mantis"){ const toks=S.st.pieces.filter(x=>(x.type==="ko"||x.type==="dead")&&pathDist(g,x)<=3);
+  for(const t of toks){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==t.id); const ng={id:st.nextId++,type:"guard",r:t.r,c:t.c,facing:2}; initPiece(ng,st); ng.noAct=st.round; st.pieces.push(ng); }, `Puppeteer: the ${t.type==="ko"?"KO":"dead"} guard at ${sq(t.r,t.c)} gets up under Mantis's control`);
+    const ng=S.st.pieces[S.st.pieces.length-1]; const d=faceToward(ng,g); if(d!=null) guardFace(ng,d,"faces Mantis"); await sleep(200); } } }
+// Ocelot: Ricochet Shot at the end of his activation if he hasn't attacked
+async function vrEndActivation(g){ g=P(g&&g.id); if(!isVrBoss(g)) return; if(g.vr==="ocelot"&&!(EN.attacked||{})[g.id]){
+  const bangs=S.st.pieces.filter(x=>x.type==="attn"&&x.mode==="alert"&&dist(x,g)<=6); for(const b of bangs.sort((a,c)=>dist(a,g)-dist(c,g))){ const pls=S.st.pieces.filter(x=>isPlayer(x)&&dist(x,b)<=2).sort((a,c)=>dist(a,g)-dist(c,g));
+    if(pls.length){ const tg=pls[0]; addLog(`Ricochet Shot: ${g.label} bounces a shot off the ! at ${sq(b.r,b.c)} at ${nameOf(tg)}`);
+      const r=await rollPrompt({target:tg,kind:"enemy",w:0,b:bossDice(g,tg),vs:defOf(tg),why:`${g.label} Ricochet Shot at ${nameOf(tg)}`}); if(r&&r.hits) hurt(P(tg.id),r.hits); return; } } } }
+// a boss attack (used by guardAttack for VR bosses)
+async function vrBossAttack(g,seen){ const B=g.vr; let tgts=seen;
+  if(B==="liquid"&&EN.activating===g.id){ const t=seen.sort((a,b)=>dist(g,a)-dist(g,b))[0]; if(dist(g,t)>1){ await bossStepToward(g,t,2,"Running Charge"); g=P(g.id); } tgts=[t]; }
+  else if(B!=="raven") tgts=[seen.sort((a,b)=>pathDist(g,a)-pathDist(g,b))[0]];
+  (EN.attacked=EN.attacked||{})[g.id]=true;
+  for(const t0 of tgts){ const tg=await hurryGetAway(t0), nb=bossDice(P(g.id),tg,(EN.moved||{})[g.id]);
+    const r=await rollPrompt({target:tg,kind:"enemy",w:0,b:nb,vs:defOf(tg),why:`${g.label} attacks ${nameOf(tg)} (${nb} black vs Defense ${defOf(tg)})`});
+    if(r){ commit(()=>{}, `${g.label} ATTACKS ${nameOf(tg)} → ${r.hits} hit${r.hits===1?"":"s"}`); if(r.hits) hurt(P(tg.id),r.hits); } else { EN.stop=true; break; } }
+  return true; }
+// player-turn triggers: Wolf's Overwatch on moving into her LOS; Raven's Retribution after an action in his LOS
+async function vrAfterMove(p,path){ const g=vrBoss(); if(!g||!p||g.vr!=="wolf") return; const me=P(p.id); if(!me||me.stealth||me.disguised) return;
+  const before=!!(S.vrSeenBefore&&S.vrSeenBefore[p.id]); const now=los(g,me.r,me.c);
+  if(now&&!before){ addLog(`Overwatch: ${nameOf(me)} moved into ${g.label}'s sights`);
+    const r=await rollPrompt({target:me,kind:"enemy",w:0,b:bossDice(g,me),vs:defOf(me),why:`${g.label} Overwatch shot at ${nameOf(me)}`}); if(r&&r.hits) hurt(P(me.id),r.hits); } }
+function vrNoteSight(p){ const g=vrBoss(); S.vrSeenBefore=S.vrSeenBefore||{}; if(g&&p) S.vrSeenBefore[p.id]=los(g,p.r,p.c); }
+async function vrAfterAction(p,kind){ const g=vrBoss(); const me=P(p&&p.id); if(!g||!me||g.vr!=="raven"||S.st.phase!=="Player") return; if(me.stealth||me.disguised) return;
+  if(los(g,me.r,me.c)){ addLog(`Retribution: ${nameOf(me)} acted in ${g.label}'s LOS`);
+    const r=await rollPrompt({target:me,kind:"enemy",w:0,b:bossDice(g,me,0),vs:defOf(me),why:`${g.label} Retribution — attacks ${nameOf(me)}`}); if(r&&r.hits) hurt(P(me.id),r.hits); } }
+// how far a boss moves this activation (Raven's Pursuit)
+function vrMoveBonus(g){ if(!isVrBoss(g)||g.vr!=="raven") return 0; const z=zoneOfPiece(g); return Math.floor((g.dmg||0)/5)+(S.st.pieces.some(x=>x.type==="attn"&&x.mode==="alert"&&inZone(z,x.r,x.c))?1:0); }
+
+// =====================================================================
 // Stage 6 — electrified floor, poison gas, Nikita Special Action card, switchboard, 3-shaft elevator
 // =====================================================================
 const s6Elec=()=>{ const s=S.st.s6; return !!(s&&s.elec&&!(S.st.switchboard&&S.st.switchboard.destroyed)); };
 const isElec=(r,c)=>!!(S.st.s6&&S.st.s6.elecCells.includes(key(r,c)));
-const isSafe=(r,c)=>{ const s=S.st.s6; if(!s) return true; const z=zoneOf(r); if(!z||z.name!=="B2") return true; if(S.st.cells[key(r,c)]==="elevator") return true; return s.safeCells.includes(key(r,c)); };
+const isSafe=(r,c)=>{ const s=S.st.s6; if(!s) return true; const z=zoneOf(r,c); if(!z||z.name!=="B2") return true; if(S.st.cells[key(r,c)]==="elevator") return true; return s.safeCells.includes(key(r,c)); };
 function nearestNonElec(r,c){ const seen=new Set([key(r,c)]); let fr=[[r,c]];
   while(fr.length){ const nx=[]; for(const [a,b] of fr) for(const d of D4){ const r2=a+DR[d], c2=b+DC[d], k=key(r2,c2); if(seen.has(k)||!inBounds(r2,c2)||wallBetween(a,b,r2,c2)||blocked(r2,c2)) continue; seen.add(k);
       if(!isElec(r2,c2)&&!figureAt(r2,c2)) return {r:r2,c:c2}; nx.push([r2,c2]); } fr=nx; } return null; }
