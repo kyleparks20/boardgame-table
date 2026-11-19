@@ -2942,7 +2942,7 @@ function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player be
             :`<div class="muted">${src.length||aloneOK()?`<b>Tap a die</b> to use:</div><div class="rb-avail">${[...new Map(src.map(s_=>[s_.pl.id+":"+s_.i+":"+s_.n,s_])).values()].map(s_=>`<div><span class="ftok">${esc(s_.n)}</span> ${s_.i<0?"equipment":s_.pl.id===owner.id?"your Focus token":`${esc(nameOf(s_.pl))}'s token (${esc(s_.why)})`} — ${esc(FOCUS_FX[s_.n]||s_.n)}</div>`).join("")}${aloneOK()?`<div><span class="ftok ab">I Work Alone</span> Snake's ability — ±1 to one die</div>`:""}`:owner?`${esc(nameOf(owner))} has no ready Focus tokens or abilities that work on this roll.`:""}</div>`}
           ${addOpts.length||hackerOK()?`<div class="rb-focus"><b>Add dice to this roll:</b>${addOpts.map(s_=>`<div class="opt"><div class="opt-src"><span class="ftok">${esc(s_.n)}</span> ${s_.pl.id===owner.id?`${esc(nameOf(s_.pl))}'s Focus token`:`<b>${esc(nameOf(s_.pl))}'s</b> Focus token — via <i>${esc(s_.why)}</i>`} · spends it</div><div class="row" style="margin:3px 0"><button class="sm" data-add="${src.indexOf(s_)}">Throw 1 more ${s_.fx.add==="b"?"black":"white"} die</button></div></div>`).join("")}${hackerOK()?`<div class="opt"><div class="opt-src"><span class="ftok ab">Hacker</span> Otacon's ability — up to +2 black when hacking/accessing, no token</div><div class="row" style="margin:3px 0"><button class="sm" data-hacker="1">Throw 1 more black die (${2-hackerAdds} left)</button></div></div>`:""}</div>`:""}`:""}
         ${o.preview&&o.preview.length?`<div class="rb-plan"><span class="muted">Plan after this roll:</span>${o.preview.map(l=>`<div>${esc(l)}</div>`).join("")}</div>`:""}
-        <div class="row">${dice?`<button class="on" id="rb-go" style="flex:1">✓ OK — apply this result</button>`:`<button class="on" id="rb-roll" style="flex:1">🎲 Roll</button><button class="sm" id="rb-hand">✋ Real dice</button>`}<button class="sm danger" id="rb-stop">${dice?"Cancel":"Skip"}</button></div>`;
+        <div class="row">${dice?`<button class="on" id="rb-go" style="flex:1">✓ OK — apply this result</button>`:`<button class="on" id="rb-roll" style="flex:1">🎲 Roll</button><button class="sm" id="rb-hand">✋ Real dice</button>`}${dice?"":`<button class="sm danger" id="rb-stop">Skip</button>`}</div>${dice?`<div class="muted" style="margin-top:4px;font-size:12px">The dice are rolled — this result stands.</div>`:""}`;
       box.style.display="block";
       const q=s_=>box.querySelector(s_);
       if(q("#rb-hand")) q("#rb-hand").onclick=()=>{ if(rolling) return; const ds=[...Array(o.w).fill("w"),...Array(o.b).fill("b")].map(k=>({k,v:k==="w"?"!":1}));
@@ -2970,7 +2970,7 @@ function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player be
         if(ws.length) parts.push("white "+ws.join(", ")); if(bs.length) parts.push("black "+bs.join(", "));
         commit(()=>{}, `rolled ${parts.join(" · ")||"no dice"}${o.why?" — "+o.why:""}${o.vs!=null?` → ${sc.hits} hit${sc.hits===1?"":"s"}`:""}${sc.bang?` · ${sc.bang} "!"`:""}`);
         res({...sc, dice, abil:[...abil]}); };
-      q("#rb-stop").onclick=()=>{ if(rolling) return; box.style.display="none"; clearDice(); shareRoll(o,dice,"close"); res(null); };
+      if(q("#rb-stop")) q("#rb-stop").onclick=()=>{ if(rolling||dice) return; box.style.display="none"; clearDice(); shareRoll(o,dice,"close"); res(null); };
     };
     draw();
   });
@@ -3096,7 +3096,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="8.2";
+const APP_VERSION="8.4";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3193,8 +3193,9 @@ setInterval(()=>{ if(!(net.dc&&net.dc.readyState==="open")) return; net.raw({t:"
 // =====================================================================
 const CAMPAIGN=["stage1","stage2","stage3","stage4","stage5","stage6"], CLASSIFIED=2;          // built missions, plus classified placeholders after them
 const REWARDS={
-  stage1:[{id:"s1a",label:"Stage 1 reward A"},{id:"s1b",label:"Stage 1 reward B"}],
-  stage2:[{id:"s2a",label:"Stage 2 reward"}],
+  stage1:[],
+  stage2:[{id:"s2a",label:"Equipment #001",k:"pistol45",when:"clear the stage"},{id:"s2b",label:"Equipment #002",k:"rations",when:"clear the stage"},
+          {id:"s2c",label:"Equipment #003",k:"chaff",when:"complete Optional Objective B (collect Event B)",test:st=>has(st,"B")}],
   stage3:[{id:"s3a",label:"Equipment #004",k:"stun",when:"defeat 12+ guards in the Holding Cells",test:st=>(st.defeat&&st.defeat.count>=12)},
           {id:"s3b",label:"Equipment #005",k:"c4",when:"reach Event C",test:st=>(st.stats&&st.stats.objectives||[]).includes("C")}],
   stage4:[{id:"s4a",label:"Equipment #006",k:"rations006",when:"defeat Ocelot"}],
@@ -3405,7 +3406,8 @@ function renderScreen(){
         ${r.newMission?`<div class="eq"><b>New mission:</b> ${esc(LAYOUTS[r.newMission].name)}</div>`:""}
         ${(REWARDS[r.key]||[]).map(w=>{ const got=r.earned.includes(w.id), rec=camp.memory.find(m=>m.slot===w.id);
           return got?`<div class="eq"><b>${esc(w.label)}</b> ${rec?`→ ${esc((EQUIP[rec.k]||{name:rec.k}).name)} <span class="muted">in your Memory Box</span>`:`<button class="sm on" data-rec="${w.id}">Record which card it is</button><div class="muted">Check the campaign book for the card, then record it so it goes in your Memory Box.</div>`}</div>`
-            :`<div class="eq locked"><div class="blur"><b>${esc(w.label)} · ??????</b></div><div class="muted">Not earned this run${w.when?` — ${esc(w.when)}`:""}</div></div>`; }).join("")}`:""}
+            :`<div class="eq locked"><div class="blur"><b>${esc(w.label)} · ??????</b></div><div class="muted">Not earned this run${w.when?` — ${esc(w.when)}`:""}</div></div>`; }).join("")}
+        ${!(REWARDS[r.key]||[]).length&&!r.newMission?`<div class="muted">This stage has no equipment rewards.</div>`:""}`:""}
       ${mine?"":`<p class="muted" style="margin-top:14px">👁 You're spectating — the players pick what happens next.</p>`}
       ${canNx?`<div class="row" style="margin-top:14px"><button class="on big" id="r-nextm" ${dis}>▶ Next mission: ${esc(LAYOUTS[nx].name)}</button></div>`:""}
       <div class="row" ${canNx?"":`style="margin-top:14px"`}><button class="${canNx?"sm":"on big"}" id="r-next" ${dis} style="flex:1">${nextL&&nextL!==sameL?`▶ Next runner: ${esc(nextL)}`:"↻ Play it again"}</button></div>
