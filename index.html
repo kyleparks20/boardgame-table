@@ -1158,8 +1158,8 @@ function endPtr(ev){
     if(p && d.moved && h.ok && (h.r!==p.r||h.c!==p.c)){ const from=sq(p.r,p.c);
       if(isPlayer(p) && S.st.phase==="Player" && S.st.rules!==false && !S.handMode){
         const dist=Math.abs(h.r-p.r)+Math.abs(h.c-p.c);
-        const via=dist===2?[0,1,2,3].map(d=>({r:p.r+DR[d],c:p.c+DC[d]})).find(s=>inBounds(s.r,s.c)&&!stepProblem(p,p.r,p.c,s.r,s.c)&&figureAt(s.r,s.c,p.id)&&playerLandings(p,p.r,p.c,s.r,s.c).some(o=>o.r===h.r&&o.c===h.c)):null;
-        (async()=>{ S.dropMove=true; try{ const msg=await runAction(via?`sneak ${p.label} ${sq(via.r,via.c)} ${sq(h.r,h.c)}`:`${dist===1?"sneak":"dash"} ${p.label} ${sq(h.r,h.c)}`); toast(msg); }catch(e){ toast("✗ "+(e.message||e)); render(); } finally{ S.dropMove=false; } })();
+        const p1=movePlan(p,h.r,h.c,1), p2=p1?null:movePlan(p,h.r,h.c,2+((tt(p).dashBonus)||0)), plan=p1||p2;
+        (async()=>{ S.dropMove=true; try{ const msg=await runAction(plan?`${p1?"sneak":"dash"} ${p.label} ${plan.map(s=>sq(s.r,s.c)).join(" ")}`:`${dist===1?"sneak":"dash"} ${p.label} ${sq(h.r,h.c)}`); toast(msg); }catch(e){ toast("✗ "+(e.message||e)); render(); } finally{ S.dropMove=false; } })();
       } else {
         commit(st=>{ const q=st.pieces.find(x=>x.id===d.id); q.r=h.r; q.c=h.c; }, `${nameOf(p)} ${from} → ${sq(h.r,h.c)}`);
         if(p.type==="guard"||p.type==="boss") autoSpot(P(p.id));
@@ -2026,6 +2026,13 @@ function playerLandings(p,r,c,r2,c2){ const d0=[0,1,2,3].find(d=>r+DR[d]===r2&&c
       const over=[]; let k=key(s.r,s.c); while(k){ over.unshift(fig.get(k)); k=par.get(k); }
       out.push({r:r3,c:c3,over,straight:e===d0&&(s.r-r)*DC[d0]===0&&(s.c-c)*DR[d0]===0}); } }
   return out.sort((a,b)=>(b.straight-a.straight)||a.over.length-b.over.length); }
+function movePlan(p,tr,tc,max){ const start=key(p.r,p.c), seen=new Map([[start,null]]); let fr=[{r:p.r,c:p.c,seq:[]}];
+  for(let n=0;n<max;n++){ const nx=[];
+    for(const s of fr) for(let d=0;d<4;d++){ const r2=s.r+DR[d], c2=s.c+DC[d]; if(stepProblem(p,s.r,s.c,r2,c2)) continue;
+      const moves=figureAt(r2,c2,p.id)?playerLandings(p,s.r,s.c,r2,c2).map(L=>({r:L.r,c:L.c,seq:[...s.seq,{r:r2,c:c2},{r:L.r,c:L.c}]})):[{r:r2,c:c2,seq:[...s.seq,{r:r2,c:c2}]}];
+      for(const m of moves){ const k=key(m.r,m.c); if(seen.has(k)) continue; seen.set(k,1); if(m.r===tr&&m.c===tc) return m.seq; nx.push(m); } }
+    fr=nx; }
+  return null; }
 function playerLeap(p,r,c,r2,c2){ const dr=r2-r, dc=c2-c, over=[]; let rr=r2, cc=c2, pr=r, pc=c;
   while(true){ if(rr<0||cc<0||rr>=S.st.rows||cc>=S.st.cols) return "no space to land after the leapfrog";
     if(wallBetween(pr,pc,rr,cc)) return `a wall between ${sq(pr,pc)} and ${sq(rr,cc)}`; if(blocked(rr,cc)) return `${sq(rr,cc)} is an obstacle or no-go square`;
@@ -2316,7 +2323,8 @@ async function runAction_(line,note){
   if(S.st.noFire&&["toss","plant","detonate","launch","gthrow","shoot"].includes(cmd)){ const z=zoneOfPiece(p); if(z&&S.st.noFire.includes(z.name)) throw `No Fire Zone — no ranged weapons or explosives on the ${z.name} tiles`; }
   const sqs=w.slice(2).map(parseSq);
   if(cmd==="sneak"||cmd==="dash"){ if(sqs.some(x=>!x)||!sqs.length) throw `${cmd} needs square(s), e.g. "${cmd} ${nameOf(p)} H18"`;
-    let path=sqs; if(cmd==="dash"&&sqs.length===1){ const t=sqs[0], d=Math.abs(t.r-p.r)+Math.abs(t.c-p.c);
+    let path=sqs; if(sqs.length===1&&Math.abs(sqs[0].r-p.r)+Math.abs(sqs[0].c-p.c)>1){ const pl=movePlan(p,sqs[0].r,sqs[0].c,cmd==="sneak"?1:2+((tt(p).dashBonus)||0)); if(pl) return await doMove(p,cmd,pl); }
+    if(cmd==="dash"&&sqs.length===1){ const t=sqs[0], d=Math.abs(t.r-p.r)+Math.abs(t.c-p.c);
       if(d===2){ const opts=[{r:p.r,c:t.c},{r:t.r,c:p.c},{r:(p.r+t.r)/2,c:(p.c+t.c)/2}].filter(m=>Number.isInteger(m.r)&&Number.isInteger(m.c)&&Math.abs(m.r-p.r)+Math.abs(m.c-p.c)===1);
         const ok=opts.find(m=>!stepProblem(p,p.r,p.c,m.r,m.c)&&!stepProblem(p,m.r,m.c,t.r,t.c)); if(!ok) throw `no legal 2-square path from ${sq(p.r,p.c)} to ${w[2]}`; path=[ok,t]; } }
     return await doMove(p,cmd,path); }
@@ -3152,7 +3160,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="8.9";
+const APP_VERSION="9.0";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
