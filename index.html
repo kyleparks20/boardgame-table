@@ -666,6 +666,29 @@ LAYOUTS.stage3={
       {type:"guard",r:16,c:4,facing:1},{type:"guard",r:17,c:11,facing:0},{type:"guard",r:20,c:7,facing:3},
       {type:"event",r:17,c:4,label:"C",color:"#3b4fb0"} ]
 };
+LAYOUTS.stage6={
+    name:"Stage 6 · Nuclear Warhead Storage", note:"Snake + Meryl · B: get the Nikita · destroy the B2 switchboard with a missile, then reach the B2 Exit",
+    rowStart:1, priority:"TL", blue:18, red:7,
+    roster:{1:["snake"],2:["snake","meryl"]}, failOn:["gameover","kia"],
+    map:["xxxxLLxxxx", "xxxxLLxxxx", ".......xxx", ".......xxx", ".#....xxxx", "+.+.....xx", ".#+..+..xx", "..+.....xx", "##+..+..xx", "..+.....xx", ".#+..+..xx", "..+..+.Exx", "xxxxxxxxxx", "xxxxLLxxxx", "xxxxLLxxxx", "...xx.xxx.", "..+.+..+..", "..+.......", "BB.....+..", "BB+.+..+..", "..........", "..+....+..", "....+.....", "xxxxxxxxxx", "xxxBB.....", "xxxBB.....", "xxxxxS.##.", "LLxxxS....", "LLxxxS.#..", "..........", "S..+.+..+.", "..#.#.#..x", "S.#.#.#+..", ".+#.#.#..x", "..#.#.#.+.", "...+.+.+.x", "x.xx.xx..."],
+    walls:["h:10,3", "h:10,4", "h:10,6", "h:10,7", "h:15,0", "h:15,1", "h:16,3", "h:16,5", "h:16,6", "h:16,8", "h:16,9", "h:17,0", "h:17,1", "h:19,0", "h:19,1", "h:19,8", "h:19,9", "h:21,3", "h:21,5", "h:21,6", "h:24,6", "h:24,7", "h:24,8", "h:24,9", "h:29,1", "h:29,2", "h:29,3", "h:29,4", "h:29,5", "h:29,7", "h:3,1", "h:3,2", "h:3,3", "h:3,4", "h:3,6", "h:4,3", "h:4,4", "h:4,6", "h:4,7", "h:6,3", "h:6,4", "h:6,6", "h:6,7", "h:8,3", "h:8,4", "h:8,6", "h:8,7", "v:10,4", "v:16,1", "v:17,2", "v:17,6", "v:17,7", "v:18,2", "v:18,6", "v:19,1", "v:19,7", "v:2,3", "v:20,1", "v:20,2", "v:20,6", "v:20,7", "v:21,2", "v:21,6", "v:22,1", "v:22,7", "v:25,4", "v:25,5", "v:26,5", "v:27,5", "v:27,6", "v:27,8", "v:28,5", "v:28,6", "v:28,8", "v:29,5", "v:29,6", "v:29,8", "v:3,3", "v:30,0", "v:31,0", "v:32,0", "v:4,4", "v:5,2", "v:5,4", "v:5,5", "v:6,4", "v:7,2", "v:7,4", "v:7,5", "v:8,4", "v:9,2", "v:9,4", "v:9,5"],
+    arrows:{"2,0": 2, "2,5": 2, "6,4": 3, "8,4": 3, "10,4": 3, "6,7": 3, "8,7": 3, "10,7": 3, "17,0": 1, "18,0": 1, "18,1": 1, "19,0": 0, "19,6": 3, "18,9": 3, "21,9": 3, "21,0": 1, "24,3": 1, "24,4": 1, "25,3": 0, "27,8": 2}, marks:{"18,0": "radio", "24,3": "radio"}, counts:{"19,1": 3, "25,4": 3},
+    zones:[{name:"B2",r0:0,r1:11},{name:"B1",r0:13,r1:22},{name:"L1 / Truck",r0:24,r1:36}],
+    shafts:{"B2":{r:0,c:4},"B1":{r:13,c:4},"L1":{r:27,c:0}}, lift:"L1",
+    noFire:["L1 / Truck"],
+    switchboard:{r:2,c:2,hp:2},
+    s6:{elecCells:["5,5","6,5","7,5","8,5","9,5","10,5","11,3","11,4","11,5","11,6","11,7"], safeCells:["2,4","2,5","2,6","3,4","3,5","3,6","4,5","5,5","11,7"], hiddenElec:["5,5"], gas:false, elec:false},
+    rules:["Objective, in order: (1) destroy the Switchboard in B2 by moving a missile into its space, (2) any player reaches the Exit in B2.",
+      "No Fire Zone: no ranged weapons or explosives can be used on the L1 or Truck tiles.",
+      "Elevator: Interact on the elevator to ride it (with everyone on it) to any other shaft; Interact next to a shaft to call it. It starts at L1.",
+      "Event A: remove it. From then on — Electrified Floor: moving onto an electrified space (the B2 grates) deals 2 damage and puts you back on the nearest safe space, until the Switchboard is destroyed. Poison Gas: Snake or Meryl ending a turn in B2 outside the yellow-bordered areas dies (Gas Mask ignores it).",
+      "Event B: remove it and take the Nikita Special Action card (unlimited missiles, one on the map at a time).",
+      "Event C: put it on your dashboard — unlocks Equipment #010 when the stage is cleared."],
+    pieces:[ {type:"snake",r:36,c:7},{type:"meryl",r:36,c:8},
+      {type:"guard",r:17,c:7,facing:2},{type:"guard",r:20,c:2,facing:0},{type:"guard",r:22,c:7,facing:3},
+      {type:"guard",r:26,c:6,facing:2},{type:"guard",r:29,c:1,facing:3},{type:"guard",r:31,c:3,facing:2},
+      {type:"event",r:4,c:5,label:"A"},{type:"event",r:22,c:0,label:"B",color:"#2f8f4e"},{type:"event",r:5,c:3,label:"C",color:"#3f4fc0"} ]
+};
 // ---------- Stage 4 · Revolver Ocelot (boss stage: no guards, no Guard decks — players, then the Boss) ----------
 LAYOUTS.stage4={
     name:"Stage 4 · Revolver Ocelot", note:"Boss stage · defeat Ocelot without letting the hostage take 3 damage",
@@ -759,7 +782,7 @@ function buildPreset(name){
   L.map.forEach((row,r)=>[...row].forEach((ch,c)=>{ if(CHAR[ch]) st.cells[r+","+c]=CHAR[ch]; }));
   (L.walls||[]).forEach(w=>st.walls[w]=1);
   st.arrows=Object.assign({},L.arrows||{}); st.marks=Object.assign({},L.marks||{}); st.counts=Object.assign({},L.counts||{});
-  ["zones","shafts","lift","rules","liftNeeds","liftGuard","reinforce","aloneHp","tripwire","bossPath","noActions","crates","special","bossStage","failOn","hostage"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
+  ["zones","shafts","lift","rules","liftNeeds","liftGuard","reinforce","aloneHp","tripwire","bossPath","noActions","crates","special","bossStage","failOn","hostage","noFire","switchboard","s6"].forEach(k=>{ if(L[k]!=null) st[k]=JSON.parse(JSON.stringify(L[k])); });
   if(L.defeat) st.defeat=Object.assign({count:0},L.defeat);
   L.pieces.forEach(p=>{ const q=Object.assign({id:st.nextId++},p); initPiece(q,st); st.pieces.push(q); });
   return st;
@@ -1862,6 +1885,12 @@ function boardText(who, quick){
   by("terminal").forEach(t=>L.push(`Terminal (level ${t.level||2}) at ${sq(t.r,t.c)}${t.hacked?" · HACKED":` · Otacon hacks it (4 black)${t.combo&&t.combo.length?`: dice must show ${t.combo.join(", ")}`:""}`}`));
   by("item").forEach(t=>L.push(`${({c4:"C-4",claymore:"Claymore mine (goes off when any figure steps on it: 2 damage to everyone within 2 in LOS)",timebomb:"Time Bomb (goes off at the start of its owner's next turn: 3 damage within 2)",missile:"Missile (hovering; steer it with Launch)",rope:"Rope",grenade:"Grenade"})[t.item]||t.item} at ${sq(t.r,t.c)}${t.owner?` · ${t.owner}'s`:""}`));
   by("hidden").forEach(t=>L.push(`${t.deck==="hazard"?"Trap":"Objective"} ? token at ${sq(t.r,t.c)} · ${t.up?"face up: "+((HIDDEN_FACES[t.face]||{}).n||"?"):"face down"}`));
+  if(st.s6){ const sb=st.switchboard; L.push(`SWITCHBOARD at ${sq(sb.r,sb.c)} (B2): ${sb.destroyed?"DESTROYED":"intact — destroy it by moving a missile into its square (Nikita: launch, then steer)"}.`);
+    L.push(`NO FIRE ZONE: no shooting, missiles or explosives while standing in the L1 / Truck zone.`);
+    L.push(`ELEVATOR at the ${st.lift} shaft. Shafts: ${Object.entries(st.shafts).map(([k,v])=>`${k} ${sq(v.r,v.c)}`).join(", ")}. On it: "elevator Snake B2" rides it to that shaft.`);
+    if(st.s6.gas) L.push(`POISON GAS in B2: ending your turn in B2 outside the yellow safe squares (${st.s6.safeCells.map(k=>{ const [r,c]=k.split(",").map(Number); return sq(r,c); }).join(", ")}) kills you — mission fails. Gas Mask ignores it.`);
+    if(st.s6.elec&&!sb.destroyed) L.push(`ELECTRIFIED FLOOR (B2 grates ${st.s6.elecCells.map(k=>{ const [r,c]=k.split(",").map(Number); return sq(r,c); }).join(", ")}): stepping on one = 2 damage and you're thrown back. Ends when the Switchboard is destroyed.`);
+    const nk=st.pieces.find(p=>p.snikita); if(nk) L.push(`${nk.label} holds the Nikita Special Action card: "launch ${nk.label} snikita <adjacent square>" places the missile; "launch ${nk.label} snikita" again steers it (2 black dice). Unlimited missiles, one on the map at a time. LOUD.`); }
   if(st.bossStage){ L.push("BOSS STAGE: no guards and no Guard Order cards. Each round every player takes a turn (any order), then the boss turns his top Boss card. Damage on the boss's turn comes from his card; damage you deal on your turn can trigger his reaction.");
     if(st.bdeck) L.push(`Boss deck: ${st.bdeck.draw.length} cards (the top card is unknown to you)`);
     if(st.hostage){ const t=st.tripwire; L.push(`HOSTAGE ${st.hostage.name}: ${Math.max(0,st.hostage.hp-(st.hostage.dmg||0))}/${st.hostage.hp} health — at 0 the mission fails. TRIP WIRES around ${sq(t.r0,t.c0)}–${sq(t.r1,t.c1)}: nobody can enter or cross those squares; they do NOT block sight. If your shot's line of sight box crosses them, every white "!" you roll deals 1 damage to the hostage.`); }
@@ -2024,7 +2053,10 @@ async function doMove(p,kind,path){
     const ev=S.st.pieces.find(x=>x.type==="event"&&x.r===s.r&&x.c===s.c);
     if(ev){ commit(st=>{ st.pieces=st.pieces.filter(x=>x.id!==ev.id); const q=st.pieces.find(x=>x.id===p.id); (q.carry=q.carry||[]).push(ev.label||"?"); }, `${nameOf(p)} collects Event ${ev.label} at ${sq(s.r,s.c)} — resolve it in the campaign book`); toast(`${nameOf(p)} collected ${ev.label} — check the campaign book`);
       if(S.st.liftNeeds&&ev.label===S.st.liftNeeds&&!S.st.lift&&S.st.shafts){ const k=Object.keys(S.st.shafts)[0]; placeLift(k,`Event ${ev.label} collected — the elevator comes down to the ${k} shaft`); toast("The elevator is coming down — with a guard on it"); } }
+    if(ev) await stageEvent(P(p.id),ev.label||"");
     await mineCheck(s.r,s.c,P(p.id)); if(!P(p.id)) break;
+    if(await shock(P(p.id))) break;
+    if(S.st.switchboard&&S.st.cells[key(s.r,s.c)]==="exit") setTimeout(()=>checkWin(P(p.id)),0);
     if(i<path.length-1 && !S.dropMove) await sleep(320);   // AI/script moves step visibly; a drag-and-drop lands straight on the square
   }
   const me=P(p.id);
@@ -2205,6 +2237,7 @@ async function endTurn(p,opts){
   const up=(t.hurt||[]).map(id=>P(id)).filter(g=>g&&g.type==="guard"&&((g.dmg||0)||(g.kod||0)));
   if(up.length){ playerToken(P(p.id),"alert"); addLog(`${up.map(nameOf).join(", ")} hurt but still standing → ${nameOf(p)} ALERTED`); out.push("a hurt guard is still up → !"); }
   commit(st=>{ st.tt[p.id].done=true; const q=st.pieces.find(x=>x.id===p.id); if(q) delete q.stealth; if(st.flow&&st.flow.active===p.id){ st.flow.active=null; st.flow.snap=null; } }, `✓ ${nameOf(p)} ends turn (${t.used} action${t.used===1?"":"s"} used)`);
+  await gasCheck(P(p.id));
   setTimeout(()=>checkWin(P(p.id)),0);
   return out.join(" · ")||"turn ended";
 }
@@ -2234,6 +2267,7 @@ async function runAction_(line,note){
     if(S.st.noActions&&S.st.noActions.includes(base)) throw `${ACT_NAME[base]||base} isn't used in boss stages`;
     if(C && ACT[base]!=null && base!=="elevator" && !EQ_CMDS[base] && !["shoot","ration","stealth","recharge"].includes(base) && !C.actions.includes(base)) throw `${nameOf(p)} doesn't have ${ACT_NAME[base]||base} on their dashboard`;
     if(C && base==="slash" && findEquip(p,E=>E.act==="slash")<0) throw `${nameOf(p)} has no blade`; }
+  if(S.st.noFire&&["toss","plant","detonate","launch","gthrow","shoot"].includes(cmd)){ const z=zoneOfPiece(p); if(z&&S.st.noFire.includes(z.name)) throw `No Fire Zone — no ranged weapons or explosives on the ${z.name} tiles`; }
   const sqs=w.slice(2).map(parseSq);
   if(cmd==="sneak"||cmd==="dash"){ if(sqs.some(x=>!x)||!sqs.length) throw `${cmd} needs square(s), e.g. "${cmd} ${nameOf(p)} H18"`;
     let path=sqs; if(cmd==="dash"&&sqs.length===1){ const t=sqs[0], d=Math.abs(t.r-p.r)+Math.abs(t.c-p.c);
@@ -2244,7 +2278,7 @@ async function runAction_(line,note){
   if(cmd==="shoot"){ const rest=w.slice(3), n=rest.find(x=>/^\+?\d+$/.test(x)); return await afterAct(p,cmd,await doShoot(p,findPiece(w[2]||""),note,rest.filter(x=>x!==n).join(" "),n&&n.replace("+",""))); }
   if(cmd==="slash") return await afterAct(p,cmd,await doSlash(p,note,w.slice(2).some(x=>/^\+1|charge$/i.test(x))));
   if(cmd==="stealth"||cmd==="recharge"||cmd==="hack"||cmd==="search"||cmd==="access") return await afterAct(p,cmd,await doEquipAct(p,cmd,w.slice(2).join(" ")));
-  if(cmd==="elevator") return await afterAct(p,"interact",doElevator(p,w[2]));
+  if(cmd==="elevator") return await afterAct(p,"interact",doElevator(p,await chooseShaft(p,w[2])));
   if(cmd==="interact") return await afterAct(p,cmd,await doInteract(p,w.slice(2).join(" "),note));
   if(cmd==="knock"||cmd==="ration") return await afterAct(p,cmd,doSimple(p,cmd,w.slice(2).join(" ")));
   if(cmd==="drag") return await afterAct(p,"drag",await doDrag(p,w[2],w[3],w[4]));
@@ -3056,7 +3090,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="7.0";
+const APP_VERSION="7.4";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3151,20 +3185,22 @@ setInterval(()=>{ if(!(net.dc&&net.dc.readyState==="open")) return; net.raw({t:"
 // =====================================================================
 // CAMPAIGN MODE: lobby → missions → briefing → play → action report
 // =====================================================================
-const CAMPAIGN=["stage1","stage2","stage3","stage4","stage5"], CLASSIFIED=2;          // built missions, plus classified placeholders after them
+const CAMPAIGN=["stage1","stage2","stage3","stage4","stage5","stage6"], CLASSIFIED=2;          // built missions, plus classified placeholders after them
 const REWARDS={
   stage1:[{id:"s1a",label:"Stage 1 reward A"},{id:"s1b",label:"Stage 1 reward B"}],
   stage2:[{id:"s2a",label:"Stage 2 reward"}],
   stage3:[{id:"s3a",label:"Equipment #004",k:"stun",when:"defeat 12+ guards in the Holding Cells",test:st=>(st.defeat&&st.defeat.count>=12)},
           {id:"s3b",label:"Equipment #005",k:"c4",when:"reach Event C",test:st=>(st.stats&&st.stats.objectives||[]).includes("C")}],
   stage4:[{id:"s4a",label:"Equipment #006",k:"rations006",when:"defeat Ocelot"}],
-  stage5:[{id:"s5a",label:"Equipment #007",k:"grenade",when:"defeat the Tank"}]};
+  stage5:[{id:"s5a",label:"Equipment #007",k:"grenade",when:"defeat the Tank"}],
+  stage6:[{id:"s6a",label:"Equipment #009",k:"nikita",when:"clear the stage"},{id:"s6b",label:"Equipment #010",k:"boxA",when:"a player has Event C",test:st=>has(st,"C")}]};
 const WIN={
   stage1:{how:"Collect Event A, then ride the elevator out with no red ! on the map."},
   stage2:{how:"Collect Event A, then end a turn on an Exit square.",exitNeeds:"A"},
   stage3:{how:"Defeat 12 guards in the Holding Cells — or collect Event C and end a turn on the Exit.",exitNeeds:"C",defeat:true},
   stage4:{how:"Defeat Ocelot (12 health with 1 player, 20 with 2) before Kenneth Baker takes 3 damage.",boss:"ocelot"},
-  stage5:{how:"Defeat the Tank (20 health with 1 player, 40 with 2).",boss:"tank"}};
+  stage5:{how:"Defeat the Tank (20 health with 1 player, 40 with 2).",boss:"tank"},
+  stage6:{how:"Destroy the B2 Switchboard with a missile, then any player reaches the B2 Exit.",exitSwitch:true}};
 // objectives (required / optional) and special rules per mission — special rules override the normal rules
 const OBJ={
   stage1:{objs:[{t:"Collect Event A",k:"required",done:st=>has(st,"A")},{t:"Ride the elevator out (Interact on it) with no red ! on the map",k:"required",done:st=>!!st.report&&st.report.result==="cleared"}],
@@ -3176,7 +3212,9 @@ const OBJ={
   stage4:{objs:[{t:"Defeat Revolver Ocelot",k:"required",done:st=>st.pieces.some(p=>p.type==="boss")&&st.pieces.filter(p=>p.type==="boss").every(b=>(b.dmg||0)>=b.hp)},{t:"Keep Kenneth Baker alive (under 3 damage)",k:"required",done:st=>(st.hostageDmg||0)<3,prog:st=>`${st.hostageDmg||0}/3 damage`}],
     special:["Boss stage: players take their turns, then Ocelot plays the top card of his Boss deck. No guards, no Guard decks.","Trip wires (yellow dashes) can't be crossed but don't block LOS.","Shooting across the trip wires: each ! rolled deals 1 damage to Kenneth Baker; at 3 the mission fails.","Ocelot is Elusive (moves chevron to chevron on his loop), needs no LOS to shoot, and reacts when hurt on your turn."]},
   stage5:{objs:[{t:"Defeat the Tank",k:"required",done:st=>st.pieces.filter(p=>p.type==="boss").every(b=>(b.dmg||0)>=b.hp)}],
-    special:["Boss stage: no guards. Players go, then the Tank plays its Boss card.","Only Missiles, Mines and Grenades hurt the Tank.","Everyone has the Grenades card (2 grenades); crates refill it.","Runover: the Tank deals 1 damage each time it enters your space."]}};
+    special:["Boss stage: no guards. Players go, then the Tank plays its Boss card.","Only Missiles, Mines and Grenades hurt the Tank.","Everyone has the Grenades card (2 grenades); crates refill it.","Runover: the Tank deals 1 damage each time it enters your space."]},
+  stage6:{objs:[{t:"1 · Destroy the Switchboard in B2 (move a missile into its space)",k:"required",done:st=>!!(st.switchboard&&st.switchboard.destroyed)},{t:"2 · Then any player reaches the B2 Exit",k:"required",done:st=>!!st.report&&st.report.result==="cleared"},{t:"Event B — Nikita Special Action card",k:"optional",done:st=>has(st,"B")},{t:"Event C — on your dashboard (unlocks #010)",k:"optional",done:st=>has(st,"C")}],
+    special:["No Fire Zone: no guns, missiles or explosives on the L1 / Truck tiles.","Elevator: 3 shafts (L1, B1, B2) — Interact on it to ride, next to a shaft to call it. Starts at L1.","After Event A: B2 grates are electrified (2 damage, pushed back) until the Switchboard is destroyed, and B2 is full of poison gas — end your turn only in the yellow-bordered areas (Gas Mask ignores it).","Event B gives the Nikita Special Action card: unlimited missiles, one on the map at a time, no equipment slot."]}};
 const has=(st,ev)=>(st.stats&&st.stats.objectives||[]).includes(ev)||st.pieces.some(p=>isPlayer(p)&&(p.carry||[]).includes(ev));
 function objectivesHtml(k,st,live){ const O=OBJ[k]; if(!O) return ""; const tag={required:"REQUIRED",optional:"OPTIONAL",either:"REQUIRED · EITHER"};
   return `<div class="sh2">Objectives</div>`+O.objs.map(o=>{ const d=live&&o.done(st); return `<div class="obj ${o.k} ${d?"done":""}"><span class="ob-box">${d?"✓":""}</span><span style="flex:1">${esc(o.t)}${live&&o.prog&&o.prog(st)?` <b>${o.prog(st)}</b>`:""}</span><span class="ob-tag ${o.k}">${tag[o.k]}</span></div>`; }).join("")
@@ -3252,6 +3290,7 @@ function finishMissionBase(result,why){
   EN.stop=true; closeAll(); setTimeout(clearModal,50); }
 function checkWin(p){ const st=S.st, k=st.run&&st.run.key, W=k&&WIN[k]; if(!W||st.report) return;
   if(W.defeat&&st.defeat&&st.defeat.count>=st.defeat.goal) return finishMission("cleared",`${st.defeat.count} guards defeated in the ${st.defeat.zone}`);
+  if(W.exitSwitch&&p&&st.cells[key(p.r,p.c)]==="exit"&&st.switchboard&&st.switchboard.destroyed) return finishMission("cleared",`${nameOf(p)} reached the Exit after the Switchboard was destroyed`);
   if(W.exitNeeds&&p&&st.cells[key(p.r,p.c)]==="exit"&&st.pieces.some(q=>isPlayer(q)&&(q.carry||[]).includes(W.exitNeeds))) return finishMission("cleared",`${nameOf(p)} reached the Exit with Event ${W.exitNeeds}`); }
 // ---------- the full-screen screens ----------
 function nextMissionLocked(i){ return `<div class="mcard locked"><div class="blur"><b>Mission ${i+1}</b><div>Classified operation</div></div><div class="lock">🔒 CLASSIFIED</div></div>`; }
@@ -3780,8 +3819,9 @@ const EQ_CMDS={
     const near=[...cs].sort((a,b)=>dist(a,p)-dist(b,p))[0];
     for(const c4 of cs){ commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==c4.id); }); await blastDamage(c4.r,c4.c,1,2,"C-4","mine"); await sleep(250); }
     await alertFromBlast(P(p.id),near.r,near.c); refresh(); return "boom"; },
-  async launch(p,args){ const k=args[0]||((p.equip||[]).find(e=>["nikita","launcher"].includes(e.k))||{}).k, ei=eqIndex(p,k), E=EQUIP[k]; if(!E||ei<0) throw `${nameOf(p)} has no missile weapon`;
-    const err=useAction(p,"launch"); if(err) throw err; const inf=hasEq(p,x=>x.infAmmo);
+  async launch(p,args){ const k=args[0]||((p.equip||[]).find(e=>["nikita","launcher"].includes(e.k))||{}).k||(p.snikita?"snikita":null), sp=k==="snikita", ei=sp?-1:eqIndex(p,k), E=sp?{name:"Nikita (Special Action card)"}:EQUIP[k];
+    if(sp&&!p.snikita) throw `${nameOf(p)} doesn't have the Nikita Special Action card`; if(!sp&&(!E||ei<0)) throw `${nameOf(p)} has no missile weapon`;
+    const err=useAction(p,"launch"); if(err) throw err; const inf=sp||hasEq(p,x=>x.infAmmo);
     let m=S.st.pieces.find(x=>x.type==="item"&&x.item==="missile"&&x.owner===p.label&&x.src===k);
     if(k==="launcher"||!m){ if(!inf&&(p.equip[ei].ch||0)<1) throw `${E.name} is out of missiles`;
       const t=await pickOr(args[1],k==="launcher"?"Fire the Missile Launcher: tap the adjacent square it leaves from (it flies straight away from you)":"Place the Nikita missile in an adjacent square",(r,c)=>dist(p,{r,c})===1&&!wallBetween(p.r,p.c,r,c)&&inBounds(r,c)); if(!t) throw "cancelled";
@@ -3844,6 +3884,7 @@ async function flyMissile(m,owner,d,n){ for(let i=0;i<n;i++){ m=P(m.id); if(!m) 
     if(!inBounds(r2,c2)){ commit(s=>{ s.pieces=s.pieces.filter(x=>x.id!==m.id); }, `The missile flies off the map`); return; }
     if(blocked(r2,c2)||wallBetween(m.r,m.c,r2,c2)){ await missileBlast(m,owner,m.r,m.c); return; }
     commit(s=>{ const q=s.pieces.find(x=>x.id===m.id); q.r=r2; q.c=c2; q.d=d; }); await sleep(140);
+    { const sb=S.st.switchboard; if(sb&&!sb.destroyed&&sb.r===r2&&sb.c===c2){ commit(s=>{ s.switchboard.destroyed=true; }, `💥 The missile hits the Switchboard — it's DESTROYED. The B2 floor is no longer electrified`); addFx(r2,c2,"boom",1); toast("Switchboard destroyed! Now reach the Exit in B2"); await missileBlast(P(m.id),owner,r2,c2); return; } }
     if(figureAt(r2,c2,m.id)){ await missileBlast(P(m.id),owner,r2,c2); return; } }
   addLog(`The missile hovers at ${sq(P(m.id).r,P(m.id).c)}`); }
 function infoPop(title,html){ return new Promise(res=>{ modalOn(); const box=document.getElementById("rollbox"); box.innerHTML=`<div class="rb-title">${esc(title)}</div>${html}<div class="row"><button class="on" id="ip-ok" style="flex:1">OK</button></div>`; box.style.display="block"; box.querySelector("#ip-ok").onclick=()=>{ box.style.display="none"; modalOff(); res(); }; }); }
@@ -3852,6 +3893,7 @@ function equipActs(p,act){ const out=[], has=k=>eqIndex(p,k)>=0, ch=k=>{ const i
   ["grenade","stun","chaff"].forEach(k=>{ if(has(k)) out.push(act(`🧨 ${EQUIP[k].name}`,`toss ${p.label} ${k}`)); });
   ["c4","claymore","timebomb"].forEach(k=>{ if(has(k)&&ch(k)) out.push(act(`📍 ${k==="timebomb"?"Drop":"Plant"} ${EQUIP[k].name} (${ch(k)})`,`plant ${p.label} ${k}`)); });
   if(S.st.pieces.some(x=>x.type==="item"&&x.item==="c4"&&x.owner===p.label)) out.push(act("💥 Detonate C-4",`detonate ${p.label}`));
+  if(p.snikita) out.push(act(`🚀 Nikita card${S.st.pieces.some(x=>x.item==="missile"&&x.owner===p.label&&x.src==="snikita")?" (steer)":""}`,`launch ${p.label} snikita`));
   ["nikita","launcher"].forEach(k=>{ if(has(k)) out.push(act(`🚀 ${EQUIP[k].name}${S.st.pieces.some(x=>x.item==="missile"&&x.owner===p.label&&x.src===k)?" (steer)":` (${ch(k)})`}`,`launch ${p.label} ${k}`)); });
   ["boxA","boxB"].forEach(k=>{ if(has(k)&&!p.boxed) out.push(act("📦 Hide in box",`hide ${p.label} ${k}`)); });
   ["key3","key4"].forEach(k=>{ if(has(k)) out.push(act(`🔑 ${EQUIP[k].name}`,`usekey ${p.label} ${k}`)); });
@@ -4006,7 +4048,7 @@ async function startGuards(){ const f=flow(); if(f.active){ toast(`Finish ${name
   if(vdeckOn()) flipVirtual(); else openGuardCard(); }
 
 // ---------- board overlays: trip wires, hostage, crates, tread marks, attack highlights, pick squares, fx ----------
-function drawOverlays(){ const st=S.st, now=performance.now()/1000;
+function drawOverlays(){ const st=S.st, now=performance.now()/1000; try{ drawS6(); }catch(e){}
   (st.treads||[]).forEach(([r,c],i)=>{ ctx.fillStyle=`rgba(20,25,30,${0.05+0.12*i/((st.treads||[]).length||1)})`; ctx.fillRect((c-1)*CS+4,(r-1)*CS,CS*0.5,CS*3); ctx.fillRect((c+1)*CS+CS*0.5-4,(r-1)*CS,CS*0.5,CS*3); });
   (st.crates||[]).forEach(([r,c])=>{ const x=c*CS, y=r*CS; ctx.fillStyle="#4d5e2a"; rr(x+7,y+11,CS-14,CS-20,3); ctx.fill(); ctx.strokeStyle="#2c3818"; ctx.lineWidth=1.5; ctx.stroke(); ctx.fillStyle="#d8e2b8"; ctx.font="bold 7px system-ui"; ctx.fillText("CRATE",x+CS/2,y+CS/2); });
   if(st.tripwire){ const t=st.tripwire, x=t.c0*CS, y=t.r0*CS, w=(t.c1-t.c0+1)*CS, h=(t.r1-t.r0+1)*CS;
@@ -4036,7 +4078,7 @@ function drawTank(p){ const x=(p.c-1)*CS, y=(p.r-1)*CS, W=CS*3; ctx.save();
   const hp=p.hp||20, left=Math.max(0,hp-(p.dmg||0)); ctx.fillStyle="#000b"; rr(x+W*0.25,y+W*0.62,W*0.5,12,4); ctx.fill(); ctx.fillStyle="#e0533f"; rr(x+W*0.25+2,y+W*0.62+2,(W*0.5-4)*left/hp,8,3); ctx.fill();
   ctx.fillStyle="#fff"; ctx.font="bold 9px system-ui"; ctx.fillText(`${left}/${hp}`,x+W/2,y+W*0.62+6.5); ctx.restore(); }
 function drawBoxOver(p,x,y){ ctx.fillStyle="#a37b4a"; rr(x+4,y+4,CS-8,CS-8,3); ctx.fill(); ctx.strokeStyle="#6e4f2a"; ctx.lineWidth=1.5; ctx.stroke(); ctx.beginPath(); ctx.moveTo(x+4,y+CS/2); ctx.lineTo(x+CS-4,y+CS/2); ctx.moveTo(x+CS/2,y+4); ctx.lineTo(x+CS/2,y+CS/2); ctx.stroke(); nameTag("BOX · "+(p.label||"")[0],x,y,"#5a3e1c"); }
-setInterval(()=>{ if(document.hidden) return; if((S.fx||[]).length||S.pickSq||S.st.tripwire||(S.st.hi&&S.st.phase==="Enemy")||S.st.pieces.some(p=>p.type==="item")) render(); },70);
+setInterval(()=>{ if(document.hidden) return; if((S.st.s6&&(S.st.s6.elec||S.st.s6.gas))||(S.fx||[]).length||S.pickSq||S.st.tripwire||(S.st.hi&&S.st.phase==="Enemy")||S.st.pieces.some(p=>p.type==="item")) render(); },70);
 // shoot buttons: one per weapon × target in line of sight
 function shootActs(p,act){ if(p.type==="otacon") return []; const out=[];
   (p.equip||[]).forEach(e=>{ const E=EQUIP[e.k]; if(!E||E.act!=="shoot") return;
@@ -4208,6 +4250,73 @@ async function doInteract(p,arg,note){
 async function doEquipAct(p,kind,arg){
   if(kind==="hack"){ const err=useAction(p,kind); if(err) throw err; const term=S.st.pieces.find(x=>x.type==="terminal"&&!x.hacked&&dist(x,p)<=1); if(!term) throw "no unhacked terminal on or next to Otacon"; return await lockRoll(p,term,"hack"); }
   return doEquipActBase(p,kind,arg); }
+
+// =====================================================================
+// Stage 6 — electrified floor, poison gas, Nikita Special Action card, switchboard, 3-shaft elevator
+// =====================================================================
+const s6Elec=()=>{ const s=S.st.s6; return !!(s&&s.elec&&!(S.st.switchboard&&S.st.switchboard.destroyed)); };
+const isElec=(r,c)=>!!(S.st.s6&&S.st.s6.elecCells.includes(key(r,c)));
+const isSafe=(r,c)=>{ const s=S.st.s6; if(!s) return true; const z=zoneOf(r); if(!z||z.name!=="B2") return true; if(S.st.cells[key(r,c)]==="elevator") return true; return s.safeCells.includes(key(r,c)); };
+function nearestNonElec(r,c){ const seen=new Set([key(r,c)]); let fr=[[r,c]];
+  while(fr.length){ const nx=[]; for(const [a,b] of fr) for(const d of D4){ const r2=a+DR[d], c2=b+DC[d], k=key(r2,c2); if(seen.has(k)||!inBounds(r2,c2)||wallBetween(a,b,r2,c2)||blocked(r2,c2)) continue; seen.add(k);
+      if(!isElec(r2,c2)&&!figureAt(r2,c2)) return {r:r2,c:c2}; nx.push([r2,c2]); } fr=nx; } return null; }
+async function shock(p){ p=P(p.id); if(!p||!s6Elec()||!isElec(p.r,p.c)) return false; const to=nearestNonElec(p.r,p.c);
+  if(!await decide("⚡ Electrified floor",`${esc(nameOf(p))} steps onto an electrified grate at ${sq(p.r,p.c)}: <b>2 damage</b>, and they're thrown back to ${to?sq(to.r,to.c):"the nearest safe space"}. <div class="fb-ref">Stage 6 special rule (Event A) — until the Switchboard is destroyed</div>`)) return true;
+  if(to) commit(s=>{ const q=s.pieces.find(x=>x.id===p.id); q.r=to.r; q.c=to.c; }, `⚡ ${nameOf(p)} is shocked on the electrified floor and thrown back to ${sq(to.r,to.c)}`);
+  addFx(p.r,p.c,"zap",0); hurt(P(p.id),2); refresh(); return true; }
+// events picked up in stage 6
+async function stageEvent(p,label){ const st=S.st; if(!st.s6) return;
+  if(label==="A"){ commit(s=>{ s.s6.gas=true; s.s6.elec=true; }, "Event A — B2 is now full of poison gas and the grates are electrified (until the Switchboard is destroyed)");
+    toast("⚠ Poison gas in B2 — end your turns only in the yellow-bordered areas. Grates are electrified!");
+    for(const pl of S.st.pieces.filter(isPlayer)) await shock(pl); }
+  if(label==="B"){ commit(s=>{ s.pieces.find(x=>x.id===p.id).snikita=true; }, `${nameOf(p)} takes the Nikita Special Action card — unlimited missiles, one on the map at a time`); toast(`${nameOf(p)} has the Nikita card — use 🚀 on your turn`); } }
+// poison gas at the end of a turn
+async function gasCheck(p){ const st=S.st; p=P(p.id); if(!p||!st.s6||!st.s6.gas||isSafe(p.r,p.c)) return;
+  if(hasEq(p,E=>/Ignore Poison Gas/.test(E.passive||""))){ addLog(`${nameOf(p)} ends the turn in the gas — the Gas Mask protects them`); return; }
+  if(await decide("☠ Poison gas",`${esc(nameOf(p))} ends the turn in B2 outside the yellow-bordered safe areas — they're killed by the gas and the mission fails. <div class="fb-ref">Stage 6 special rule (Event A)</div>`)) setTimeout(()=>failStage(`${nameOf(p)} was killed by the poison gas in B2`),200); }
+// the switchboard on the B2 back wall
+function drawSwitchboard(){ const sb=S.st.switchboard; if(!sb) return; const x=sb.c*CS, y=sb.r*CS;
+  ctx.save(); ctx.fillStyle=sb.destroyed?"#2a2a2a":"#1d3550"; rr(x+4,y+3,CS-8,CS-10,3); ctx.fill(); ctx.strokeStyle=sb.destroyed?"#555":"#6fb0ff"; ctx.lineWidth=1.5; ctx.stroke();
+  if(!sb.destroyed){ ctx.fillStyle=(performance.now()/300|0)%2?"#ffd400":"#7a6500"; ctx.fillRect(x+9,y+9,5,5); ctx.fillStyle="#c0392b"; rr(x+CS-17,y+7,10,13,2); ctx.fill(); ctx.fillStyle="#fff"; ctx.font="bold 9px system-ui"; ctx.textAlign="center"; ctx.fillText("2",x+CS-12,y+14); }
+  else { ctx.strokeStyle="#ff7a3a"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x+8,y+8); ctx.lineTo(x+CS-8,y+CS-12); ctx.moveTo(x+CS-8,y+8); ctx.lineTo(x+8,y+CS-12); ctx.stroke(); }
+  ctx.fillStyle="#000c"; rr(x+2,y+CS-10,CS-4,9,2); ctx.fill(); ctx.fillStyle=sb.destroyed?"#aaa":"#9fd0ff"; ctx.font="bold 6.5px system-ui"; ctx.textAlign="center"; ctx.fillText(sb.destroyed?"DESTROYED":"SWITCHBOARD",x+CS/2,y+CS-5.5); ctx.restore(); }
+function drawS6(){ const s=S.st.s6; if(!s) return; const now=performance.now()/1000;
+  const z=(S.st.zones||[]).find(z=>z.name==="B2");
+  // poison gas: soft drifting see-through clouds over every B2 square outside the yellow safe areas
+  if(s.gas&&z){ ctx.save(); ctx.beginPath(); let any=false;
+    for(let r=z.r0;r<=z.r1;r++) for(let c=0;c<S.st.cols;c++){ if(S.st.cells[key(r,c)]==="void"||S.st.cells[key(r,c)]==="elevator"||isSafe(r,c)) continue; ctx.rect(c*CS,r*CS,CS,CS); any=true; }
+    if(any){ ctx.clip(); ctx.fillStyle="rgba(140,175,60,0.13)"; ctx.fillRect(0,z.r0*CS,S.st.cols*CS,(z.r1-z.r0+1)*CS);
+      for(let i=0;i<22;i++){ const sp=0.06+(i%5)*0.025, ph=i*1.7;
+        const cx=((i*97.3+now*CS*sp*6)%(S.st.cols*CS+120))-60, cy=z.r0*CS+((i*61.7+Math.sin(now*0.4+ph)*30)%((z.r1-z.r0+1)*CS)), rad=CS*(1.1+0.5*Math.sin(now*0.5+ph));
+        const g=ctx.createRadialGradient(cx,cy,0,cx,cy,rad); g.addColorStop(0,"rgba(185,215,70,0.20)"); g.addColorStop(0.6,"rgba(160,200,60,0.09)"); g.addColorStop(1,"rgba(160,200,60,0)");
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,rad,0,7); ctx.fill(); } }
+    ctx.restore(); }
+  // yellow safe-area outline (pulses once the gas is on)
+  ctx.save(); ctx.strokeStyle=s.gas?`rgba(255,212,0,${0.75+0.25*Math.sin(now*3)})`:"#ffd400"; ctx.lineWidth=s.gas?3:2; ctx.setLineDash([6,4]); if(s.gas){ ctx.shadowColor="#ffd400"; ctx.shadowBlur=6; } const safe=new Set(s.safeCells);
+  for(const k of safe){ const [r,c]=k.split(",").map(Number), x=c*CS, y=r*CS; if(!safe.has((r-1)+","+c)){ ctx.beginPath(); ctx.moveTo(x,y+1); ctx.lineTo(x+CS,y+1); ctx.stroke(); } if(!safe.has((r+1)+","+c)){ ctx.beginPath(); ctx.moveTo(x,y+CS-1); ctx.lineTo(x+CS,y+CS-1); ctx.stroke(); } if(!safe.has(r+","+(c-1))){ ctx.beginPath(); ctx.moveTo(x+1,y); ctx.lineTo(x+1,y+CS); ctx.stroke(); } if(!safe.has(r+","+(c+1))){ ctx.beginPath(); ctx.moveTo(x+CS-1,y); ctx.lineTo(x+CS-1,y+CS); ctx.stroke(); } }
+  ctx.restore();
+  // electrified grates: blue glow, flicker and crackling arcs between neighbouring grates
+  const live=s6Elec(), hid=new Set(s.hiddenElec||[]), cells=s.elecCells.filter(k=>!hid.has(k)).map(k=>k.split(",").map(Number)), set=new Set(s.elecCells.filter(k=>!hid.has(k)));
+  for(const k of hid){ const [r,c]=k.split(",").map(Number), x=c*CS, y=r*CS; ctx.strokeStyle="rgba(140,180,200,0.25)"; ctx.lineWidth=1; for(let i=6;i<CS;i+=7){ ctx.beginPath(); ctx.moveTo(x+i,y+3); ctx.lineTo(x+i,y+CS-3); ctx.stroke(); }
+    if(live){ const fl=0.5+0.5*Math.sin(now*7+1.3); ctx.fillStyle=`rgba(110,190,255,${0.07+0.06*fl})`; ctx.fillRect(x,y,CS,CS);   // the sneaky square: a faint glow…
+      if(Math.random()<0.18){ ctx.fillStyle="rgba(210,245,255,0.85)"; for(let k=0;k<2;k++) ctx.fillRect(x+Math.random()*CS,y+Math.random()*CS,2,2); }
+      if(Math.random()<0.07){ ctx.save(); ctx.strokeStyle="rgba(200,240,255,0.7)"; ctx.shadowColor="#6fd0ff"; ctx.shadowBlur=5; ctx.lineWidth=1; ctx.beginPath(); let px=x+4+Math.random()*(CS-8), py=y+4; ctx.moveTo(px,py); for(let k=0;k<3;k++){ py+=CS/4; px+=(Math.random()-0.5)*10; ctx.lineTo(px,py); } ctx.stroke(); ctx.restore(); } } }   // …and the odd small spark
+  for(const [r,c] of cells){ const x=c*CS, y=r*CS;
+    if(live){ const fl=0.55+0.45*Math.abs(Math.sin(now*11+r*1.3+c*2.1))*(Math.random()>0.08?1:0.2);
+      const g=ctx.createRadialGradient(x+CS/2,y+CS/2,2,x+CS/2,y+CS/2,CS*0.75); g.addColorStop(0,`rgba(120,210,255,${0.38*fl})`); g.addColorStop(1,"rgba(60,140,255,0.05)"); ctx.fillStyle=g; ctx.fillRect(x,y,CS,CS);
+      ctx.strokeStyle=`rgba(170,230,255,${0.35*fl})`; ctx.lineWidth=1; for(let i=5;i<CS;i+=6){ ctx.beginPath(); ctx.moveTo(x+i,y+2); ctx.lineTo(x+i,y+CS-2); ctx.stroke(); }
+      for(let n=0;n<2;n++){ ctx.save(); ctx.strokeStyle=`rgba(${200+Math.random()*55|0},245,255,${0.6+0.4*Math.random()})`; ctx.shadowColor="#6fd0ff"; ctx.shadowBlur=8; ctx.lineWidth=1.2+Math.random();
+        const hor=Math.random()<0.5; ctx.beginPath(); let px=hor?x:x+Math.random()*CS, py=hor?y+Math.random()*CS:y; ctx.moveTo(px,py);
+        for(let k=0;k<6;k++){ if(hor){ px+=CS/6; py=Math.min(y+CS,Math.max(y,py+(Math.random()-0.5)*CS*0.5)); } else { py+=CS/6; px=Math.min(x+CS,Math.max(x,px+(Math.random()-0.5)*CS*0.5)); } ctx.lineTo(px,py); } ctx.stroke(); ctx.restore(); }
+      if(Math.random()<0.25){ ctx.fillStyle="rgba(230,250,255,0.9)"; for(let k=0;k<3;k++) ctx.fillRect(x+Math.random()*CS,y+Math.random()*CS,2,2); } }
+    else { ctx.strokeStyle="rgba(140,180,200,0.25)"; ctx.lineWidth=1; for(let i=6;i<CS;i+=7){ ctx.beginPath(); ctx.moveTo(x+i,y+3); ctx.lineTo(x+i,y+CS-3); ctx.stroke(); } } }
+  if(live&&Math.random()<0.5){ const [r,c]=cells[Math.random()*cells.length|0]; const nb=[[r+1,c],[r,c+1],[r-1,c],[r,c-1]].filter(([a,b])=>set.has(a+","+b)); if(nb.length){ const [a,b]=nb[Math.random()*nb.length|0];
+      ctx.save(); ctx.strokeStyle="rgba(235,250,255,0.95)"; ctx.shadowColor="#8fe0ff"; ctx.shadowBlur=14; ctx.lineWidth=2; ctx.beginPath(); let px=c*CS+CS/2, py=r*CS+CS/2; const tx=b*CS+CS/2, ty=a*CS+CS/2; ctx.moveTo(px,py);
+      for(let k=1;k<=5;k++){ const t=k/5; ctx.lineTo(px+(tx-px)*t+(k<5?(Math.random()-0.5)*14:0),py+(ty-py)*t+(k<5?(Math.random()-0.5)*14:0)); } ctx.stroke(); ctx.restore(); } }
+  drawSwitchboard(); }
+// riding the elevator with 3 shafts: ask where to
+async function chooseShaft(p,dest){ const st=S.st, keys=Object.keys(st.shafts||{}); if(dest||keys.length<=2||!onLift(p.r,p.c)) return dest;
+  const opts=keys.filter(k=>k!==st.lift); const i=await enemyAsk("🛗 Ride the elevator",`Which floor? The elevator is at ${esc(st.lift)}.`,[...opts.map(k=>`→ ${k}`),"Cancel"]); if(i<0||i>=opts.length) throw "cancelled"; return opts[i]; }
 
 // =====================================================================
 // CODEC: dial a frequency from the Codec Reference book; calls are summarized in our own words
