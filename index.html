@@ -95,7 +95,7 @@ body.tp-open #tp-handle{display:none}
 #rollbox{position:fixed;left:8px;right:8px;bottom:calc(var(--tabh) + var(--safe-b) + 8px);z-index:60;display:none;background:#141a18f7;border:1px solid var(--accent2);border-radius:14px;padding:12px;max-height:75%;overflow:auto;box-shadow:0 8px 30px #000a}
 @media (min-width:900px){ #rollbox{left:auto;width:400px} }
 .rb-title{font-weight:800;font-size:16px;margin-bottom:2px}
-#dicefx{position:fixed;inset:0;z-index:58;pointer-events:none;perspective:2200px;overflow:hidden}
+#dicefx{position:fixed;inset:0;z-index:62;pointer-events:none;perspective:2200px;overflow:hidden}
 #dicefx .dw{position:absolute;left:0;top:0;width:56px;height:56px;transform-style:preserve-3d}
 #dicefx .cube{position:relative;width:56px;height:56px;transform-style:preserve-3d}
 #dicefx .f{position:absolute;inset:0;border-radius:10px;display:flex;align-items:center;justify-content:center;font:900 26px system-ui;backface-visibility:hidden;box-shadow:inset 0 0 8px #0004}
@@ -1942,7 +1942,7 @@ function boardText(who, quick){
   L.push("  shoot Meryl G2 rifle  ·  shoot Fox G2 cannon 2 (spend 2 charges for +2 white)  ·  slash Fox [+1] (HF Blade, every adjacent figure)  ·  stealth Otacon (camo, no ! from LOS this turn)  ·  recharge Otacon");
   L.push("  elevator Snake [Armory]   1 action (Interact): ride the elevator with everyone on it, or call it while standing next to an empty shaft");
   L.push("  disguise Meryl (2 actions, next to a KO/dead token, her ! off the map)  ·  hack Otacon <terminal> · search Otacon · access Otacon <card>");
-  L.push("  Each character can only use the actions on their own dashboard (Otacon has no attacks or weapons). Attacks are rolled against the target's Defense. Snake's Sneak Attack and Meryl's I'm No Rookie bonuses are added automatically.");
+  L.push("  Each character can only use the actions on their own dashboard (Otacon has no attacks or weapons). Attacks are rolled against the target's Defense. Snake's Sneak Attack and Meryl's I'm No Rookie are optional: when the roll result allows one, the dice pop-up offers it and the player chooses.");
   L.push("  focus Snake Reroll (spend a token) · focus Snake refresh Reroll (costs actions) · focusmove Snake H15 (after spending a Move 1 token)");
   L.push("  end Snake                  ends the turn: noise check for noisy actions, alert if a guard you hurt is still standing");
   L.push("  Line of sight is automatic: any move that starts in or passes through a guard's/camera's sight puts a red ! under the player at the end of that move. Walking onto an event collects it.");
@@ -2084,7 +2084,7 @@ async function doAttack(p,kind,g,note){
     spend(p,kind,false); commit(()=>{}, `${nameOf(p)} SILENT TAKEDOWN ${nameOf(g)}`); convertGuard(g,"dead"); return `silent takedown — ${nameOf(g)} replaced with a dead guard token`;
   }
   const dice=kind==="combo"?{w:2,b:1}:{w:1,b:0};
-  const r=await rollPrompt({...dice, by:p, kind:"attack", vs:defOf(g), why:`${nameOf(p)} ${kind==="combo"?"Combo Attack":"Hand-to-Hand"} on ${nameOf(g)}`, note});
+  const r=await rollPrompt({...dice, by:p, tgt:g, ko:g.type==="guard", kind:"attack", vs:defOf(g), why:`${nameOf(p)} ${kind==="combo"?"Combo Attack":"Hand-to-Hand"} on ${nameOf(g)}`, note});
   if(!r) throw "attack cancelled";
   spend(p,kind,false); commit(()=>{}, `${nameOf(p)} ${kind==="combo"?"COMBO":"HAND-TO-HAND"} ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`);
   S.lastRoll=r;
@@ -2100,8 +2100,8 @@ function behindLine(p,g){ const d=facingOf(g); if(d==null) return false;
   if(DR[d]!==0) return p.c===g.c && (p.r-g.r)*DR[d]<0; return p.r===g.r && (p.c-g.c)*DC[d]<0; }
 function applyHits(p,g,r,ko){
   let n=r.hits||0;
-  if(n && p.type==="snake" && g.type!=="player" && behindLine(p,g) && onceRound(p,"sneakatk")){ n++; useOnce(p,"sneakatk"); addLog(`Sneak Attack: Snake is behind ${nameOf(g)} → +1 ${ko?"KO ":""}damage`); }
-  if(n && p.type==="meryl" && (r.dice||[]).some(d=>d.v===6&&!d.mod) && onceRound(p,"rookie")){ n++; useOnce(p,"rookie"); addLog(`"I'm No Rookie": unmodified 6 → +1 ${ko?"KO ":""}damage`); }
+  if(n && (r.abil||[]).includes("sneakatk") && p.type==="snake" && !isPlayer(g) && behindLine(p,g) && onceRound(p,"sneakatk")){ n++; useOnce(p,"sneakatk"); addLog(`Sneak Attack: Snake is behind ${nameOf(g)} → +1 ${ko?"KO ":""}damage`); }
+  if(n && (r.abil||[]).includes("rookie") && p.type==="meryl" && (r.dice||[]).some(d=>d.v===6&&!d.mod) && onceRound(p,"rookie")){ n++; useOnce(p,"rookie"); addLog(`"I'm No Rookie": unmodified 6 → +1 ${ko?"KO ":""}damage`); }
   if(n){ hurt(P(g.id),n,ko&&g.type==="guard"); if(P(g.id)&&g.type==="guard") commit(st=>{ const t=st.tt[p.id]; if(!t.hurt.includes(g.id)) t.hurt.push(g.id); }); }
   if(r.bang){ /* handled by caller */ }
   return n;
@@ -2119,7 +2119,7 @@ async function doShoot_old(p,g,note,wname,extra){
   const e=p.equip[ei], E=EQUIP[e.k]; if(E.charges!=null&&!E.boost&&(e.ch||0)<1) throw `${E.name} is out of ammo`;
   const boost=E.boost?Math.min(+extra||0,e.ch||0):0;
   if(!lineClear(p,g)) throw `no line of sight from ${sq(p.r,p.c)} to ${nameOf(g)}`;
-  const r=await rollPrompt({by:p,kind:"weapon",w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name} (LOUD)`,note}); if(!r) throw "shot cancelled";
+  const r=await rollPrompt({by:p,tgt:g,kind:"weapon",w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name} (LOUD)`,note}); if(!r) throw "shot cancelled";
   spend(p,"shoot",false);
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id), qe=q.equip[ei]; if(E.charges!=null) qe.ch=Math.max(0,(qe.ch||0)-(E.boost?boost:1)); }, `${nameOf(p)} SHOOT ${nameOf(g)} with ${E.name}${boost?` (+${boost} charge)`:""} → ${r.hits} hit${r.hits===1?"":"s"} (LOUD)`); S.lastRoll=r;
   applyHits(p,g,r,false);
@@ -2134,7 +2134,7 @@ async function doSlash(p,note,extra){
   const tg=S.st.pieces.filter(g=>g.id!==p.id&&(g.type==="guard"||g.type==="boss"||isPlayer(g))&&Math.abs(g.r-p.r)+Math.abs(g.c-p.c)===1&&!wallBetween(p.r,p.c,g.r,g.c));
   if(!tg.length) throw "no adjacent figures to slash";
   spend(p,"slash",false); if(boost) commit(st=>{ st.pieces.find(x=>x.id===p.id).equip[ei].ch--; });
-  const out=[]; for(const g of tg){ const r=await rollPrompt({by:p,kind:"weapon",w:1+boost,b:0,vs:defOf(g),why:`${nameOf(p)} SLASH ${nameOf(g)}`,note}); if(!r) break;
+  const out=[]; for(const g of tg){ const r=await rollPrompt({by:p,tgt:g,kind:"weapon",w:1+boost,b:0,vs:defOf(g),why:`${nameOf(p)} SLASH ${nameOf(g)}`,note}); if(!r) break;
     commit(()=>{}, `${nameOf(p)} SLASH ${nameOf(g)} → ${r.hits} hit${r.hits===1?"":"s"}`); S.lastRoll=r; applyHits(p,g,r,false); out.push(`${nameOf(g)} ${r.hits}`);
     if(r.bang){ playerToken(P(p.id),"q"); addLog(`${nameOf(p)} rolled a white "!" → draws attention`); } }
   refresh(); return "slash: "+out.join(", ");
@@ -2463,7 +2463,7 @@ async function activateGuard(gid,card){
   let left=n, guard=0;
   while(left>0&&guard++<40){ g=P(gid);
     const s=guardStep(g,g.r,g.c,g.facing,{arrow:card.arrow});
-    if(!s){ const d=newPathFacing(g,card.arrow); if(d==null){ if(await fallback(`${nameOf(g)} is boxed in`,`keep patrolling (${left} space${left===1?"":"s"} left)`,"he turned all the way around and found no open path","his activation ends",15)) addLog(`${nameOf(g)} is boxed in — activation ends`); return; } if(!await explain("newpath",`${esc(nameOf(g))} can't keep going ${DIRN[g.facing]} from ${sq(g.r,g.c)}, so he turns ${DIRN[d]}.`)) return; guardFace(g,d,"blocked, finds a new path"); await sleep(200);
+    if(!s){ const d=newPathFacing(g,card.arrow); if(d==null){ if(await fallback(`${nameOf(g)} is boxed in`,`keep patrolling (${left} space${left===1?"":"s"} left)`,"he turned all the way around and found no open path","his activation ends",15)) addLog(`${nameOf(g)} is boxed in — activation ends`); return; } guardFace(g,d,"blocked, finds a new path"); await sleep(200);
       if(await guardAttack(P(gid))){ if(tokenAt(P(gid).r,P(gid).c).length) await guardReaction(P(gid)); return; } continue; }
     if(s.leap&&!await explain("leap",`${esc(nameOf(g))} jumps over the guard in front of him and lands on ${sq(s.r,s.c)} — counted as 1 space.`)) return;
     guardMoveTo(g,s,"PATROL",`${n-left+1}/${n}`); left--; await mineCheck(s.r,s.c,P(gid)); g=P(gid); if(!g) return; await sleep(300); if(EN.stop) return;
@@ -2472,13 +2472,13 @@ async function activateGuard(gid,card){
     if(await guardAttack(g)){ if(tokenAt(g.r,g.c).length) await guardReaction(P(gid)); return; }
     if(tokenAt(g.r,g.c).length){ await guardReaction(g); await noWallFacing(gid,card); return; } }
   g=P(gid); if(!g) return; if(playersSeenBy(g).length){ await guardAttack(g); return; }
-  if(S.st.cells[key(g.r,g.c)]==="corner"){ const d=newPathFacing(g,card.arrow); if(d!=null&&d!==g.facing&&await explain("corner",`${esc(nameOf(g))} ended on the turn icon at ${sq(g.r,g.c)}, so he turns ${DIRN[d]}.`)) guardFace(g,d,"ended on a corner icon"); }
+  if(S.st.cells[key(g.r,g.c)]==="corner"){ const d=newPathFacing(g,card.arrow); if(d!=null&&d!==g.facing) guardFace(g,d,"ended on a corner icon"); }
   else { const r2=g.r+DR[g.facing], c2=g.c+DC[g.facing];   // only real obstacles/walls count here — a figure in front is not an obstacle
     if(!inBounds(r2,c2)||wallBetween(g.r,g.c,r2,c2)||blocked(r2,c2)){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"faces an obstacle"); } }
   await guardAttack(P(gid));
 }
 async function noWallFacing(gid,card){ const g=P(gid); if(!g) return; const r2=g.r+DR[g.facing], c2=g.c+DC[g.facing];
-  if(!inBounds(r2,c2)||wallBetween(g.r,g.c,r2,c2)||blocked(r2,c2)){ const d=newPathFacing(g,card.arrow); if(d!=null&&await explain("wall",`${esc(nameOf(g))} would end facing a wall at ${sq(g.r,g.c)}, so he turns ${DIRN[d]}.`)) guardFace(g,d,"never ends facing a wall"); } }
+  if(!inBounds(r2,c2)||wallBetween(g.r,g.c,r2,c2)||blocked(r2,c2)){ const d=newPathFacing(g,card.arrow); if(d!=null) guardFace(g,d,"never ends facing a wall"); } }
 function spawnFacing(st,r,c){ const a=(st.arrows||{})[key(r,c)]; if(a!=null) return a; for(const d of [2,1,3,0]){ const r2=r+DR[d],c2=c+DC[d]; if(inBounds(r2,c2)&&!wallBetween(r,c,r2,c2)&&!blocked(r2,c2)) return d; } return 2; }
 function burnCard(why){ if(vdeckOn()){ burnVirtual(why); return; } commit(s=>{ if(s.blue>0) s.blue--; else if(s.red>0) s.red--; }, `${why} → reveal the top Guard Order card and put it on the bottom (if it's GAME OVER, the stage fails)`); }
 async function radioIn(zones){ const st=S.st;
@@ -2488,8 +2488,7 @@ async function radioIn(zones){ const st=S.st;
       const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).length;
       while(have<want){ const [r,c]=radios[0].split(",").map(Number); let spot=null;
         const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
-        if(free(r,c)) spot={r,c}; else { for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; }
-          if(spot&&!await fallback("Radio-In",`a guard spawns on the radio at ${sq(r,c)}`,"a figure is already standing there",`he spawns next to it at ${sq(spot.r,spot.c)}`,13)) break; }
+        if(free(r,c)) spot={r,c}; else { for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; } }
         if(!spot||guardsLeft()<1){ if(await fallback("Radio-In",`a guard spawns${z?" in the "+esc(z.name):""}`,spot?"all 12 Guard figures are already on the board":"the radio square and every square next to it are taken","reveal the top Guard Order card and put it on the bottom",13)) burnCard(`Radio-In: ${spot?"no Guard figures left in the supply":"no room to spawn"}${z?" in the "+z.name:""}`); break; }
         commit(s=>{ const g={id:s.nextId++,type:"guard",r:spot.r,c:spot.c,facing:spawnFacing(s,spot.r,spot.c)}; initPiece(g,s); s.pieces.push(g); }, `Radio-In: a guard spawns at ${sq(spot.r,spot.c)}${z?" ("+z.name+")":""}`);
         have++; await sleep(250); } } }
@@ -2507,8 +2506,7 @@ async function guardActionSection(card){
       const want=counts.reduce((a,[,v])=>a+(+v),0); let have=S.st.pieces.filter(p=>p.type==="guard"&&inZone(z,p.r)).length;
       while(have<want){ const [r,c]=radios[0].split(",").map(Number); let spot=null;
         const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
-        if(free(r,c)) spot={r,c}; else { for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; }
-          if(spot&&!await fallback("Radio-In",`a guard spawns on the radio at ${sq(r,c)}`,"a figure is already standing there",`he spawns next to it at ${sq(spot.r,spot.c)}`,13)) break; }
+        if(free(r,c)) spot={r,c}; else { for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; } }
         if(!spot||guardsLeft()<1){ if(await fallback("Radio-In",`a guard spawns${z?" in the "+esc(z.name):""}`,spot?"all 12 Guard figures are already on the board":"the radio square and every square next to it are taken","reveal the top Guard Order card and put it on the bottom",13)) burnCard(`Radio-In: ${spot?"no Guard figures left in the supply":"no room to spawn"}${z?" in the "+z.name:""}`); break; }
         commit(s=>{ const g={id:s.nextId++,type:"guard",r:spot.r,c:spot.c,facing:spawnFacing(s,spot.r,spot.c)}; initPiece(g,s); s.pieces.push(g); }, `Radio-In: a guard spawns at ${sq(spot.r,spot.c)}${z?" ("+z.name+")":""}`);
         have++; await sleep(250); } } }
@@ -2911,14 +2909,20 @@ function busyModal(){ if(S.modal){ alertMsg("Finish the pop-up on screen first")
 function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player being attacked), kind, note, preview}
   o._rid=Math.random().toString(36).slice(2,9); modalOn(); S.curRoll=o;
   return new Promise(res0=>{ const res=v=>{ modalOff(); res0(v); };
-    const box=document.getElementById("rollbox"); let dice=null, pick=null, rolling=false, hackerAdds=0;
+    const box=document.getElementById("rollbox"); let dice=null, pick=null, rolling=false, hackerAdds=0; const abil=new Set();
     const owner=o.by?P(o.by.id):o.target?P(o.target.id):null;
     const spendTok=(s_)=>s_.spend?s_.spend():commit(st=>{ st.pieces.find(x=>x.id===s_.pl.id).focus[s_.i]=false; }, `${nameOf(s_.pl)} spends Focus "${s_.n}"${s_.why?" ("+s_.why+")":""} on: ${o.why||"a roll"}`);
     const aloneOK=()=>owner&&owner.type==="snake"&&o.kind==="weapon"&&!playersWithin(owner,2).length&&onceRound(owner,"alone");
     const hackerOK=()=>owner&&owner.type==="otacon"&&(o.kind==="hack"||o.kind==="access")&&hackerAdds<2;
+    const dmgAb=()=>{ const t=o.tgt&&P(o.tgt.id); if(!dice||!owner||!t||o.vs==null||!scoreDice(dice,o.vs).hits) return [];
+      const out=[], dt=o.ko?"KO damage":"damage";
+      if(owner.type==="snake"&&!isPlayer(t)&&behindLine(owner,t)&&onceRound(owner,"sneakatk")) out.push({k:"sneakatk",n:"Sneak Attack",d:`you're behind ${nameOf(t)} in his row/column · +1 ${dt} · once per round`});
+      if(owner.type==="meryl"&&dice.some(d=>d.v===6&&!d.mod)&&onceRound(owner,"rookie")) out.push({k:"rookie",n:"I'm No Rookie",d:`you rolled an unmodified 6 · +1 ${dt} · once per round`});
+      return out; };
     const throwMore=async(list)=>{ rolling=true; box.style.display="none"; await rollDice(list,o.vs); rolling=false; };
     const draw=()=>{
-      const sc=dice?scoreDice(dice,o.vs):null, src=dice?focusSources(owner,dice):[];
+      const sc=dice?scoreDice(dice,o.vs):null, src=dice?focusSources(owner,dice):[], abs=dmgAb();
+      [...abil].forEach(k=>{ if(!abs.some(a=>a.k===k)) abil.delete(k); });
       const perOpts=pick!=null?src.filter(s_=>s_.fx.per&&(!s_.fx.dieKind||s_.fx.dieKind===dice[pick].k)&&(!s_.blackOnly||dice[pick].k==="b")&&!(Array.isArray(s_.fx.per)&&dice[pick].v==="!")&&!(s_.onceDie&&dice[pick][s_.onceDie])):[];
       const addOpts=src.filter(s_=>s_.fx.add&&(!s_.blackOnly||s_.fx.add==="b"));
       const who=s_=>s_.pl.id===owner.id?"":`${nameOf(s_.pl)}'s `;
@@ -2927,7 +2931,8 @@ function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player be
         <div class="muted">${[o.w?o.w+" white":"",o.b?o.b+" black":""].filter(Boolean).join(" + ")||"no dice"}${o.vs!=null?` · each ${o.vs}+ is a hit`:""}${owner?` · ${o.target?"rolled against":"rolled by"} ${esc(nameOf(owner))}`:""}</div>
         ${o.note?`<div class="rb-note">${esc(o.note)}</div>`:""}
         ${dice?`<div class="rb-dice">${dice.map((d,i)=>`<button class="chip ${d.k==="w"?"w":"b"} ${d.v==="!"?"bang":""} ${pick===i?"pk":""}" data-d="${i}">${d.v}</button>`).join("")}</div>
-          <div class="rb-score"><b>${o.vs!=null?`${sc.hits} hit${sc.hits===1?"":"s"}`:"Rolled"}</b>${sc.bang?` · <span class="bad">${sc.bang} "!"</span>`:""}</div>
+          <div class="rb-score"><b>${o.vs!=null?`${sc.hits} hit${sc.hits===1?"":"s"}${abil.size?` + ${abil.size} (${abs.filter(a=>abil.has(a.k)).map(a=>a.n).join(", ")}) = ${sc.hits+abil.size} ${o.ko?"KO ":""}damage`:""}`:"Rolled"}</b>${sc.bang?` · <span class="bad">${sc.bang} "!"</span>`:""}</div>
+          ${abs.length?`<div class="rb-focus"><b>Abilities you may use on this result:</b>${abs.map(a=>`<div class="opt"><div class="opt-src"><span class="ftok ab">${esc(a.n)}</span> ${esc(a.d)}</div><div class="row" style="margin:3px 0"><button class="sm ${abil.has(a.k)?"on":""}" data-ab="${a.k}">${abil.has(a.k)?"✓ Using it — tap to skip":"Use it (+1)"}</button></div></div>`).join("")}</div>`:""}
           ${pick!=null?`<div class="rb-focus"><b>Change die ${pick+1} (${dice[pick].k==="w"?"white":"black"} ${dice[pick].v}) using:</b>${
               perOpts.map(s_=>{ const vals=(s_.fx.per==="re"||s_.fx.per==="rm")?[s_.fx.per]:s_.fx.per;
                 return `<div class="opt"><div class="opt-src"><span class="ftok">${esc(s_.n)}</span> ${s_.pl.id===owner.id?`${esc(nameOf(s_.pl))}'s Focus token`:`<b>${esc(nameOf(s_.pl))}'s</b> Focus token — via <i>${esc(s_.why)}</i>`} · spends it</div>
@@ -2956,6 +2961,7 @@ function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player be
         else if(v==="rm"){ dice.splice(pick,1); }
         else { d.v=d.v+(+v); d.mod=true; }
         pick=null; shareRoll(o,dice,"changed"); draw(); });
+      box.querySelectorAll("[data-ab]").forEach(b=>b.onclick=()=>{ const k=b.dataset.ab; abil.has(k)?abil.delete(k):abil.add(k); draw(); });
       box.querySelectorAll("[data-alone]").forEach(b=>b.onclick=()=>{ const d=dice[pick]; d.v=d.v+(+b.dataset.alone); d.mod=true; useOnce(owner,"alone"); addLog(`Snake uses "I Work Alone": ${+b.dataset.alone>0?"+1":"−1"} to one die`); pick=null; draw(); });
       box.querySelectorAll("[data-add]").forEach(b=>b.onclick=async()=>{ if(rolling) return; const s_=src[+b.dataset.add]; spendTok(s_); const one=[{k:s_.fx.add,v:null}]; await throwMore(one); dice.push(one[0]); draw(); });
       if(q("[data-hacker]")) q("[data-hacker]").onclick=async()=>{ if(rolling) return; hackerAdds++; addLog("Otacon uses Hacker: +1 black die"); const one=[{k:"b",v:null}]; await throwMore(one); dice.push(one[0]); draw(); };
@@ -2963,7 +2969,7 @@ function rollPrompt(o){ // o: {w,b,vs,why,by (player rolling), target (player be
         const parts=[]; const ws=dice.filter(d=>d.k==="w").map(d=>d.v), bs=dice.filter(d=>d.k==="b").map(d=>d.v);
         if(ws.length) parts.push("white "+ws.join(", ")); if(bs.length) parts.push("black "+bs.join(", "));
         commit(()=>{}, `rolled ${parts.join(" · ")||"no dice"}${o.why?" — "+o.why:""}${o.vs!=null?` → ${sc.hits} hit${sc.hits===1?"":"s"}`:""}${sc.bang?` · ${sc.bang} "!"`:""}`);
-        res({...sc, dice}); };
+        res({...sc, dice, abil:[...abil]}); };
       q("#rb-stop").onclick=()=>{ if(rolling) return; box.style.display="none"; clearDice(); shareRoll(o,dice,"close"); res(null); };
     };
     draw();
@@ -2997,11 +3003,11 @@ function focusPanel(p){ if(busyModal()) return; p=P(p.id); const box=document.ge
 function abilityStatus(p){ const used=t=>!onceRound(p,t), r=(name,state,cls,how)=>({name,state,cls,how});
   if(p.type==="snake") return [
     r("Silent Takedown","action · 2","",`Stand directly behind an adjacent guard: the button appears in the quick bar. No roll — he becomes a dead guard token (a kill).`),
-    r("Sneak Attack",used("sneakatk")?"used this round":"ready · automatic",used("sneakatk")?"off":"on",`Hit a guard from behind in his row or column and the board adds +1 damage by itself. Once per round.`),
+    r("Sneak Attack",used("sneakatk")?"used this round":"ready · your choice",used("sneakatk")?"off":"on",`Damage a target from behind in his row or column and the dice result offers +1 damage — use it or save it. Once per round.`),
     r(`"I Work Alone"`,used("alone")?"used this round":playersWithin(p,2).length?"blocked — a player is within 2":"ready",used("alone")||playersWithin(p,2).length?"off":"on",`When you shoot with no players within 2 squares, tap a die in the dice box for +1 or −1. Once per round.`)];
   if(p.type==="meryl") return [
     r("Gain Disguise","action · 2",p.disguised?"on":"",`Next to a KO or dead guard with your ! off the map: the Disguise button appears in the quick bar. ${p.disguised?"You are disguised now.":""}`),
-    r(`"I'm No Rookie"`,used("rookie")?"used this round":"ready · automatic",used("rookie")?"off":"on",`Roll a natural 6 when attacking and the board adds +1 damage by itself. Once per round.`),
+    r(`"I'm No Rookie"`,used("rookie")?"used this round":"ready · your choice",used("rookie")?"off":"on",`Roll an unmodified 6 when attacking and the dice result offers +1 damage — use it or save it. Once per round.`),
     r(`"I Can Still Help"`,"passive","on",`Teammates within 2 squares can use your Focus tokens — they appear in their dice box automatically.`)];
   if(p.type==="otacon") return [
     r(`"I'm No Soldier"`,"passive","",`You can't attack or use weapons.`),
@@ -3090,7 +3096,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="7.6";
+const APP_VERSION="8.2";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3725,7 +3731,8 @@ const EXPLAIN={leap:{t:"Leapfrog",p:15,w:"Guards jump over other Guards. Jumping
   newpath:{t:"Blocked — finding a new path",p:15,w:"A patrolling guard who can't go further straight ahead turns left or right toward a direction with open space. If both are open, the Guard Order card's arrow picks."},
   wall:{t:"Never ends facing a wall",p:15,w:"A guard never finishes his move facing a wall, locked door or obstacle. He turns to the nearest open direction; if left and right are both open, the card's arrow picks."},
   patrolnotnear:{t:"Patrols instead of investigating",p:16,w:"Only the nearest guard (or tied nearest) to a ? goes to investigate it. Everyone else just patrols."}};
-async function explain(kind,detail){ if(S.sim||(S.st.noExplain||[]).includes(kind)) return true; const E=EXPLAIN[kind];
+const EXPLAIN_OFF=["leap","arrow","patrolnotnear","corner","newpath","wall"];
+async function explain(kind,detail){ if(S.sim||EXPLAIN_OFF.includes(kind)||(S.st.noExplain||[]).includes(kind)) return true; const E=EXPLAIN[kind];
   return new Promise(res=>{ modalOn(); const box=document.getElementById("rollbox");
     box.innerHTML=`<div class="rb-title">ℹ ${esc(E.t)}</div><div style="margin:6px 0">${detail}</div><div class="fb"><div class="muted">${esc(E.w)}</div><div class="fb-ref">📖 Rulebook p.${E.p}</div></div>
       <label class="row" style="margin:8px 0;gap:8px"><input type="checkbox" id="ex-off"> Don't explain this one again this game</label>
@@ -3737,8 +3744,7 @@ async function spawnGuardAt(z,why){ const st=S.st; const radios=Object.keys(st.m
   if(!radios.length){ addLog(`${why}: no barracks in ${z?z.name:"this map"} — nothing spawns`); return; }
   const free=(r_,c_)=>inBounds(r_,c_)&&!blocked(r_,c_)&&!S.st.pieces.some(p=>p.r===r_&&p.c===c_&&blocksFig(p));
   const [r,c]=radios[0].split(",").map(Number); let spot=free(r,c)?{r,c}:null;
-  if(!spot){ for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; }
-    if(spot&&!await fallback(why,`a guard spawns on the radio at ${sq(r,c)}`,"a figure is already standing there",`he spawns next to it at ${sq(spot.r,spot.c)} (you may pick another empty square next to the radio)`,13)) return; }
+  if(!spot){ for(let d=0;d<4&&!spot;d++){ const r2=r+DR[d],c2=c+DC[d]; if(free(r2,c2)&&!wallBetween(r,c,r2,c2)) spot={r:r2,c:c2}; } }
   if(!spot||guardsLeft()<1){ if(await fallback(why,`a guard spawns${z?" in the "+esc(z.name):""}`,spot?"all 12 Guard figures are already on the board":"the radio square and every square next to it are taken","reveal the top Guard Order card and put it on the bottom",13)) burnCard(`${why}: ${spot?"no Guard figures left in the supply":"no room to spawn"}`); return; }
   commit(s=>{ const g={id:s.nextId++,type:"guard",r:spot.r,c:spot.c,facing:spawnFacing(s,spot.r,spot.c),noAct:s.round}; initPiece(g,s); s.pieces.push(g); }, `${why}: a guard spawns at ${sq(spot.r,spot.c)}${z?" ("+z.name+")":""} — he doesn't activate this turn`); }
 // ---------- Guard Reaction: draw the card, show it, then auto or manual ----------
@@ -3961,7 +3967,7 @@ async function doShoot(p,g,note,wname,extra){
   const boost=E.boost?Math.min(+extra||0,e.ch||0):0;
   if(!lineClear(p,g)) throw `no line of sight from ${sq(p.r,p.c)} to ${nameOf(g)}`;
   const sup=E.loud&&((E.pistol&&hasEq(p,x=>x.attach==="pistol"))||(E.rifle&&hasEq(p,x=>x.attach==="rifle"))), loud=E.loud&&!sup, trip=tripCross(p,g);
-  const r=await rollPrompt({by:p,kind:"weapon",w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name}${loud?" (LOUD)":sup?" (suppressed)":""}`,
+  const r=await rollPrompt({by:p,tgt:g,kind:"weapon",w:(E.w||1)+boost,b:0,vs:defOf(g),why:`${nameOf(p)} shoots ${nameOf(g)} with ${E.name}${loud?" (LOUD)":sup?" (suppressed)":""}`,
     note:[note,trip?`⚠ This shot crosses the trip wires — every "!" rolled deals 1 damage to ${S.st.hostage.name}`:""].filter(Boolean).join(" · ")}); if(!r) throw "shot cancelled";
   spend(p,"shoot",false); if(cost>1) commit(st=>{ st.tt[p.id].used+=cost-1; });
   commit(st=>{ const q=st.pieces.find(x=>x.id===p.id), qe=q.equip[ei]; if(E.charges!=null&&!(inf&&!E.boost)) qe.ch=Math.max(0,(qe.ch||0)-(E.boost?boost:1)); }, `${nameOf(p)} SHOOT ${nameOf(g)} with ${E.name}${boost?` (+${boost} charge)`:""}${inf&&E.charges!=null?" (Bandana: no ammo used)":""} → ${r.hits} hit${r.hits===1?"":"s"}${loud?" (LOUD)":""}`); S.lastRoll=r;
@@ -4487,7 +4493,7 @@ function markHeard(n){ const c=S.st.camp; if(c){ if(!(c.codecs||[]).includes(n))
   const h=codecHeard(); if(!h.includes(n)){ h.push(n); saveLS("st-codecs",JSON.stringify(h)); } }
 // ---------- the Codec screen ----------
 S.codec=null;
-function openCodec(n){ S.codec={view:n?"call":"dial",n:n||"",i:0}; renderCodec(); }
+function openCodec(n){ S.codec={view:n?"call":"dial",n:n||"",i:0,direct:!!n}; renderCodec(); }
 function closeCodec(){ S.codec=null; const el=document.getElementById("codec"); if(el) el.remove(); }
 function normCodec(v){ const d=String(v||"").replace(/[^0-9]/g,""); if(d.length<3) return null; const a=d.slice(0,d.length-2).padStart(2,"0"), b=d.slice(-2); return `${a}.${b}`; }
 function renderCodec(){
@@ -4515,11 +4521,11 @@ function renderCodec(){
     <div class="cd-call">${face(other==="snake"?"campbell":other)}<div class="cd-mid"><div class="cd-freq sm">${c.n}</div><div class="cd-bars">${[1,2,3,4,5,6,7].map(i=>`<i style="--i:${i}"></i>`).join("")}</div><div class="cd-mhz">PTT · ${st.i+1}/${c.lines.length}</div></div>${face("snake")}</div>
     <div class="cd-text" id="cd-text" style="--c:${CODEC_WHO[cur[0]].c}"><b>${esc(CODEC_WHO[cur[0]].n)}:</b> <span id="cd-type"></span></div>
     <div class="cd-hist">${c.lines.slice(0,st.i).map(l=>`<div style="--c:${CODEC_WHO[l[0]].c}"><b>${esc(CODEC_WHO[l[0]].n)}:</b> ${esc(l[1])}</div>`).join("")}</div>
-    <div class="row"><button class="sm" id="cd-replay">↺ Replay</button><button class="on" id="cd-next" style="flex:1">${done?"End call":"Next ▸"}</button></div></div>`;
+    <div class="row"><button class="sm" id="cd-replay">↺ Replay</button><button class="on" id="cd-next" style="flex:1">${done?(st.direct?"End call — back to the board":"End call"):"Next ▸"}</button></div></div>`;
   // typewriter
   const t=el.querySelector("#cd-type"), full=cur[1]; let k=0; clearInterval(S.codecTimer); S.codecTimer=setInterval(()=>{ k+=2; t.textContent=full.slice(0,k); if(k>=full.length) clearInterval(S.codecTimer); },18);
   el.querySelector("#cd-text").onclick=()=>{ clearInterval(S.codecTimer); t.textContent=full; };
-  el.querySelector("#cd-next").onclick=()=>{ if(t.textContent.length<full.length){ clearInterval(S.codecTimer); t.textContent=full; return; } if(done){ S.codec={view:"dial",n:""}; renderCodec(); } else { S.codec.i++; renderCodec(); } };
+  el.querySelector("#cd-next").onclick=()=>{ if(t.textContent.length<full.length){ clearInterval(S.codecTimer); t.textContent=full; return; } if(done){ if(S.codec.direct) closeCodec(); else { S.codec={view:"dial",n:""}; renderCodec(); } } else { S.codec.i++; renderCodec(); } };
   el.querySelector("#cd-replay").onclick=()=>{ S.codec.i=0; renderCodec(); };
   el.querySelector("#cd-back").onclick=()=>{ S.codec={view:"dial",n:""}; renderCodec(); };
   el.querySelector("#cd-x").onclick=closeCodec;
