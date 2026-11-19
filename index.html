@@ -3090,7 +3090,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="7.5";
+const APP_VERSION="7.6";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3249,30 +3249,56 @@ function deleteCampaign(id){ const all=camps(), nm=(all[id]||{}).name||(S.st.cam
   if(S.st.camp&&S.st.camp.id===id){ try{ campSync.stop(); }catch(e){} commit(s=>{ const n=defaultState(); Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,{screen:"lobby"}); }, `Campaign deleted: ${nm}`); }
   else { addLog(`Campaign deleted: ${nm}`); renderScreen(); }
   toast(`Deleted “${nm}” from this phone`); }
+// after a run: every runner list moves down one (the top goes to the bottom)
+function rotatedQueues(br){ const q={}; Object.entries(br.queues||{}).forEach(([l,a])=>{ q[l]=a.length>1?[...a.slice(1),a[0]]:[...a]; }); return q; }
+function nextRunLabel(br){ const rq=rotatedQueues(br), k=br.key, ch=charsOf(k); return ch.map(t=>(rq[TYPES[t].name]||[])[0]).filter(Boolean).map(r=>r.name).join(" + "); }
+function sameRunLabel(br){ const ch=charsOf(br.key); return ch.map(t=>((br.queues||{})[TYPES[t].name]||[])[0]).filter(Boolean).map(r=>r.name).join(" + "); }
+function nextRun(){ commit(s=>{ s.brief.queues=rotatedQueues(s.brief); s.brief.seats={}; }); launchMission(S.st.brief.key,0); }
+// moving on to the next mission: whoever just played goes to the back, so someone else starts the next one
+function nextMission(nx){ const br=S.st.brief||{}, flat=flatOrder(br), went=charsOf(br.key).length, order=[...flat.slice(went),...flat.slice(0,went)];
+  commit(s=>{ s.camp.lineup={order:order.map(r=>({id:r.id,name:r.name,proxy:r.proxy||""})),spect:br.spect||[]}; });
+  setScreen("briefing",{brief:newBrief(nx)}); }
 function setScreen(k,extra){ commit(s=>{ s.screen=k; if(extra) Object.assign(s,extra); }); }
 function newCampaign(name){ const c={id:"c"+Date.now().toString(36),code:newCampCode(),name:name||"Shadow Moses",unlocked:["stage1"],memory:[],custom:{},runs:{},best:{},created:Date.now()};
   commit(s=>{ const n=defaultState(); Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,n,{camp:c,screen:"missions"}); }, `New campaign: ${c.name}`); }
 function loadCampaign(id){ const sv=camps()[id]; if(!sv) return; commit(s=>{ Object.keys(s).forEach(k=>delete s[k]); Object.assign(s,defaultState(),sv.state,{screen:"missions"}); }, `Loaded campaign: ${sv.name}`); applyCustom(); }
 // ---------- launching a mission ----------
-function charsOf(k){ const L=LAYOUTS[k]; let t=L.pieces.filter(p=>TYPES[p.type].kind==="player").map(p=>p.type); const br=S.st.brief; if(L.roster&&br&&br.key===k&&br.players===1) t=t.filter(x=>L.roster[1].includes(x)); return t; }
+function allChars(k){ const L=LAYOUTS[k]; return L.pieces.filter(p=>TYPES[p.type].kind==="player").map(p=>p.type); }
+// characters going in = the filled runner lists, in order (Snake, then Meryl, …); the roster on the page decides which
+function charsOf(k){ const L=LAYOUTS[k], all=allChars(k), br=S.st.brief; if(!br||br.key!==k||!br.queues) return L.roster&&br&&br.key===k&&br.players?(L.roster[br.players]||all):all;
+  const n=activeCount(k,br); return L.roster?(L.roster[n]||all.slice(0,n)):all.slice(0,Math.max(1,n)); }
+function activeCount(k,br){ let n=0; for(const t of allChars(k)){ if(((br.queues||{})[TYPES[t].name]||[]).length) n++; else break; } return n; }
+function queueOf(lab){ return ((S.st.brief||{}).queues||{})[lab]||[]; }
+function isPlayerHere(){ if(!inRoom()) return true; const q=(S.st.brief||{}).queues||{}; return Object.values(q).some(a=>a.some(r=>r.id===room.me)); }
+// build a briefing's lists from a flat order of people: person 1 → first character, person 2 → second, … (wrapping); spectators stay spectators
+function makeQueues(k,order,spect){ const chars=allChars(k), L=LAYOUTS[k], max=L.roster?Math.max(...Object.keys(L.roster).map(Number)):chars.length, use=chars.slice(0,Math.min(max,chars.length)), q={};
+  use.forEach(t=>q[TYPES[t].name]=[]); const pl=order.filter(p=>!(spect||[]).includes(p.id));
+  pl.forEach((p,i)=>q[TYPES[use[i%use.length]].name].push({id:p.id,name:p.name,proxy:p.proxy||""}));
+  const out={}; let gap=false; use.forEach(t=>{ const lab=TYPES[t].name; if(gap||!q[lab].length){ gap=true; out[lab]=[]; } else out[lab]=q[lab]; }); return out; }
+function flatOrder(br){ const qs=Object.values(br.queues||{}), out=[], seen=new Set(); const L=Math.max(0,...qs.map(a=>a.length));
+  for(let i=0;i<L;i++) qs.forEach(a=>{ const r=a[i]; if(r&&!seen.has(r.id)){ seen.add(r.id); out.push(r); } }); return out; }
+function newBrief(k){ const ps=people(), camp=S.st.camp||{}, lu=camp.lineup||{}, spect=(lu.spect||[]).filter(id=>ps.some(p=>p.id===id));
+  let order=[...(lu.order||[]).filter(o=>ps.some(p=>p.id===o.id)).map(o=>({...ps.find(p=>p.id===o.id),proxy:o.proxy})),...ps.filter(p=>!(lu.order||[]).some(o=>o.id===p.id))];
+  return {key:k,seats:{},loadout:{},spect,queues:makeQueues(k,order,spect)}; }
 function needsLoadout(k){ return charsOf(k).some(t=>CHARS[t].start.length)||((S.st.camp||{}).memory||[]).length>0; }
-function seatNameFor(lab){ const br=S.st.brief||{}, solo=charsOf(br.key).length===1, s_=solo?(br.runners||[])[0]:(br.seats||{})[lab]; return s_?s_.name:"anyone"; }
-function canEditSeat(lab){ if(!inRoom()) return true; const br=S.st.brief||{}, solo=charsOf(br.key).length===1, s_=solo?(br.runners||[])[0]:(br.seats||{})[lab]; return !s_||s_.id===room.me; }
+function seatNameFor(lab){ const s_=queueOf(lab)[0]; return s_?s_.name:"anyone"; }
+function canEditSeat(lab){ if(!inRoom()) return true; const s_=queueOf(lab)[0]; return !s_||s_.id===room.me; }
 function launchMission(k,runIdx){
   const camp=S.st.camp, br=S.st.brief||{}, chars=charsOf(k), solo=chars.length===1, run=S.st.run&&S.st.run.key===k?S.st.run:null;
-  const runners=solo?((br.key===k&&br.runners)||run&&run.runners||[]):[], idx=runIdx??0;
+  const idx=0;
   const n=buildPreset(k); n.camp=camp; n.brief=br; n.stats=newStats(); n.screen="play";
-  { const L_=LAYOUTS[k]; if(L_.roster&&br.key===k&&br.players===1){ const keepT=L_.roster[1], gone=n.pieces.filter(p=>TYPES[p.type].kind==="player"&&!keepT.includes(p.type)).map(p=>p.label);
+  { const L_=LAYOUTS[k]; if(br.key===k&&chars.length<allChars(k).length){ const keepT=chars, gone=n.pieces.filter(p=>TYPES[p.type].kind==="player"&&!keepT.includes(p.type)).map(p=>p.label);
       n.pieces=n.pieces.filter(p=>!(TYPES[p.type].kind==="player"&&!keepT.includes(p.type))&&!(p.type==="attn"&&gone.includes(p.owner)));
-      const ah=n.aloneHp, z=ah&&(n.zones||[]).find(z=>z.name===ah.zone); if(z) n.pieces.forEach(p=>{ if(p.type==="guard"&&p.r>=z.r0&&p.r<=z.r1) p.hp=ah.hp; }); }
+      const ah=n.aloneHp, z=ah&&(n.zones||[]).find(z=>z.name===ah.zone); if(z&&chars.length===1) n.pieces.forEach(p=>{ if(p.type==="guard"&&p.r>=z.r0&&p.r<=z.r1) p.hp=ah.hp; }); }
     prepBoss(n); if(!n.bossStage) buildReactionDeck(n); }
-  n.seats={}; chars.forEach(t=>{ const lab=TYPES[t].name; const s=solo?runners[idx]:(br.seats||{})[lab]; if(s) n.seats[lab]=s; });
+  n.seats={}; chars.forEach(t=>{ const lab=TYPES[t].name; const s=((br.queues||{})[lab]||[])[0]||(br.seats||{})[lab]; if(s) n.seats[lab]=s; });
+  const runners=chars.map(t=>n.seats[TYPES[t].name]).filter(Boolean);
   n.run={key:k,runners,idx,attempt:((camp.runs[k]||[]).length)+1};
   // loadout from the Memory Box
   n.pieces.filter(p=>TYPES[p.type].kind==="player").forEach(p=>{ ensureChar(p); const refs=(br.loadout||{})[p.label]; if(!refs) return;
     p.equip=refs.map(ref=>{ if(ref.startsWith("start:")){ const k=ref.split(":")[2]; return EQUIP[k]?{k,ch:EQUIP[k].charges}:null; } const m=camp.memory.find(x=>x.id===ref); return m&&EQUIP[m.k]?{k:m.k,ch:EQUIP[m.k].charges,mem:m.id}:null; }).filter(Boolean).slice(0,CHARS[p.type].slots); });
   commit(s=>{ const keep={bgOpacity:s.bgOpacity,bgRect:s.bgRect,bgVer:s.bgVer}; Object.keys(s).forEach(x=>delete s[x]); Object.assign(s,n,keep); S.sel=null; },
-    `▶ Mission start: ${LAYOUTS[k].name}${solo&&runners[idx]?` — ${runners[idx].name}'s run`:""}`);
+    `▶ Mission start: ${LAYOUTS[k].name}${runners.length?` — ${chars.map(t=>`${TYPES[t].name}: ${(n.seats[TYPES[t].name]||{}).name||"?"}`).join(", ")}`:""}`);
   S.st.log=S.st.log.slice(0,1); S.steps=[]; persist(); stageBg(); S.zoneView=null; if(!LAYOUTS[k].bossStage) buildDeck(); fitView(); closeAll(); refresh(); }
 // ---------- end of a mission ----------
 function runScore(r){ return (r.result==="cleared"?1e6:0)-r.rounds*1000-r.stats.spotted*50-r.stats.dmg*10+r.stats.ko; }
@@ -3332,20 +3358,23 @@ function renderScreen(){
       <div class="sh">Shared pool · unlocked</div><p class="muted" style="margin-top:-4px">Anyone can take these. There's one of each.</p>${c.memory.length?c.memory.map(m=>{ const E=EQUIP[m.k]||{name:m.k,text:""}; return `<div class="eq"><div class="row" style="margin:0"><b style="flex:1">${esc(E.name)}</b><span class="muted">${esc(m.no||"")}</span>${codecChip(m.k)}<button class="sm" data-unmem="${m.id}">Remove</button></div><div class="muted">${E.charges!=null?`[${E.charges}] · `:""}${E.loud?"LOUD · ":""}${esc(E.text)}</div>${m.from?`<div class="muted">From ${esc(m.from)}</div>`:""}</div>`; }).join(""):`<p class="muted">Nothing yet — clear missions to unlock equipment.</p>`}
       <div class="row"><button class="sm" id="mem-add">＋ Record an unlocked card</button></div>
       <div class="sh">Locked</div>${locked.map(r=>`<div class="eq locked"><div class="blur"><b>${esc(r.label)} · ??????</b><div>Effect hidden until unlocked.</div></div><div class="muted">${esc(r.stage)}${r.when?` — ${esc(r.when)}`:""}</div></div>`).join("")||`<p class="muted">Nothing left to unlock in these missions.</p>`}`; }
-  if(k==="briefing"){ const key_=st.brief.key, L=LAYOUTS[key_], chars=charsOf(key_), solo=chars.length===1, br=st.brief, ps=people();
-    const pick=(lab,cur)=>ps.map(p=>`<button class="sm ${cur&&cur.id===p.id?"on":""}" data-seat="${esc(lab)}" data-pid="${p.id}" data-pn="${esc(p.name)}">${esc(p.name)}${p.me?" (me)":""}</button>`).join("");
+  if(k==="briefing"){ const key_=st.brief.key, L=LAYOUTS[key_], br=st.brief, ps=people(), all=allChars(key_), max=L.roster?Math.max(...Object.keys(L.roster).map(Number)):all.length, use=all.slice(0,Math.min(max,all.length));
+    if(!br.queues){ Object.assign(br,newBrief(key_)); }
+    const n=activeCount(key_,br), chars=charsOf(key_), spect=br.spect||[], nm=id=>(ps.find(p=>p.id===id)||{name:"(left the room)"}).name, me=id=>id===myId()?" (me)":"";
     h=`<div class="topbar">${back("missions","← Missions")}<div class="ttl">Briefing</div><span></span></div>
       <div class="brief"><div class="bt">${esc(L.name)}</div>${objectivesHtml(key_,st,false)}</div>
-      ${L.roster?`<div class="sh">How many players?</div><div class="row">${Object.keys(L.roster).map(n_=>`<button class="sm ${(br.players||2)===+n_?"on":""}" data-np="${n_}" style="flex:1">${n_} player${n_>1?"s":""} · ${L.roster[n_].map(t=>TYPES[t].name).join(" + ")}</button>`).join("")}</div>${(br.players||2)===1&&L.aloneHp?`<p class="muted">Working Alone applies: guards in the ${esc(L.aloneHp.zone)} have ${L.aloneHp.hp} health.</p>`:""}`:""}
-      <div class="sh">Team</div>
-      ${solo?`<div class="scard"><div class="row" style="margin:0"><span class="sw" style="background:${TYPES[chars[0]].color}">${TYPES[chars[0]].short}</span><b>${TYPES[chars[0]].name}</b><span class="muted" style="margin-left:auto">one character — take turns</span></div>
-          <p class="muted">Runners play ${TYPES[chars[0]].name} one at a time, in this order. If a run ends, the next runner gets a go; the best run is kept.</p>
-          ${(br.runners||[]).map((r,i)=>`<div class="row"><b style="min-width:22px">${i+1}.</b><span style="flex:1">${esc(r.name)}</span><input type="text" placeholder="playing for… (e.g. Claude)" data-proxy="${i}" value="${esc(r.proxy||"")}" style="width:46%"><button class="sm" data-rup="${i}" ${i?"":"disabled"}>↑</button><button class="sm" data-rx="${i}">✕</button></div>`).join("")}
-          <div class="row">${ps.filter(p=>!(br.runners||[]).some(r=>r.id===p.id)).map(p=>`<button class="sm" data-radd="${p.id}" data-pn="${esc(p.name)}">＋ ${esc(p.name)}${p.me?" (me)":""}</button>`).join("")||`<span class="muted">Everyone is in the order.</span>`}</div></div>`
-       :chars.map(t=>{ const lab=TYPES[t].name, cur=(br.seats||{})[lab]; return `<div class="scard"><div class="row" style="margin:0"><span class="sw" style="background:${TYPES[t].color}">${TYPES[t].short}</span><b>${lab}</b><span class="muted" style="margin-left:auto">${cur?"played by "+esc(cur.name):"pick a player"}</span></div>
-          <div class="row">${pick(lab,cur)}</div>${cur?`<div class="row"><input type="text" placeholder="playing for… (e.g. Muse)" data-sproxy="${esc(lab)}" value="${esc(cur.proxy||"")}" style="flex:1"></div>`:""}</div>`; }).join("")}
-      <p class="muted">Anyone without a character watches as a spectator and can't move pieces.</p>
-      <div class="row" style="margin-top:14px"><button class="on big" id="b-go" ${solo?((br.runners||[]).length?"":"disabled"):(chars.every(t=>(br.seats||{})[TYPES[t].name])?"":"disabled")}>${needsLoadout(key_)?"Next: Loadout →":"▶ Start mission"}</button></div>`; }
+      <div class="sh">Who's going in</div>
+      <p class="muted">Put people in a character's runner list to play them, or in Spectators to watch. Characters fill in order${use.length>1?` — ${use.map(t=>TYPES[t].name).join(", then ")}`:""}. The top of each list plays this run; after each run the lists move down one, and wrap back to the top.</p>
+      ${use.map((t,ci)=>{ const lab=TYPES[t].name, q=(br.queues||{})[lab]||[], locked=ci>0&&!((br.queues||{})[TYPES[use[ci-1]].name]||[]).length, going=ci<n;
+        return `<div class="scard ${locked?"dim":""}"><div class="row" style="margin:0"><span class="sw" style="background:${TYPES[t].color}">${TYPES[t].short}</span><b>${lab}</b><span class="muted" style="margin-left:auto">${going?`goes in · ${esc(q[0].name)} first`:locked?`add someone to ${TYPES[use[ci-1]].name} first`:"not going in — nobody listed"}</span></div>
+          ${q.map((r,i)=>`<div class="row"><b style="min-width:22px">${i+1}.</b><span style="flex:1">${esc(r.name)}${me(r.id)}</span><input type="text" placeholder="playing for… (e.g. Muse)" data-qproxy="${esc(lab)}|${i}" value="${esc(r.proxy||"")}" style="width:42%"><button class="sm" data-qup="${esc(lab)}|${i}" ${i?"":"disabled"}>↑</button><button class="sm" data-qx="${esc(lab)}|${i}">✕</button></div>`).join("")}
+          ${locked?"":`<div class="row">${ps.filter(p=>!q.some(r=>r.id===p.id)).map(p=>`<button class="sm" data-qadd="${esc(lab)}" data-pid="${p.id}" data-pn="${esc(p.name)}">＋ ${esc(p.name)}${p.me?" (me)":""}</button>`).join("")||`<span class="muted">Everyone is in this list.</span>`}</div>`}</div>`; }).join("")}
+      <div class="scard"><div class="row" style="margin:0"><b>👁 Spectators</b><span class="muted" style="margin-left:auto">watch only — skipped in the rotation</span></div>
+        <div class="row">${spect.map(id=>`<span class="pill">${esc(nm(id))}${me(id)} <button class="sm" data-unspect="${id}">✕</button></span>`).join(" ")||`<span class="muted">Nobody.</span>`}</div>
+        <div class="row">${ps.filter(p=>!spect.includes(p.id)).map(p=>`<button class="sm" data-spect="${p.id}">👁 ${esc(p.name)}${p.me?" (me)":""} spectates</button>`).join("")}</div></div>
+      ${n?`<div class="eq"><b>This run:</b> ${chars.map(t=>`${TYPES[t].name} — ${esc((((br.queues||{})[TYPES[t].name]||[])[0]||{}).name||"?")}`).join(" · ")}${L.roster&&L.roster[n]?` <span class="muted">(${n} player${n>1?"s":""} setup)</span>`:""}</div>`:""}
+      ${n===1&&L.aloneHp?`<p class="muted">Working Alone applies: guards in the ${esc(L.aloneHp.zone)} have ${L.aloneHp.hp} health.</p>`:""}
+      <div class="row" style="margin-top:14px"><button class="on big" id="b-go" ${n?"":"disabled"}>${n?(needsLoadout(key_)?"Next: Loadout →":"▶ Start mission"):"Add someone to "+TYPES[use[0]].name}</button></div>`; }
   if(k==="loadout"){ const key_=st.brief.key, chars=charsOf(key_), br=st.brief, lo=br.loadout||{}, solo=chars.length===1;
     const taken=ref=>Object.keys(lo).find(l=>(lo[l]||[]).includes(ref)), nameOfRef=ref=>{ if(ref.startsWith("start:")) return EQUIP[ref.split(":")[2]].name; const m=camp.memory.find(x=>x.id===ref); return m?(EQUIP[m.k]||{name:m.k}).name:"?"; };
     h=`<div class="topbar">${back("briefing","← Briefing")}<div class="ttl">Loadout</div><span></span></div>
@@ -3358,10 +3387,10 @@ function renderScreen(){
           <div class="sh2">${lab}'s own gear</div><div class="row">${C.start.length?C.start.map(k=>chip(`start:${t}:${k}`,EQUIP[k].name)).join(""):`<span class="muted">None</span>`}</div>
           <div class="sh2">Shared pool</div><div class="row">${camp.memory.length?camp.memory.map(m=>chip(m.id,(EQUIP[m.k]||{name:m.k}).name)).join(""):`<span class="muted">Nothing unlocked yet</span>`}</div></div>`; }).join("")+
       `<div class="row" style="margin-top:14px"><button class="on big" id="b-start">▶ Start mission</button></div>`; }
-  if(k==="report"){ const r=st.report, L=LAYOUTS[r.key], solo=charsOf(r.key).length===1, run=st.run||{runners:[],idx:0}, nextR=solo&&run.runners[run.idx+1];
+  if(k==="report"){ const r=st.report, L=LAYOUTS[r.key], br=st.brief||{key:r.key}, nx=CAMPAIGN[CAMPAIGN.indexOf(r.key)+1], canNx=r.result==="cleared"&&nx&&(camp.unlocked||[]).includes(nx), nextL=br.queues?nextRunLabel(br):"", sameL=br.queues?sameRunLabel(br):"", mine=isPlayerHere(), dis=mine?"":"disabled";
     const S_=r.stats, stat=(n,v,bad)=>`<div class="stat ${bad&&v?"bad":""}"><b>${v}</b><span>${n}</span></div>`;
     h=`<div class="rep ${r.result}"><div class="rep-h">${r.result==="cleared"?"MISSION COMPLETE":r.result==="kia"?"KILLED IN ACTION":"MISSION FAILED"}</div>
-        <div class="rep-s">${esc(L.name)} · run ${r.attempt}</div><div class="muted">${esc(r.why)}</div>${r.best?`<div class="pill">★ Best run for this mission</div>`:""}</div>
+        <div class="rep-s">${esc(L.name)} · run ${r.attempt}</div><div class="muted">${esc(r.why)}</div>${r.perfect?`<div class="pill">★★ PERFECT RUN — every objective</div>`:""}${r.best?`<div class="pill">★ Best run for this mission</div>`:""}</div>
       <div class="sh">Operatives</div>${r.team.map(t=>`<div class="op ${t.kia?"kia":""}"><span class="sw" style="background:${TYPES[t.type].color}">${TYPES[t.type].short}</span><b>${esc(t.name)}</b><span class="muted">${esc(t.by)}</span><span style="margin-left:auto">${t.kia?`<span class="kia-tag">KIA</span>`:`${t.hp}/${t.max} HP`}</span></div>`).join("")}
       <div class="sh">Action report</div>
       <div class="stats">${stat("Rounds",r.rounds)}${stat("Times spotted",S_.spotted,1)}${stat("Guards KO'd",S_.ko)}${stat("Guards killed",S_.kills,1)}${stat("Damage taken",S_.dmg,1)}${stat("Noise made",S_.noise,1)}${stat("Guard cards",S_.cards)}${stat("Objectives",S_.objectives.length)}</div>
@@ -3371,9 +3400,11 @@ function renderScreen(){
         ${(REWARDS[r.key]||[]).map(w=>{ const got=r.earned.includes(w.id), rec=camp.memory.find(m=>m.slot===w.id);
           return got?`<div class="eq"><b>${esc(w.label)}</b> ${rec?`→ ${esc((EQUIP[rec.k]||{name:rec.k}).name)} <span class="muted">in your Memory Box</span>`:`<button class="sm on" data-rec="${w.id}">Record which card it is</button><div class="muted">Check the campaign book for the card, then record it so it goes in your Memory Box.</div>`}</div>`
             :`<div class="eq locked"><div class="blur"><b>${esc(w.label)} · ??????</b></div><div class="muted">Not earned this run${w.when?` — ${esc(w.when)}`:""}</div></div>`; }).join("")}`:""}
-      <div class="row" style="margin-top:14px">${nextR?`<button class="on big" id="r-next">▶ ${esc(nextR.name)}'s run</button>`:""}</div>
-      <div class="row"><button class="${nextR?"sm":"on"}" id="r-retry" style="flex:1">↻ Replay mission</button><button class="sm" data-go="missions" style="flex:1">Missions</button></div>
-      ${r.result!=="cleared"?`<div class="row"><button class="sm" id="r-undo" style="flex:1">↶ That was a mistake — undo it</button></div>`:""}`; }
+      ${mine?"":`<p class="muted" style="margin-top:14px">👁 You're spectating — the players pick what happens next.</p>`}
+      ${canNx?`<div class="row" style="margin-top:14px"><button class="on big" id="r-nextm" ${dis}>▶ Next mission: ${esc(LAYOUTS[nx].name)}</button></div>`:""}
+      <div class="row" ${canNx?"":`style="margin-top:14px"`}><button class="${canNx?"sm":"on big"}" id="r-next" ${dis} style="flex:1">${nextL&&nextL!==sameL?`▶ Next runner: ${esc(nextL)}`:"↻ Play it again"}</button></div>
+      <div class="row">${nextL&&nextL!==sameL?`<button class="sm" id="r-retry" ${dis} style="flex:1">↻ Same runner again (${esc(sameL)})</button>`:""}<button class="sm" data-go="missions" ${dis} style="flex:1">Missions</button></div>
+      ${r.result!=="cleared"?`<div class="row"><button class="sm" id="r-undo" ${dis} style="flex:1">↶ That was a mistake — undo it</button></div>`:""}`; }
   el.innerHTML=`<div class="swrap">${h}</div>`;
   const q=s_=>el.querySelector(s_), on=(s_,f)=>{ const b=q(s_); if(b) b.onclick=f; }, all=(s_,f)=>el.querySelectorAll(s_).forEach(b=>b.onclick=()=>f(b));
   all("[data-go]",b=>setScreen(b.dataset.go));
@@ -3386,21 +3417,24 @@ function renderScreen(){
   el.querySelectorAll("[data-delcamp]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const id=b.dataset.delcamp, nm=(camps()[id]||{}).name||(S.st.camp&&S.st.camp.name)||"this campaign";
     if(!b.dataset.armed){ b.dataset.armed=1; b.textContent="Delete?"; alertMsg(`Tap Delete? again to remove “${nm}” from this phone. Missions, runs and its Memory Box go with it.`); setTimeout(()=>{ if(b.isConnected){ delete b.dataset.armed; b.textContent="🗑"; } },4000); return; }
     deleteCampaign(id); });
-  all("[data-brief]",b=>{ const k_=b.dataset.brief, ps=people(); setScreen("briefing",{brief:Object.assign({key:k_,seats:{},loadout:{},runners:charsOf(k_).length===1?ps.map(p=>({id:p.id,name:p.name})):[]},(S.st.brief&&S.st.brief.key===k_)?S.st.brief:{})}); });
+  all("[data-brief]",b=>{ const k_=b.dataset.brief; setScreen("briefing",{brief:(S.st.brief&&S.st.brief.key===k_&&S.st.brief.queues)?S.st.brief:newBrief(k_)}); });
+  const qsplit=v=>{ const [lab,i]=v.split("|"); return [lab,+i]; }, fixGaps=s=>{ const k_=s.brief.key, use=allChars(k_); let gap=false; use.forEach(t=>{ const lab=TYPES[t].name; s.brief.queues[lab]=s.brief.queues[lab]||[]; if(gap) s.brief.queues[lab]=[]; if(!s.brief.queues[lab].length) gap=true; }); s.brief.seats={}; };
+  all("[data-qadd]",b=>commit(s=>{ const lab=b.dataset.qadd; (s.brief.queues[lab]=s.brief.queues[lab]||[]).push({id:b.dataset.pid,name:b.dataset.pn}); s.brief.spect=(s.brief.spect||[]).filter(x=>x!==b.dataset.pid); fixGaps(s); }));
+  all("[data-qx]",b=>commit(s=>{ const [lab,i]=qsplit(b.dataset.qx); s.brief.queues[lab].splice(i,1); fixGaps(s); }));
+  all("[data-qup]",b=>commit(s=>{ const [lab,i]=qsplit(b.dataset.qup), a=s.brief.queues[lab]; [a[i-1],a[i]]=[a[i],a[i-1]]; }));
+  el.querySelectorAll("[data-qproxy]").forEach(inp=>inp.onchange=()=>commit(s=>{ const [lab,i]=qsplit(inp.dataset.qproxy); s.brief.queues[lab][i].proxy=inp.value.trim(); }));
+  all("[data-spect]",b=>commit(s=>{ const id=b.dataset.spect; Object.keys(s.brief.queues).forEach(l=>s.brief.queues[l]=s.brief.queues[l].filter(r=>r.id!==id)); s.brief.spect=[...new Set([...(s.brief.spect||[]),id])]; fixGaps(s); }));
+  all("[data-unspect]",b=>commit(s=>{ s.brief.spect=(s.brief.spect||[]).filter(x=>x!==b.dataset.unspect); }));
   all("[data-seat]",b=>commit(s=>{ s.brief.seats=s.brief.seats||{}; const cur=s.brief.seats[b.dataset.seat]; s.brief.seats[b.dataset.seat]=cur&&cur.id===b.dataset.pid?null:{id:b.dataset.pid,name:b.dataset.pn}; }));
   el.querySelectorAll("[data-sproxy]").forEach(i=>i.onchange=()=>commit(s=>{ const c=s.brief.seats[i.dataset.sproxy]; if(c) c.proxy=i.value.trim(); }));
-  el.querySelectorAll("[data-proxy]").forEach(i=>i.onchange=()=>commit(s=>{ s.brief.runners[+i.dataset.proxy].proxy=i.value.trim(); }));
-  all("[data-rup]",b=>commit(s=>{ const i=+b.dataset.rup, a=s.brief.runners; [a[i-1],a[i]]=[a[i],a[i-1]]; }));
-  all("[data-rx]",b=>commit(s=>{ s.brief.runners.splice(+b.dataset.rx,1); }));
-  all("[data-np]",b=>commit(s=>{ s.brief.players=+b.dataset.np; s.brief.seats={}; s.brief.runners=[]; }));
-  all("[data-radd]",b=>commit(s=>{ (s.brief.runners=s.brief.runners||[]).push({id:b.dataset.radd,name:b.dataset.pn}); }));
   if(false) all("[data-eq]",b=>commit(s=>{ const L_=s.brief.loadout=s.brief.loadout||{}, a=L_[b.dataset.eq]=L_[b.dataset.eq]||[], id=b.dataset.mid; const i=a.indexOf(id); if(i>=0) a.splice(i,1); else { Object.values(L_).forEach(x=>{ const j=x.indexOf(id); if(j>=0) x.splice(j,1); }); a.push(id); } }));
   on("#b-go",()=>{ const k_=S.st.brief.key; if(!needsLoadout(k_)) return launchMission(k_,0);
     commit(s=>{ const lo=s.brief.loadout=s.brief.loadout||{}; charsOf(k_).forEach(t=>{ const lab=TYPES[t].name; if(!lo[lab]) lo[lab]=CHARS[t].start.map(k=>`start:${t}:${k}`); }); s.screen="loadout"; }); });
   on("#b-start",()=>launchMission(S.st.brief.key,0));
   all("[data-lo]",b=>commit(s=>{ const lo=s.brief.loadout=s.brief.loadout||{}, a=lo[b.dataset.lo]=lo[b.dataset.lo]||[], i=a.indexOf(b.dataset.ref); if(i>=0) a.splice(i,1); else a.push(b.dataset.ref); }));
-  on("#r-next",()=>launchMission(S.st.report.key,(S.st.run.idx||0)+1));
-  on("#r-retry",()=>launchMission(S.st.report.key,(S.st.run&&S.st.run.idx)||0));
+  on("#r-next",()=>nextRun());
+  on("#r-retry",()=>launchMission(S.st.report.key,0));
+  on("#r-nextm",()=>nextMission(CAMPAIGN[CAMPAIGN.indexOf(S.st.report.key)+1]));
   on("#r-undo",()=>{ commit(s=>{ const c=s.camp, list=c.runs[s.report.key]; if(list) list.pop(); if(c.best[s.report.key]===undefined); delete s.report; s.screen="play"; }); undoFail(); });
   all("[data-rec]",b=>recordCard(b.dataset.rec));
   on("#mem-add",()=>recordCard(null));
@@ -4089,6 +4123,7 @@ function shootActs(p,act){ if(p.type==="otacon") return []; const out=[];
   return out; }
 // campaign rewards that name their card go straight into the Memory Box
 function finishMission(result,why){ finishMissionBase(result,why); const st=S.st, rep=st.report; if(!rep||result!=="cleared"||!st.camp) return;
+  { const O=OBJ[rep.key]; let perf=false; try{ perf=!!O&&O.objs.every(o=>o.done(S.st)); }catch(e){} if(perf) commit(s=>{ s.report.perfect=true; const L=s.camp.runs[rep.key]; if(L&&L.length) L[L.length-1].perfect=true; }, "★★ Perfect run — every objective done"); }
   const add=(REWARDS[rep.key]||[]).filter(w=>w.k&&rep.earned.includes(w.id)&&!st.camp.memory.some(m=>m.slot===w.id||m.k===w.k));
   if(add.length){ commit(s=>{ add.forEach(w=>s.camp.memory.push({id:"m"+Date.now().toString(36)+w.id,k:w.k,slot:w.id,no:(EQUIP[w.k]||{}).no||"",from:`${LAYOUTS[rep.key].name} — ${w.when||w.label}`})); }, `Memory Box: ${add.map(w=>EQUIP[w.k].name).join(", ")} unlocked`); saveCamp(); } }
 // stage backdrops ship with the site: use them when this phone has no picture of its own for the stage
