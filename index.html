@@ -98,6 +98,8 @@ button.spent{opacity:.6;text-decoration:line-through}
 .tp-next{background:#1d2a24;border:1px solid var(--accent2);border-radius:10px;padding:7px 10px;margin:6px 0;font-size:13px}
 .tp-sub{font-size:12px;color:var(--muted);margin:2px 0 0}
 .tok-st{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-left:auto}.tok-st.q{border-color:#3a7bd5;color:#9cc3ff}.tok-st.alert{border-color:var(--danger);color:#ffb3a8}
+.lob-choice{display:flex;flex-direction:column;gap:8px;margin:6px 0}.lob-choice button{text-align:left;padding:12px 14px;font-weight:600}.lob-choice button span{display:block;font-weight:400;font-size:13px;opacity:.8;margin-top:2px}
+.scard.dim{opacity:.55}
 .cd-recent{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
 .lround-h button.sm{min-height:32px;padding:4px 8px;font-size:13px}
 #rollbox{position:fixed;left:8px;right:8px;bottom:calc(var(--tabh) + var(--safe-b) + 8px);z-index:60;display:none;background:#141a18f7;border:1px solid var(--accent2);border-radius:14px;padding:12px;max-height:75%;overflow:auto;box-shadow:0 8px 30px #000a}
@@ -861,7 +863,7 @@ function commit(fn, msg){
 function undo(){ if(!S.undo.length) return; S.redo.push(snapshot()); S.st=JSON.parse(S.undo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
 function redo(){ if(!S.redo.length) return; S.undo.push(snapshot()); S.st=JSON.parse(S.redo.pop()); S.st.ver++; afterReplace(); net.sendState(); }
 function afterReplace(){ if(S.sel && !P(S.sel)) S.sel=null; persist(); refresh(); }
-function refresh(){ if(S.sim) return; try{ fxSync(); revealSync(); }catch(e){} render(); renderSide(); renderQbar(); renderZonebar(); renderTurnPanel(); try{ renderScreen(); }catch(e){ console.error(e); } if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
+function refresh(){ if(S.sim||S.booting) return; try{ fxSync(); revealSync(); }catch(e){} render(); renderSide(); renderQbar(); renderZonebar(); renderTurnPanel(); try{ renderScreen(); }catch(e){ console.error(e); } if(document.getElementById("hist")?.classList.contains("open")) renderHistory(); }
 
 // ---------- rules ----------
 function isCorner(r,c){ return S.st.cells[key(r,c)]==="corner"||(S.st.cornerX||[]).includes(key(r,c)); }
@@ -3245,7 +3247,7 @@ document.getElementById("eye").onclick=()=>{ S.losAll=!S.losAll; syncEye(); refr
 setInterval(()=>{ if(document.hidden) return; const L=S.lastLOS; if((L&&(L.beams.length||L.spotted.length)) && !S.drag) render(); }, 70);
 
 // ---------- room sync over a public MQTT broker (encrypted; survives app switching) ----------
-const APP_VERSION="9.5";
+const APP_VERSION="9.6";
 const BROKERS=["wss://broker.hivemq.com:8884/mqtt","wss://broker.emqx.io:8084/mqtt"];
 const MQTT_SRC="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
 const room = {
@@ -3508,19 +3510,37 @@ function renderScreen(){
   let h="";
   if(k==="lobby"){ const ps=people(), saved=Object.entries(camps()).sort((a,b)=>b[1].t-a[1].t);
     h=`<div class="brand">SNEAKING TABLE</div><div class="sub">Metal Gear Solid · campaign table</div>
-      <div class="scard"><div class="sh">1 · Your squad</div>
-        <div class="row"><label>Your name</label><input type="text" id="l-name" value="${esc(S.me)}" style="flex:1"></div>
-        ${inRoom()?`<div class="row"><label>Room</label><b class="code">${esc(room.code)}</b><span class="muted">${room.connected().length?"live":"connecting…"}</span></div>
-          <div class="plist">${ps.map(p=>`<div class="pp ${p.me?"me":""}"><span class="dot ok"></span>${esc(p.name)}${p.me?" (you)":""}</div>`).join("")}</div>
-          <p class="muted">Share the room code. Everyone who joins shows up here.</p>`
-        :`<p class="muted">Playing on this device only. To play together, create a room and send the code to your friend.</p>
-          <div class="row"><button class="on" id="l-create">Create a room</button><input type="text" id="l-code" placeholder="MGS-XXXX" style="flex:1;min-width:0"><button class="sm" id="l-join">Join</button></div>`}</div>
-      <div class="scard"><div class="sh">2 · Campaign</div>
-        ${camp?`<div class="row"><b style="flex:1">${esc(camp.name)}</b><button class="on" data-go="missions">Continue →</button><button class="sm danger" data-delcamp="${camp.id}" aria-label="Delete campaign">🗑</button></div>`:""}
-        ${saved.filter(([id])=>!camp||id!==camp.id).map(([id,v])=>`<div class="row"><span style="flex:1"><b>${esc(v.name)}</b><br><span class="muted">${v.cleared} mission${v.cleared===1?"":"s"} cleared · ${new Date(v.t).toLocaleDateString()}</span></span><button class="sm" data-load="${id}">Load</button><button class="sm danger" data-delcamp="${id}" aria-label="Delete campaign">🗑</button></div>`).join("")}
-        <div class="row"><input type="text" id="l-new" placeholder="New campaign name" style="flex:1;min-width:0"><button class="${camp?"sm":"on"}" id="l-start">New campaign</button></div>
-        <div class="row"><input type="text" id="l-cj" placeholder="CAMP-XXXX-XXXX" style="flex:1;min-width:0"><button class="sm" id="l-cjoin">Join a campaign</button></div>
-        <p class="muted">A campaign remembers unlocked missions, your Memory Box and every run. It saves by itself on each phone in the room.</p></div>`; }
+      ${(()=>{ const mode=inRoom()?"room":loadLS("st-mode")||"", host=inRoom()&&loadLS("st-host")===room.code, live=inRoom()&&room.connected().length;
+        let h1=`<div class="scard"><div class="sh">1 · Your name</div>
+          <div class="row"><input type="text" id="l-name" value="${esc(S.me)}" style="flex:1" placeholder="What your friends call you"></div>
+          <p class="muted" style="margin:0">Shown to the other players in the room and on mission reports.</p></div>
+        <div class="scard"><div class="sh">2 · How are you playing?</div>`;
+        if(mode==="room"&&inRoom()) h1+=`<div class="row"><span class="muted">Room code</span><b class="code" style="font-size:22px">${esc(room.code)}</b><span class="muted">${live?"● live":"connecting…"}</span><button class="sm" id="l-copycode" style="margin-left:auto">📋 Copy</button></div>
+            <div class="plist">${ps.map(p=>`<div class="pp ${p.me?"me":""}"><span class="dot ok"></span>${esc(p.name)}${p.me?" (you)":""}</div>`).join("")}</div>
+            <p class="muted">${host?`You made this room. Send the code to your friends — when they type it in, they show up in the list above.`:`You're in the room. Everyone in it sees the same board, live.`}${ps.length<2?" Nobody else has joined yet.":""}</p>
+            <div class="row"><button class="sm" id="l-leave">Leave the room</button></div>`;
+        else if(mode==="room") h1+=`<p class="muted" style="margin-top:0">A <b>room</b> links your phones so everyone sees the same board, live. One person makes the room and sends the code; everyone else types it in.</p>
+            <div class="lob-choice"><button class="on" id="l-create">🆕 Make a room<span>I'm setting up the game</span></button></div>
+            <div class="row"><input type="text" id="l-code" placeholder="Friend's code, e.g. MGS-AB12" style="flex:1;min-width:0"><button class="on" id="l-join">Join</button></div>
+            <div class="row"><button class="sm" data-mode="">← Back</button></div>`;
+        else if(mode==="solo") h1+=`<div class="row" style="margin:0"><b style="flex:1">📱 Just this device</b><button class="sm" data-mode="">Change</button></div>
+            <p class="muted">Everyone plays on this one phone or computer — or you play with an AI. No room needed.</p>`;
+        else h1+=`<div class="lob-choice"><button class="on" data-mode="room">👥 Together, on our own phones<span>Make or join a room so everyone sees the same board</span></button>
+            <button data-mode="solo">📱 Just this device<span>Pass one phone around, or play with an AI</span></button></div>`;
+        h1+=`</div>`;
+        const ready=mode==="solo"||(mode==="room"&&inRoom());
+        if(!ready) return h1+`<div class="scard dim"><div class="sh">3 · Campaign</div><p class="muted" style="margin:0">${mode==="room"?"Make or join a room first — then you'll pick the campaign here.":"Pick how you're playing first."}</p></div>`;
+        const others=saved.filter(([id])=>!camp||id!==camp.id);
+        h1+=`<div class="scard"><div class="sh">3 · Campaign</div>
+          <p class="muted" style="margin-top:0">A <b>campaign</b> is your saved progress: which missions are unlocked, your Memory Box of equipment, and every run.${mode==="room"?" One person picks it and everyone in the room plays it together — it saves on every phone.":""}</p>`;
+        if(camp) h1+=`<div class="row"><b style="flex:1">${esc(camp.name)}</b><button class="on" data-go="missions">Continue →</button>${mode==="room"&&!host?"":`<button class="sm danger" data-delcamp="${camp.id}" aria-label="Delete campaign">🗑</button>`}</div>`;
+        else if(mode==="room"&&!host) h1+=`<div class="tp-next">⏳ Waiting for the person who made the room to start or load a campaign — it appears here by itself.</div>`;
+        const pick=`${others.map(([id,v])=>`<div class="row"><span style="flex:1"><b>${esc(v.name)}</b><br><span class="muted">${v.cleared} mission${v.cleared===1?"":"s"} cleared · ${new Date(v.t).toLocaleDateString()}</span></span><button class="sm" data-load="${id}">Load</button><button class="sm danger" data-delcamp="${id}" aria-label="Delete campaign">🗑</button></div>`).join("")}
+          <div class="row"><input type="text" id="l-new" placeholder="New campaign name" style="flex:1;min-width:0"><button class="${camp?"sm":"on"}" id="l-start">Start new</button></div>`;
+        h1+=mode==="room"&&!host?`<details><summary class="muted">Start or load one from this phone instead</summary>${pick}</details>`:pick;
+        h1+=`<details><summary class="muted">Have a campaign code?</summary><p class="muted">A campaign code (CAMP-XXXX-XXXX, shown in the Memory Box) loads your group's campaign onto this phone — handy for playing solo with the same Memory Box. You don't need it to play in a room.</p>
+            <div class="row"><input type="text" id="l-cj" placeholder="CAMP-XXXX-XXXX" style="flex:1;min-width:0"><button class="sm" id="l-cjoin">Load by code</button></div></details></div>`;
+        return h1; })()}`; }
   if(k==="missions"){ const c=camp;
     h=`<div class="topbar">${back("lobby","← Lobby")}<div class="ttl">${esc(c.name)}</div><button class="sm" data-go="memory">🎒 Memory Box</button></div>
       <div class="sh" style="margin-top:6px">Missions</div>
@@ -3602,7 +3622,10 @@ function renderScreen(){
   all("[data-vrboss]",b=>commit(s=>{ s.brief.vrBoss=b.dataset.vrboss||null; }, b.dataset.vrboss?`VR Boss variant: ${VR_BOSSES[b.dataset.vrboss].name}`:"VR Boss variant off"));
   on("#r-ai",()=>copyText(reportForAI(),"Results copied — paste them to Claude or Muse"));
   const nm=q("#l-name"); if(nm) nm.onchange=e=>{ S.me=e.target.value.trim()||"Player"; saveLS("st-name",S.me); room.hello(); renderScreen(); };
-  on("#l-create",()=>{ room.join(room.newCode(),true); setTimeout(renderScreen,400); });
+  on("#l-create",()=>{ const c=room.newCode(); saveLS("st-host",c); room.join(c,true); setTimeout(renderScreen,400); });
+  all("[data-mode]",b=>{ saveLS("st-mode",b.dataset.mode); renderScreen(); });
+  on("#l-copycode",()=>copyText(room.code,"Room code copied — send it to your friend"));
+  on("#l-leave",()=>{ room.leave(); saveLS("st-mode","room"); setTimeout(renderScreen,300); });
   on("#l-join",()=>{ const c=q("#l-code").value.trim(); if(c){ room.join(c,false); setTimeout(renderScreen,600); } });
   on("#l-start",()=>newCampaign(q("#l-new").value.trim()));
   on("#l-cjoin",()=>joinCampaign(q("#l-cj").value));
@@ -3789,8 +3812,11 @@ async function joinCampaign(code){ code=String(code||"").toUpperCase().replace(/
 syncEye();
 new ResizeObserver(()=>render()).observe(stage);
 const fresh=!loadLS("st-state");
-fitView(); syncArmed(); refresh(); renderNetPane();
-if(!S.st.screen&&!S.st.camp) S.st.screen="lobby"; applyCustom(); renderScreen();
+// the screens use tables defined further down this file, so draw them once everything has loaded
+// (a reload while on the Missions screen used to stop the page here)
+S.booting=true; try{ fitView(); syncArmed(); renderNetPane(); }catch(e){ console.error(e); }
+if(!S.st.screen&&!S.st.camp) S.st.screen="lobby"; try{ applyCustom(); }catch(e){ console.error(e); }
+setTimeout(()=>{ S.booting=false; try{ refresh(); }catch(e){ console.error(e); } },0);
 try{ const saved=JSON.parse(loadLS("st-room")||"null"); if(saved&&saved.code) room.join(saved.code,false); }catch(e){}
 
 // =====================================================================
@@ -3867,7 +3893,12 @@ function drawItem(p,x,y){ const cx=x+CS/2, cy=y+CS/2; ctx.save(); ctx.translate(
 const HIDDEN_FACES={check:{t:"✓",c:"#3fbf63",n:"Objective ✓"},x:{t:"✗",c:"#e0533f",n:"Nothing (✗)"},camera:{t:"◉",c:"#e07b2a",n:"Camera"},laser:{t:"≋",c:"#ff3b2f",n:"Laser barrier"},blank:{t:"·",c:"#888",n:"Empty"},sensor:{t:"✷",c:"#ff3b2f",n:"Laser sensor trap"}};
 const SECCOL={yellow:"#e3c42b",orange:"#e3862b",red:"#d0402b"};
 function drawSecDoor(p,x,y){ const cx=x+CS/2, cy=y+CS/2, col=SECCOL[p.color]||p.color||"#c9a227"; ctx.fillStyle="#1b1f1e"; rr(x+5,y+5,CS-10,CS-10,5); ctx.fill(); ctx.strokeStyle=col; ctx.lineWidth=2.5; ctx.stroke();
-  ctx.fillStyle=col; ctx.fillRect(x+9,y+CS-13,CS-18,5); ctx.fillStyle="#eee"; ctx.font="bold 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⇆",cx,cy-2); }
+  // the colored bar sits on the edge shared with its partner, so the two halves meet in the middle like the printed door
+  const m=secPartner(p), dr=m?Math.sign(m.r-p.r):1, dc=m?Math.sign(m.c-p.c):0, t=5, in_=13; ctx.fillStyle=col;
+  if(dr>0) ctx.fillRect(x+9,y+CS-in_,CS-18,t); else if(dr<0) ctx.fillRect(x+9,y+in_-t,CS-18,t); else if(dc>0) ctx.fillRect(x+CS-in_,y+9,t,CS-18); else ctx.fillRect(x+in_-t,y+9,t,CS-18);
+  // Interact icon (these doors open with an Interact, like the elevator button)
+  ctx.font="17px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillStyle="#fff";
+  ctx.save(); ctx.translate(cx-dc*4,cy-dr*4); ctx.rotate(dr>0?Math.PI:dr<0?0:dc>0?Math.PI/2:-Math.PI/2); ctx.fillText("👆",0,0); ctx.restore(); }   // finger points at the doorway
 function drawHidden(p,x,y){ const cx=x+CS/2, cy=y+CS/2;
   if(!p.up){ const olive=p.deck!=="hazard"; ctx.fillStyle=olive?"#8f8a2c":"#b8b8b8"; rr(x+6,y+8,CS-12,CS-14,4); ctx.fill(); ctx.fillStyle=olive?"#77721f":"#9a9a9a"; ctx.fillRect(x+6,y+5,12,5);
     ctx.fillStyle=olive?"#fff":"#c0392b"; ctx.font="bold 18px system-ui"; ctx.fillText("?",cx,cy+2); return; }
